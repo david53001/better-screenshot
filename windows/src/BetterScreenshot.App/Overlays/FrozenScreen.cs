@@ -71,8 +71,12 @@ public sealed class FrozenScreen
         try
         {
             var cropped = new CroppedBitmap(still, new Int32Rect((int)r.X, (int)r.Y, (int)r.Width, (int)r.Height));
-            cropped.Freeze();
-            return cropped;
+            // Copy the pixels out rather than handing back the crop itself: a CroppedBitmap is only a window onto
+            // its source, so returning it would pin the whole full-screen still in memory for as long as the
+            // capture lives on (Quick Access card, history, a pin, the editor).
+            var detached = new WriteableBitmap(cropped);
+            detached.Freeze();
+            return detached;
         }
         catch
         {
