@@ -12,6 +12,11 @@ capture history. **No cloud, no accounts, no uploads, ever.**
 
 - **Capture** — area (`Ctrl+Shift+4`), full screen (`Ctrl+Shift+6`), a specific window (`Ctrl+Shift+8`), and
   **Capture Text / OCR + QR** (`Ctrl+Shift+7`, copies recognized text to the clipboard).
+- **Freeze while selecting** (on by default) — the screen is grabbed the instant you press the shortcut and shown
+  as a still while you pick an area or a window, and the capture comes out of that still. Without it, whatever you
+  were using loses focus the moment the overlay appears, and apps that react to that — a full-screen game pausing
+  to its menu, a video player showing its controls — change what you were trying to capture. Toggle it in
+  **Settings → Capture**.
 - **Quick Access overlay** — a floating post-capture card (copy / edit / pin / save / close), stacking up to 3,
   drag-to-export.
 - **Annotation editor** — arrow, line, rectangle (outline/filled), ellipse, text, counter, blur, pixelate, crop,
@@ -24,7 +29,7 @@ capture history. **No cloud, no accounts, no uploads, ever.**
   tray timer, and a Quick Access card + history entry on finish.
 - **Capture history** — a persistent, browsable thumbnail grid (copy / annotate / pin / reveal / delete / clear-all);
   "Restore Recently Closed" brings back the last dismissed card. Auto-prunes by age + count.
-- **Settings** — a single scrolling **wall of titled cards** (Capture, Quick Access Overlay, Pin to Screen,
+- **Settings** — a single scrolling **wall of titled cards** (Capture — including the freeze toggle, Quick Access Overlay, Pin to Screen,
   History, Startup, Save Location, Recording, Keyboard Shortcuts) with macOS-style toggle switches and segmented
   controls. Changes apply **instantly** and global hotkeys rebind live.
 

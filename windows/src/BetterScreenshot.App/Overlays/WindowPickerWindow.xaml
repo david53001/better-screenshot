@@ -5,6 +5,10 @@
         Topmost="True" ShowInTaskbar="False" ShowActivated="True"
         WindowStartupLocation="Manual" Cursor="Cross">
     <Canvas x:Name="RootCanvas" Background="Transparent">
+        <!-- Freeze mode only: this monitor's still plus its own dim (the window itself is opaque then, so the
+             translucent window Background can't supply it). Both stay hidden when freeze is off. -->
+        <Image x:Name="FrozenImage" Stretch="Fill" Visibility="Collapsed"/>
+        <Rectangle x:Name="FrozenDim" Fill="#26000000" Visibility="Collapsed"/>
         <Rectangle x:Name="Highlight" Visibility="Collapsed"/>
         <Border x:Name="TitleHost" Background="#99000000" CornerRadius="4" Padding="6,3" Visibility="Collapsed">
             <TextBlock x:Name="TitleText" Foreground="White" FontSize="13" FontWeight="SemiBold"/>

@@ -9,12 +9,20 @@ public enum SettingsOverlayCorner { TopLeft, TopRight, BottomLeft, BottomRight }
 /// <summary>
 /// Capture behavior settings, persisted as a flat string dictionary (1:1 with the macOS app's persisted keys).
 /// Defaults: show the quick-access overlay, PNG, bottom-right corner, 6s auto-dismiss, pin radius 8 + shadow,
-/// history enabled with a 50-item cap.
+/// history enabled with a 50-item cap, screen frozen while selecting.
 /// </summary>
 public sealed record CaptureSettings
 {
     public AfterCaptureBehavior AfterCapture { get; init; } = AfterCaptureBehavior.ShowOverlay;
     public SettingsImageFormat Format { get; init; } = SettingsImageFormat.Png;
+
+    /// <summary>
+    /// Freeze the screen while you pick an area or a window: the still is grabbed the instant the shortcut fires
+    /// (before any overlay steals focus) and the capture is cropped out of that still. Without it, an app that
+    /// reacts to losing focus — a game pausing to its menu, a video overlay fading out — changes the screen
+    /// between the keypress and the capture. On by default.
+    /// </summary>
+    public bool FreezeScreen { get; init; } = true;
     public SettingsOverlayCorner OverlayCorner { get; init; } = SettingsOverlayCorner.BottomRight;
     public int OverlayAutoDismissSeconds { get; init; } = 6;
     public int PinCornerRadius { get; init; } = 8;
@@ -46,6 +54,7 @@ public sealed record CaptureSettings
         ["pinShadow"] = PinShadow ? "true" : "false",
         ["historyEnabled"] = HistoryEnabled ? "true" : "false",
         ["historyCap"] = HistoryCap.ToString(CultureInfo.InvariantCulture),
+        ["freezeScreen"] = FreezeScreen ? "true" : "false",
     };
 
     public static CaptureSettings FromDictionary(IReadOnlyDictionary<string, string> d)
@@ -79,6 +88,7 @@ public sealed record CaptureSettings
             PinShadow = ParseBool(d, "pinShadow", def.PinShadow),
             HistoryEnabled = ParseBool(d, "historyEnabled", def.HistoryEnabled),
             HistoryCap = ParseInt(d, "historyCap", def.HistoryCap),
+            FreezeScreen = ParseBool(d, "freezeScreen", def.FreezeScreen),
         };
     }
 

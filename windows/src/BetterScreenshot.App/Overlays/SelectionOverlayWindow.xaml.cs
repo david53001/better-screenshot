@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
+using System.Windows.Media.Imaging;
 using BetterScreenshot.Capture;
 using BetterScreenshot.Core;
 using BetterScreenshot.Platform;
@@ -17,20 +18,28 @@ namespace BetterScreenshot.App.Overlays;
 /// One full-monitor dimmed overlay for drag-to-select area capture; the dragged selection is punched clear of the
 /// dim, matching the macOS overlay. Positioned in physical pixels via MoveWindow (correct under per-monitor DPI);
 /// reports the selection as a top-left physical-pixel rect (or null on cancel).
+/// <para>
+/// Given a frozen still of its monitor (see <see cref="FrozenScreen"/>) the overlay becomes opaque and paints that
+/// still 1:1 underneath the dim, and reports the selected pixels cropped from it — so what you select is what was
+/// on screen when the shortcut fired, even if the app behind it reacted to losing focus.
+/// </para>
 /// </summary>
 public partial class SelectionOverlayWindow : Window
 {
     private readonly MonitorInfo _monitor;
-    private readonly Action<PxRect?> _onResult;
+    private readonly BitmapSource? _frozen;
+    private readonly Action<AreaSelection?> _onResult;
     private Point? _start;
     private bool _dragging;
     private bool _completed;
 
-    public SelectionOverlayWindow(MonitorInfo monitor, Action<PxRect?> onResult)
+    public SelectionOverlayWindow(MonitorInfo monitor, BitmapSource? frozen, Action<AreaSelection?> onResult)
     {
         _monitor = monitor;
+        _frozen = frozen;
         _onResult = onResult;
         InitializeComponent();
+        if (frozen != null) ShowFrozenBackdrop(frozen);
         SourceInitialized += OnSourceInitialized;
         SizeChanged += (_, e) => FullRectGeometry.Rect = new Rect(0, 0, e.NewSize.Width, e.NewSize.Height);
         MouseLeftButtonDown += OnMouseDown;
@@ -58,11 +67,27 @@ public partial class SelectionOverlayWindow : Window
         Close();
     }
 
+    /// <summary>
+    /// Freeze mode: go opaque (the still covers everything) and lay the still out at exactly its own pixel size —
+    /// physical pixels ÷ DPI scale — anchored top-left, so it maps 1:1 onto the screen it was taken from. Sizing
+    /// it to the still rather than to the window matters on a rig whose real framebuffer is smaller than the
+    /// monitor's reported bounds; stretching to fill would skew the frozen picture.
+    /// </summary>
+    private void ShowFrozenBackdrop(BitmapSource frozen)
+    {
+        OverlayHelpers.MakeOpaque(this);
+        FrozenImage.Source = frozen;
+        FrozenImage.Width = frozen.PixelWidth / _monitor.DpiScale;
+        FrozenImage.Height = frozen.PixelHeight / _monitor.DpiScale;
+        FrozenImage.Visibility = Visibility.Visible;
+    }
+
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
         var hwnd = new WindowInteropHelper(this).Handle;
         var b = _monitor.Bounds;
         MoveWindow(hwnd, (int)b.X, (int)b.Y, (int)b.Width, (int)b.Height, true);
+        if (_frozen != null) OverlayHelpers.SquareOffCorners(hwnd);
     }
 
     private void OnMouseDown(object sender, MouseButtonEventArgs e)
@@ -119,7 +144,12 @@ public partial class SelectionOverlayWindow : Window
         if (_completed) return;
         _completed = true;
         Hide(); // clear the dim overlay before the caller captures the screen
-        _onResult(result);
+        // In freeze mode the pixels come straight out of the still — a null crop (nothing landed inside it)
+        // leaves the caller to capture live, exactly as if freeze were off.
+        var selection = result is { } r
+            ? new AreaSelection(r, _frozen is null ? null : FrozenScreen.Crop(_frozen, _monitor, r))
+            : (AreaSelection?)null;
+        _onResult(selection);
         Close();
     }
 

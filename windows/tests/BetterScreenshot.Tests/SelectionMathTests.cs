@@ -48,4 +48,43 @@ public class SelectionMathTests
         var clamped = SelectionMath.ClampToBounds(PxRect.FromLtrb(-50, -30, 200, 100), 1500, 1080);
         Assert.Equal(new PxRect(0, 0, 200, 100), clamped);
     }
+
+    [Fact]
+    public void ToSnapshotRectOnThePrimaryMonitorIsTheRectItself()
+    {
+        var r = SelectionMath.ToSnapshotRect(new PxRect(10, 20, 100, 50), new PxRect(0, 0, 1920, 1080), new PxSize(1920, 1080));
+        Assert.Equal(new PxRect(10, 20, 100, 50), r);
+    }
+
+    [Fact]
+    public void ToSnapshotRectSubtractsTheMonitorOrigin()
+    {
+        // A selection on the secondary monitor at physical (1920,0) is image-local (10,20) in that monitor's still.
+        var r = SelectionMath.ToSnapshotRect(new PxRect(1930, 20, 100, 50), new PxRect(1920, 0, 2560, 1440), new PxSize(2560, 1440));
+        Assert.Equal(new PxRect(10, 20, 100, 50), r);
+    }
+
+    [Fact]
+    public void ToSnapshotRectRoundsFractionalDipConversions()
+    {
+        // DIP→physical at 150% yields fractions; the crop rounds them exactly like a live BitBlt capture does
+        // (Math.Round), so a frozen crop and a live grab of the same selection come out the same size.
+        var r = SelectionMath.ToSnapshotRect(new PxRect(10.4, 20.6, 100.6, 50.4), new PxRect(0, 0, 1920, 1080), new PxSize(1920, 1080));
+        Assert.Equal(new PxRect(10, 21, 101, 50), r);
+    }
+
+    [Fact]
+    public void ToSnapshotRectClampsToAStillShorterThanTheReportedBounds()
+    {
+        // Stretched-resolution rig: the monitor reports 1920×1080 but the real framebuffer (and so the still)
+        // is 1600×900 — a selection running past it is trimmed rather than reading outside the image.
+        var r = SelectionMath.ToSnapshotRect(new PxRect(1500, 800, 300, 200), new PxRect(0, 0, 1920, 1080), new PxSize(1600, 900));
+        Assert.Equal(new PxRect(1500, 800, 100, 100), r);
+    }
+
+    [Fact]
+    public void ToSnapshotRectIsNullWhenTheRectMissesTheStillEntirely()
+    {
+        Assert.Null(SelectionMath.ToSnapshotRect(new PxRect(1700, 950, 200, 100), new PxRect(0, 0, 1920, 1080), new PxSize(1600, 900)));
+    }
 }

@@ -691,6 +691,40 @@ editor was a clunky white box. Both fixed. Details in `INVESTIGATION-2026-07-03-
 - Chip is sticky (`AnnotationStyle.TextBackground`), drawn by `DocumentRenderer`; old styles without the field load as `null`.
 - Verified: 260 tests green; crash harness survives all orderings; visually confirmed; `dist/` republished.
 
+## Freeze the screen while selecting (2026-08-10) — owner: "screenshotting Minecraft unfocuses it and I capture the menu"
+Pressing a capture shortcut showed the selection overlay, which stole focus; a full-screen game reacted by pausing
+to its menu, and the capture — taken *after* the drag, from the live screen — got the menu instead of the frame the
+owner wanted. Fixed by freezing: `FrozenScreen.Capture()` (new, `App/Overlays/FrozenScreen.cs`) BitBlts every
+monitor the instant the shortcut fires, *before* any overlay window exists and so before anything loses focus. The
+selection and window-picker overlays paint their monitor's still as their backdrop and the capture is cropped from
+it, never re-grabbed. New setting `CaptureSettings.FreezeScreen` (persisted key `freezeScreen`, **default true**),
+toggled in Settings → Capture.
+
+- Applies to **Capture Area**, **Capture Text** and **Capture Window**. `CaptureFullscreen` needs nothing (no
+  overlay, so nothing changes before the grab). Recording target-picking passes `freeze: false` on purpose — only
+  the *rectangle* matters there and the recording itself is live, so a stale still would misrepresent it.
+- Overlays go **opaque** in freeze mode (`OverlayHelpers.MakeOpaque`, flipping `AllowsTransparency` off in the
+  ctor — WPF rejects that change once the HWND exists). Not just cosmetic: a layered/transparent window gets no
+  hardware acceleration, so repainting a 4K still on every mouse-move while dragging would crawl. Win11 rounds
+  top-level window corners, which on a screen-filling overlay leaks four notches of *live* desktop through the
+  still — suppressed via `DWMWA_WINDOW_CORNER_PREFERENCE` (`OverlayHelpers.SquareOffCorners`).
+- The still is laid out at its own pixel size ÷ DPI scale, not stretched to the window: on the owner's
+  stretched-res rig the real framebuffer is smaller than the reported bounds, and stretching would skew it.
+  Cropping goes through the new pure `SelectionMath.ToSnapshotRect` (rounds exactly like the live `CaptureRegion`
+  so both paths agree on size, and clamps to the still).
+- Every crop is a **fallback, never a failure**: a null crop (still missing, rect outside it, window spanning two
+  monitors) falls through to the old live capture. Freeze off ⇒ byte-for-byte the previous behaviour.
+- `WindowPickerWindow` now enumerates windows in its **constructor** instead of `SourceInitialized` — i.e. before
+  the overlay is shown. A game that minimises itself on deactivation used to drop out of the list (`IsIconic`) and
+  become unpickable; and in freeze mode the list must describe the same desktop the still froze.
+- Verified: build 0 warnings / 0 errors; **301 tests** green (6 new `ToSnapshotRect` + `FreezeScreen` settings
+  round-trip). Plus a scratch end-to-end harness driving the real overlays with synthesized `SendInput`:
+  (1) painted the screen red → froze → painted it blue → dragged: capture came back **red** while a live capture
+  of the same rect was blue; (2) showed the picker over a green window in another process, **killed that process**,
+  then clicked where it was: got its green pixels at the exact frame size — impossible for a live `PrintWindow`;
+  (3) freeze off: overlay stayed `AllowsTransparency=True`, no crop carried, live capture returned the current
+  (blue) screen. `dist/` republished + relaunched.
+
 ## Known issues / TODO discovered during build (append as you find them)
 - Git warns LF→CRLF on the C# files (autocrlf). Harmless; could add a `.gitattributes` to normalize.
 - **Republish `dist/` after runtime-visible changes.** `dist/` is a manual publish snapshot; a plain build/commit

@@ -92,6 +92,21 @@
 
                             <Grid Margin="0,14,0,0">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource RowTitle}" Text="Freeze the screen while selecting" VerticalAlignment="Center"/>
+                                        <ctl:InfoTip Margin="6,0,0,0"
+                                            Title="Freeze the screen while selecting"
+                                            Explanation="Grabs the screen the instant you press the shortcut and shows that still while you pick an area or a window, so the capture is taken from it. Without this, whatever you were using loses focus the moment the selection overlay appears — and apps that react to that change what you were trying to capture."
+                                            Example="Screenshotting a full-screen game: normally it pauses to its menu the moment the overlay opens, and you capture the menu. Frozen, you get the frame you were looking at."/>
+                                    </StackPanel>
+                                    <TextBlock Style="{StaticResource RowSub}" Text="Captures what was on screen when you pressed the shortcut."/>
+                                </StackPanel>
+                                <CheckBox x:Name="FreezeScreenCheck" Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource Theme.MonoSwitch}" Checked="Changed" Unchecked="Changed"/>
+                            </Grid>
+
+                            <Grid Margin="0,14,0,0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
                                     <TextBlock Style="{StaticResource RowTitle}" Text="Play a sound on capture" VerticalAlignment="Center"/>
                                     <ctl:InfoTip Margin="6,0,0,0"

@@ -82,6 +82,7 @@ public partial class SettingsWindow : Window
         (c.HistoryCap switch { 10 => Cap10, 100 => Cap100, _ => Cap50 }).IsChecked = true;
         LaunchAtLoginCheck.IsChecked = _settings.LaunchAtLogin;
         CaptureSoundCheck.IsChecked = _settings.CaptureSoundEnabled;
+        FreezeScreenCheck.IsChecked = c.FreezeScreen;
     }
 
     private void LoadRecording()
@@ -332,6 +333,7 @@ public partial class SettingsWindow : Window
             PinShadow = PinShadowCheck.IsChecked == true,
             HistoryEnabled = HistoryEnabledCheck.IsChecked == true,
             HistoryCap = Cap10.IsChecked == true ? 10 : Cap100.IsChecked == true ? 100 : 50,
+            FreezeScreen = FreezeScreenCheck.IsChecked == true,
         };
 
         _settings.Recording = new RecordingConfig

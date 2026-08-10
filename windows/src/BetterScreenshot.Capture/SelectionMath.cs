@@ -32,4 +32,22 @@ public static class SelectionMath
             monitorPhysical.Y + dipRect.Y * dpiScale,
             dipRect.Width * dpiScale,
             dipRect.Height * dpiScale);
+
+    /// <summary>
+    /// Maps an absolute physical-pixel rect onto a frozen still of one monitor: subtracts the monitor origin
+    /// (the still's pixel (0,0) is the monitor's top-left), rounds to whole pixels the same way a live BitBlt
+    /// capture does, and clamps to the still's size — the still can be *smaller* than the monitor's reported
+    /// bounds when a game or a "stretched" resolution leaves the real framebuffer short. Returns null when
+    /// nothing of the rect lands inside the still; the caller should then capture the live screen instead.
+    /// </summary>
+    public static PxRect? ToSnapshotRect(PxRect physical, PxRect monitorBounds, PxSize snapshotSize)
+    {
+        var local = new PxRect(
+            Math.Round(physical.X - monitorBounds.X),
+            Math.Round(physical.Y - monitorBounds.Y),
+            Math.Round(physical.Width),
+            Math.Round(physical.Height));
+        var clamped = ClampToBounds(local, snapshotSize.Width, snapshotSize.Height);
+        return clamped.IsEmpty ? null : clamped;
+    }
 }

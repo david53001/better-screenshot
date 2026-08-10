@@ -58,17 +58,19 @@ public sealed class CaptureCoordinator : IAppCommands
 
     public void CaptureWindow()
     {
-        _picker.Present(hwnd =>
+        // Freeze first, while the app you were using still has focus — the picker overlay is what makes it lose it.
+        var frozen = Freeze();
+        _picker.Present(pick =>
         {
-            if (hwnd is { } h && h != IntPtr.Zero) Handle(ScreenCapture.CaptureWindow(h));
-        });
+            if (pick is { } p && p.Hwnd != IntPtr.Zero) Handle(p.Frozen ?? ScreenCapture.CaptureWindow(p.Hwnd));
+        }, frozen);
     }
 
     public void CaptureArea()
     {
-        _selection.Present(rect =>
+        _selection.Present(_settings.Capture.FreezeScreen, selection =>
         {
-            if (rect is { } r) Handle(ScreenCapture.CaptureRegion(r));
+            if (selection is { } s) Handle(Pixels(s));
         });
     }
 
@@ -76,17 +78,25 @@ public sealed class CaptureCoordinator : IAppCommands
     /// which wins — lands on the clipboard. HUD confirms.</summary>
     public void CaptureText()
     {
-        _selection.Present(rect =>
+        _selection.Present(_settings.Capture.FreezeScreen, selection =>
         {
-            if (rect is { } r) _ = CaptureTextAsync(r);
+            if (selection is { } s) _ = CaptureTextAsync(s);
         });
     }
 
-    private async Task CaptureTextAsync(PxRect region)
+    /// <summary>A still of every screen when "Freeze the screen" is on, else null (overlays stay see-through
+    /// and the capture is taken live).</summary>
+    private FrozenScreen? Freeze() => _settings.Capture.FreezeScreen ? FrozenScreen.Capture() : null;
+
+    /// <summary>The selected pixels: cropped out of the frozen still when there is one, else captured live.</summary>
+    private static BitmapSource Pixels(AreaSelection selection) =>
+        selection.Frozen ?? ScreenCapture.CaptureRegion(selection.Region);
+
+    private async Task CaptureTextAsync(AreaSelection selection)
     {
         try
         {
-            var image = ScreenCapture.CaptureRegion(region);
+            var image = Pixels(selection);
             var result = await TextRecognizerService.RecognizeAsync(image);
             if (result.ClipboardString is { } text) ClipboardService.SetText(text);
             HudController.Show(result.HudMessage);

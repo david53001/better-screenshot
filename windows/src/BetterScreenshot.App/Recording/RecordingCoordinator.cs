@@ -136,9 +136,11 @@ public sealed class RecordingCoordinator
     private void BeginArea()
     {
         HideStrip();
-        _selection.Present(rect =>
+        // Never freeze when picking a recording target: only the rectangle matters here (the recording itself is
+        // live), and selecting against a stale still would just misrepresent what is about to be recorded.
+        _selection.Present(freeze: false, selection =>
         {
-            if (rect is { } r && !r.IsEmpty) _ = BeginAsync(r);
+            if (selection is { } s && !s.Region.IsEmpty) _ = BeginAsync(s.Region);
             else AbortArm();
         });
     }
@@ -146,9 +148,9 @@ public sealed class RecordingCoordinator
     private void BeginWindow()
     {
         HideStrip();
-        _picker.Present(hwnd =>
+        _picker.Present(pick =>
         {
-            if (hwnd is { } h && WindowEnum.FrameBounds(h) is { } r) _ = BeginAsync(r);
+            if (pick is { } p && WindowEnum.FrameBounds(p.Hwnd) is { } r) _ = BeginAsync(r);
             else AbortArm();
         });
     }

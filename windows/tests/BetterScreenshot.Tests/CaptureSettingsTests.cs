@@ -17,6 +17,7 @@ public class CaptureSettingsTests
         Assert.True(d.PinShadow);
         Assert.True(d.HistoryEnabled);
         Assert.Equal(50, d.HistoryCap);
+        Assert.True(d.FreezeScreen);
     }
 
     [Fact]
@@ -32,6 +33,7 @@ public class CaptureSettingsTests
             PinShadow = false,
             HistoryEnabled = false,
             HistoryCap = 200,
+            FreezeScreen = false,
         };
         var round = CaptureSettings.FromDictionary(s.ToDictionary());
         Assert.Equal(s, round);

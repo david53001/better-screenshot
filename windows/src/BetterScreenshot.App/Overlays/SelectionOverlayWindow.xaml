@@ -7,6 +7,9 @@
     <!-- Canvas background is 1/255 alpha: visually nothing, but keeps the whole window hit-testable
          (fully transparent pixels on a layered window pass clicks through to whatever is beneath). -->
     <Canvas x:Name="RootCanvas" Background="#01000000">
+        <!-- Freeze mode only: this monitor's still, painted 1:1 under the dim so the screen appears frozen.
+             Hidden (and the window stays transparent over the live screen) when freeze is off. -->
+        <Image x:Name="FrozenImage" Stretch="Fill" Visibility="Collapsed"/>
         <!-- Dim with the live selection punched out (EvenOdd: full-monitor rect minus selection rect). -->
         <Path x:Name="DimPath" Fill="#59000000">
             <Path.Data>
