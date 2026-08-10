@@ -692,6 +692,8 @@ editor was a clunky white box. Both fixed. Details in `INVESTIGATION-2026-07-03-
 - Verified: 260 tests green; crash harness survives all orderings; visually confirmed; `dist/` republished.
 
 ## Freeze the screen while selecting (2026-08-10) — owner: "screenshotting Minecraft unfocuses it and I capture the menu"
+Full write-up: `docs/freeze-screen.md`.
+
 Pressing a capture shortcut showed the selection overlay, which stole focus; a full-screen game reacted by pausing
 to its menu, and the capture — taken *after* the drag, from the live screen — got the menu instead of the frame the
 owner wanted. Fixed by freezing: `FrozenScreen.Capture()` (new, `App/Overlays/FrozenScreen.cs`) BitBlts every
