@@ -269,6 +269,35 @@
                         </StackPanel>
                     </ctl:DarkSection>
 
+                    <!-- TEMPORARY FILES -->
+                    <ctl:DarkSection HeaderText="Temporary Files">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Keep temp copies for" Margin="0" VerticalAlignment="Center"/>
+                                <ctl:InfoTip Margin="6,0,0,0"
+                                    Title="Keep temp copies for"
+                                    Explanation="When you copy a capture, or drag one out of the Quick Access card, a throwaway PNG is written to your Windows temp folder (%TEMP%\BetterScreenshot-&#8230;) so other apps can take it as a file. This is how long that temp copy is kept before it deletes itself. Drag the bar between 5 and 30 minutes. Your actual screenshot is never touched &#8212; History keeps its own separate copy."
+                                    Example="At 5 min, a screenshot you copied can still be pasted as a file for 5 minutes. Drag it to 30 if you often copy a capture and only paste it into an email or upload box much later."/>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource RowSub}" Text="Lifetime of the clipboard/drag files in %TEMP% &#8212; not your saved screenshots" Margin="0,0,0,8"/>
+                            <Grid Width="240" HorizontalAlignment="Left">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Slider x:Name="TempRetentionSlider" Grid.Column="0" VerticalAlignment="Center"
+                                        Minimum="5" Maximum="30" IsSnapToTickEnabled="True" TickFrequency="1"
+                                        SmallChange="1" LargeChange="5" IsMoveToPointEnabled="True"
+                                        Style="{StaticResource Theme.Slider}"
+                                        ValueChanged="TempRetentionSlider_ValueChanged"/>
+                                <TextBlock x:Name="TempRetentionValueLabel" Grid.Column="1" MinWidth="52"
+                                           Margin="12,0,0,0" VerticalAlignment="Center" TextAlignment="Right"
+                                           FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{StaticResource Theme.TextW85}"/>
+                            </Grid>
+                        </StackPanel>
+                    </ctl:DarkSection>
+
                 </StackPanel>
 
                 <!-- ===== COLUMN C ===== -->

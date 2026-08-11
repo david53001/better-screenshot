@@ -1,4 +1,5 @@
 using System.IO;
+using BetterScreenshot.Capture;
 using BetterScreenshot.Platform;
 using Xunit;
 
@@ -7,11 +8,36 @@ namespace BetterScreenshot.Tests;
 public class TempFilesTests
 {
     [Fact]
-    public void PayloadLifetimeIsFiveMinutes()
+    public void PayloadLifetimeDefaultsToFiveMinutes()
     {
-        // The drag/clipboard temp PNG must live exactly 5 minutes — not longer, not shorter.
+        // Untouched settings must behave exactly as before the setting existed: a 5-minute temp lifetime.
+        RestoreDefaultRetention();
         Assert.Equal(TimeSpan.FromMinutes(5), TempFiles.PayloadLifetime);
+        Assert.Equal(5, TempFiles.RetentionMinutes);
     }
+
+    [Theory]
+    [InlineData(5, 5)]
+    [InlineData(12, 12)]
+    [InlineData(30, 30)]
+    [InlineData(1, 5)]    // out-of-range values are clamped to the bar's 5..30 range, never honored raw
+    [InlineData(0, 5)]
+    [InlineData(90, 30)]
+    public void ConfigureSetsTheClampedLifetime(int minutes, int expected)
+    {
+        try
+        {
+            TempFiles.Configure(minutes);
+            Assert.Equal(expected, TempFiles.RetentionMinutes);
+            Assert.Equal(TimeSpan.FromMinutes(expected), TempFiles.PayloadLifetime);
+        }
+        finally
+        {
+            RestoreDefaultRetention();
+        }
+    }
+
+    private static void RestoreDefaultRetention() => TempFiles.Configure(TempRetentionScale.DefaultMinutes);
 
     [Fact]
     public async Task ScheduleDeleteRemovesContainingDirAfterDelay()

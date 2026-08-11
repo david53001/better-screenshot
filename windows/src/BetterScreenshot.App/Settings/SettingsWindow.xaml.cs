@@ -75,6 +75,8 @@ public partial class SettingsWindow : Window
         }).IsChecked = true;
         DismissSlider.Value = OverlayDismissScale.SecondsToPosition(c.OverlayAutoDismissSeconds);
         UpdateDismissLabel();
+        TempRetentionSlider.Value = TempRetentionScale.Clamp(c.TempRetentionMinutes);
+        UpdateTempRetentionLabel();
         SaveDirBox.Text = _settings.SaveDirectory;
         PinRadiusCombo.SelectedIndex = Math.Max(0, Array.IndexOf(PinRadii, c.PinCornerRadius));
         PinShadowCheck.IsChecked = c.PinShadow;
@@ -315,6 +317,22 @@ public partial class SettingsWindow : Window
         DismissValueLabel.Text = OverlayDismissScale.Label(OverlayDismissScale.PositionToSeconds(DismissSlider.Value));
     }
 
+    /// <summary>The temp-retention slider: same live-readout + instant-apply pattern as the auto-dismiss bar.</summary>
+    private void TempRetentionSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        UpdateTempRetentionLabel();
+        if (_loading) return;
+        Apply();
+    }
+
+    /// <summary>Refresh the "5 min" … "30 min" readout beside the temp-retention slider. Null-guarded for the
+    /// same reason as <see cref="UpdateDismissLabel"/> (the slider can raise ValueChanged during XAML parse).</summary>
+    private void UpdateTempRetentionLabel()
+    {
+        if (TempRetentionValueLabel is null) return;
+        TempRetentionValueLabel.Text = TempRetentionScale.Label(TempRetentionScale.PositionToMinutes(TempRetentionSlider.Value));
+    }
+
     private void Apply()
     {
         _settings.Capture = new CaptureSettings
@@ -334,6 +352,7 @@ public partial class SettingsWindow : Window
             HistoryEnabled = HistoryEnabledCheck.IsChecked == true,
             HistoryCap = Cap10.IsChecked == true ? 10 : Cap100.IsChecked == true ? 100 : 50,
             FreezeScreen = FreezeScreenCheck.IsChecked == true,
+            TempRetentionMinutes = TempRetentionScale.PositionToMinutes(TempRetentionSlider.Value),
         };
 
         _settings.Recording = new RecordingConfig
@@ -355,6 +374,8 @@ public partial class SettingsWindow : Window
         // Push the launch-at-login choice to the OS Run key. Reconcile (not SetEnabled) is idempotent, so the
         // per-control instant-apply firing this on every settings change stays a cheap no-op unless it changed.
         StartupRegistration.Reconcile(_settings.LaunchAtLogin);
+        // Temp-file retention takes effect from the next capture on (already-scheduled deletions keep their delay).
+        TempFiles.Configure(_settings.Capture.TempRetentionMinutes);
         _settings.Save();
     }
 

@@ -727,6 +727,38 @@ toggled in Settings → Capture.
   (3) freeze off: overlay stayed `AllowsTransparency=True`, no crop carried, live capture returned the current
   (blue) screen. `dist/` republished + relaunched.
 
+## Keep temp copies for — 5–30 min slider (2026-08-11) — owner: "keep the screenshots in temp for longer"
+Full write-up: `docs/temp-retention.md`.
+
+Copying a capture, or dragging one off the Quick Access card, writes a throwaway PNG to
+`%TEMP%\BetterScreenshot-{guid}\` so other apps can take it as a *file*; it was deleted on a **hardcoded 5-minute**
+timer, which is too short if you paste into an email/upload box minutes later. Now a slider in
+**Settings → Temporary Files → "Keep temp copies for"**: **5–30 minutes, default 5** (= the old behavior, so
+nothing changes until it's moved).
+- **New pure `Capture/TempRetentionScale.cs`** owns the range (`MinMinutes` 5 / `MaxMinutes` 30 / `DefaultMinutes` 5)
+  + `Clamp`, `PositionToMinutes` (round-then-clamp a slider double), `Label` ("5 min"…"30 min") — one tested place
+  so the slider and the persisted int can't drift, mirroring `OverlayDismissScale`.
+- **`CaptureSettings.TempRetentionMinutes`** (persisted key `tempRetentionMinutes`), **clamped on read** so a
+  zero/legacy/hand-edited value can't drop below the 5 min an in-flight drop needs or exceed 30.
+- **`Platform/TempFiles.PayloadLifetime`** went from `static readonly TimeSpan` to a property over
+  `RetentionMinutes`, set by new `TempFiles.Configure(minutes)`. Both consumers (`ClipboardService.SetImage`,
+  `CaptureCoordinator.ShowOverlayCard`'s drag file) read `PayloadLifetime` unchanged → one setting governs every
+  temp payload. `Configure` is called from `App.OnStartup` (after `SettingsStore.Load`, before any capture) and
+  `SettingsWindow.Apply` (instant-apply) — same wiring shape as `StartupRegistration.Reconcile`.
+- **Settings UI:** new `Temporary Files` `DarkSection` in **column B** under Save Location — `Theme.Slider` 5..30,
+  snap-to-integer, `IsMoveToPointEnabled`, live "5 min" readout + InfoTip. Column B was the shortest column, so the
+  window height didn't grow.
+- **Decisions (owner away):** (1) no "forever" stop — these are disposable copies and History keeps the real one, so
+  an unbounded option would just leak `%TEMP%`; (2) a retention change applies from the **next** capture on —
+  already-scheduled deletions keep their delay (re-arming would mean tracking every pending payload for no benefit);
+  (3) default stays **5** so existing installs behave identically until the owner drags the bar.
+- **Verified:** build **0/0**; `dotnet test` **336 passed / 0 failed** (301 → 336, +35: 25 `TempRetentionScaleTests`,
+  +6 `TempFiles.Configure`, +4 `CaptureSettings` clamp-on-read). Settings rendered from the freshly built binary via
+  `--ui-preview settings` + PrintWindow — TEMPORARY FILES card present, slider at the 5-min minimum, "5 min" readout,
+  monochrome theme intact. ⚠️ **Capture the preview by PID:** the owner's `dist/` agent had its own
+  "BetterScreenshot Settings" window open, and a title-only window search grabbed *that* (old build) — which looked
+  exactly like the new card silently failing to render. `dist/` republished + tray agent relaunched.
+
 ## Known issues / TODO discovered during build (append as you find them)
 - Git warns LF→CRLF on the C# files (autocrlf). Harmless; could add a `.gitattributes` to normalize.
 - **Republish `dist/` after runtime-visible changes.** `dist/` is a manual publish snapshot; a plain build/commit

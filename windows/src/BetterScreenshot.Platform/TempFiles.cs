@@ -1,4 +1,5 @@
 using System.IO;
+using BetterScreenshot.Capture;
 
 namespace BetterScreenshot.Platform;
 
@@ -10,9 +11,19 @@ namespace BetterScreenshot.Platform;
 /// </summary>
 public static class TempFiles
 {
+    /// <summary>Current retention in minutes — the user's <see cref="CaptureSettings.TempRetentionMinutes"/>
+    /// setting, applied through <see cref="Configure"/>.</summary>
+    public static int RetentionMinutes { get; private set; } = TempRetentionScale.DefaultMinutes;
+
     /// <summary>How long a drag/clipboard temp PNG is kept alive before it is auto-deleted. Long enough that an
-    /// app receiving a drop can still read the file, short enough that temp does not accumulate images.</summary>
-    public static readonly TimeSpan PayloadLifetime = TimeSpan.FromMinutes(5);
+    /// app receiving a drop can still read the file, short enough that temp does not accumulate images — the
+    /// user picks where in that range they sit (Settings → Temporary Files → "Keep temp copies for").</summary>
+    public static TimeSpan PayloadLifetime => TimeSpan.FromMinutes(RetentionMinutes);
+
+    /// <summary>Applies the user's retention setting (clamped to the 5..30-minute range). Called at startup and
+    /// again whenever settings change, so the next capture's temp file uses the newly chosen lifetime. Already
+    /// scheduled deletions keep the lifetime they were scheduled with.</summary>
+    public static void Configure(int minutes) => RetentionMinutes = TempRetentionScale.Clamp(minutes);
 
     /// <summary>
     /// Deletes the unique temp subdirectory that contains <paramref name="filePath"/> after <paramref name="delay"/>.

@@ -6,8 +6,9 @@ namespace BetterScreenshot.Platform;
 
 /// <summary>
 /// Clipboard interactions. <see cref="SetImage"/> puts both the bitmap and a file-drop of a temp PNG on the
-/// clipboard (so it can be pasted as an image or dropped as a file), then deletes the temp file after 5 minutes
-/// (see <see cref="TempFiles.PayloadLifetime"/>). Must be called on an STA thread (the WPF UI thread at runtime).
+/// clipboard (so it can be pasted as an image or dropped as a file), then deletes the temp file once the user's
+/// retention window elapses (see <see cref="TempFiles.PayloadLifetime"/>). Must be called on an STA thread (the
+/// WPF UI thread at runtime).
 /// </summary>
 public static class ClipboardService
 {

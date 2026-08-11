@@ -9,7 +9,7 @@ public enum SettingsOverlayCorner { TopLeft, TopRight, BottomLeft, BottomRight }
 /// <summary>
 /// Capture behavior settings, persisted as a flat string dictionary (1:1 with the macOS app's persisted keys).
 /// Defaults: show the quick-access overlay, PNG, bottom-right corner, 6s auto-dismiss, pin radius 8 + shadow,
-/// history enabled with a 50-item cap, screen frozen while selecting.
+/// history enabled with a 50-item cap, screen frozen while selecting, temp copies kept 5 minutes.
 /// </summary>
 public sealed record CaptureSettings
 {
@@ -29,6 +29,14 @@ public sealed record CaptureSettings
     public bool PinShadow { get; init; } = true;
     public bool HistoryEnabled { get; init; } = true;
     public int HistoryCap { get; init; } = 50;
+
+    /// <summary>
+    /// How long (in minutes, <see cref="TempRetentionScale.MinMinutes"/>..<see cref="TempRetentionScale.MaxMinutes"/>)
+    /// the throwaway PNGs under <c>%TEMP%\BetterScreenshot-{guid}\</c> — the files behind clipboard file-drops and
+    /// Quick Access drag-to-export — are kept before they are auto-deleted. Raising it lets you paste or drop a
+    /// capture as a *file* long after you took it; the capture itself is never affected (History keeps its own copy).
+    /// </summary>
+    public int TempRetentionMinutes { get; init; } = TempRetentionScale.DefaultMinutes;
 
     public static CaptureSettings Default => new();
 
@@ -55,6 +63,7 @@ public sealed record CaptureSettings
         ["historyEnabled"] = HistoryEnabled ? "true" : "false",
         ["historyCap"] = HistoryCap.ToString(CultureInfo.InvariantCulture),
         ["freezeScreen"] = FreezeScreen ? "true" : "false",
+        ["tempRetentionMinutes"] = TempRetentionMinutes.ToString(CultureInfo.InvariantCulture),
     };
 
     public static CaptureSettings FromDictionary(IReadOnlyDictionary<string, string> d)
@@ -89,6 +98,9 @@ public sealed record CaptureSettings
             HistoryEnabled = ParseBool(d, "historyEnabled", def.HistoryEnabled),
             HistoryCap = ParseInt(d, "historyCap", def.HistoryCap),
             FreezeScreen = ParseBool(d, "freezeScreen", def.FreezeScreen),
+            // Clamped on read: a hand-edited or future-written value can never shorten the lifetime below the
+            // 5 minutes an in-flight drop needs, nor leave temp files lying around past the bar's 30-minute end.
+            TempRetentionMinutes = TempRetentionScale.Clamp(ParseInt(d, "tempRetentionMinutes", def.TempRetentionMinutes)),
         };
     }
 

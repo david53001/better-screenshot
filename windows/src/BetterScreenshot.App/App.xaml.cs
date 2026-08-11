@@ -49,6 +49,8 @@ public partial class App : System.Windows.Application
         // Keep the Windows "run at sign-in" registration honest: refresh the Run key to this exe's current path
         // (repairs a stale entry after the app is moved/republished) or clear it if the flag was turned off.
         StartupRegistration.Reconcile(_settings.LaunchAtLogin);
+        // How long clipboard/drag temp PNGs survive is a user setting; apply it before the first capture can run.
+        TempFiles.Configure(_settings.Capture.TempRetentionMinutes);
         _commands = new CaptureCoordinator(_settings, Shutdown);
         _tray = new TrayIcon(_commands, _settings.Hotkeys);
         _hotkeys = new HotkeyController(_commands);

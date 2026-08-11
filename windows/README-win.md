@@ -30,8 +30,12 @@ capture history. **No cloud, no accounts, no uploads, ever.**
 - **Capture history** — a persistent, browsable thumbnail grid (copy / annotate / pin / reveal / delete / clear-all);
   "Restore Recently Closed" brings back the last dismissed card. Auto-prunes by age + count.
 - **Settings** — a single scrolling **wall of titled cards** (Capture — including the freeze toggle, Quick Access Overlay, Pin to Screen,
-  History, Startup, Save Location, Recording, Keyboard Shortcuts) with macOS-style toggle switches and segmented
-  controls. Changes apply **instantly** and global hotkeys rebind live.
+  History, Startup, Save Location, Temporary Files, Recording, Keyboard Shortcuts) with macOS-style toggle switches
+  and segmented controls. Changes apply **instantly** and global hotkeys rebind live.
+- **Temp copy retention** — copying or dragging a capture writes a throwaway PNG to `%TEMP%\BetterScreenshot-…` so
+  other apps can take it as a *file*. **Settings → Temporary Files** has a slider for how long that copy is kept —
+  **5 to 30 minutes** (default 5) — so a capture you copied is still pasteable as a file later. Your screenshots are
+  never affected: History keeps its own separate copy.
 
 The interface is an all-**monochrome black-and-white** dark theme (matching the sibling **JVoice** app's look):
 pure-black surfaces, near-black cards each headed by a glowing dot + label, and **white as the sole accent**.

@@ -18,6 +18,7 @@ public class CaptureSettingsTests
         Assert.True(d.HistoryEnabled);
         Assert.Equal(50, d.HistoryCap);
         Assert.True(d.FreezeScreen);
+        Assert.Equal(5, d.TempRetentionMinutes);
     }
 
     [Fact]
@@ -34,9 +35,21 @@ public class CaptureSettingsTests
             HistoryEnabled = false,
             HistoryCap = 200,
             FreezeScreen = false,
+            TempRetentionMinutes = 22,
         };
         var round = CaptureSettings.FromDictionary(s.ToDictionary());
         Assert.Equal(s, round);
+    }
+
+    [Theory]
+    [InlineData("0", 5)]     // a zero/blank legacy value must not mean "delete the temp copy instantly"
+    [InlineData("1", 5)]
+    [InlineData("45", 30)]   // nor can a hand-edited settings.json leave temp files around past the 30-min end
+    [InlineData("oops", 5)]  // unparseable → the default
+    public void TempRetentionMinutesIsClampedOnRead(string persisted, int expected)
+    {
+        var round = CaptureSettings.FromDictionary(new Dictionary<string, string> { ["tempRetentionMinutes"] = persisted });
+        Assert.Equal(expected, round.TempRetentionMinutes);
     }
 
     [Fact]

@@ -132,10 +132,10 @@ public sealed class CaptureCoordinator : IAppCommands
             dragFile, _settings.Capture.OverlayAutoDismissSeconds, reason =>
             {
                 OnCardDismissed(historyId, reason);
-                // The temp PNG only backs drag-to-export. Keep it alive for PayloadLifetime (5 min) after the card
-                // goes away so an in-flight drop into another app can still read the file, then auto-delete it. The
-                // screenshot itself is preserved separately in History (its own %APPDATA% copy), so this never loses
-                // the capture — it only cleans up the throwaway drag file.
+                // The temp PNG only backs drag-to-export. Keep it alive for PayloadLifetime (the user's "Keep temp
+                // copies for" setting, 5–30 min) after the card goes away so a later drop into another app can still
+                // read the file, then auto-delete it. The screenshot itself is preserved separately in History (its
+                // own %APPDATA% copy), so this never loses the capture — it only cleans up the throwaway drag file.
                 TempFiles.ScheduleDeleteContainingDir(dragFile, TempFiles.PayloadLifetime);
             });
     }
