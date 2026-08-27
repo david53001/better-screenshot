@@ -46,3 +46,27 @@ let quickAccessContrastTests: [TestCase] = [
         t.approxEqual(Double(s.height), min(max(210.0/(16.0/9.0),150),280), tol: 0.001)
     },
 ]
+
+// MARK: - sRGB / WCAG primitives
+
+let srgbTests: [TestCase] = [
+    TestCase("srgbExpandEncodeRoundTrip") { t in
+        // Tolerance is loose at the 0.04045 kink: the two standard thresholds
+        // (0.04045 encoded, 0.0031308 linear) are rounded and don't map onto
+        // each other exactly, so the branch can flip on the way back.
+        for c in [0.0, 0.002, 0.04045, 0.1, 0.5, 0.9, 1.0] {
+            t.approxEqual(SRGB.encode(SRGB.expand(c)), c, tol: 1e-6)
+        }
+    },
+    TestCase("srgbRelativeLuminanceEndpoints") { t in
+        t.approxEqual(SRGB.relativeLuminance(r: 255, g: 255, b: 255), 1.0, tol: 1e-9)
+        t.approxEqual(SRGB.relativeLuminance(r: 0, g: 0, b: 0), 0.0, tol: 1e-9)
+    },
+    TestCase("srgbContrastRatioWhiteOnBlackIs21") { t in
+        t.approxEqual(SRGB.contrastRatio(1.0, 0.0), 21.0, tol: 1e-9)
+    },
+    TestCase("srgbContrastRatioIsSymmetric") { t in
+        t.approxEqual(SRGB.contrastRatio(0.2, 0.7), SRGB.contrastRatio(0.7, 0.2), tol: 1e-12)
+        t.approxEqual(SRGB.contrastRatio(0.4, 0.4), 1.0, tol: 1e-12)
+    },
+]
