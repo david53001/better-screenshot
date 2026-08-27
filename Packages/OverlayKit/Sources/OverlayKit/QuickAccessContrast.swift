@@ -10,6 +10,16 @@ public struct ContrastPalette: Equatable {
 }
 
 public enum QuickAccessContrast {
+    /// The darkest and brightest backgrounds the button row has to survive.
+    public struct BandExtremes: Equatable {
+        public let dark: Double      // low-percentile relative luminance
+        public let bright: Double    // high-percentile relative luminance
+        public init(dark: Double, bright: Double) {
+            self.dark = dark
+            self.bright = bright
+        }
+    }
+
     public static let lightThreshold = 0.58
 
     /// Mean Rec.709 relative luminance (0...1) of an RGBA byte buffer; alpha ignored. 0 if empty.
