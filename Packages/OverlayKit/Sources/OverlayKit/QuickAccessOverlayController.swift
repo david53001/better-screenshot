@@ -5,16 +5,15 @@ public struct QuickAccessActions {
     public let onCopy: () -> Void
     public let onSave: () -> Void
     public let onAnnotate: () -> Void
-    public let onPin: () -> Void
     public let onOpen: () -> Void
     public let onReveal: () -> Void
     public let fileURLForDrag: () -> URL?
     public init(onCopy: @escaping () -> Void = {}, onSave: @escaping () -> Void = {},
-                onAnnotate: @escaping () -> Void = {}, onPin: @escaping () -> Void = {},
+                onAnnotate: @escaping () -> Void = {},
                 onOpen: @escaping () -> Void = {}, onReveal: @escaping () -> Void = {},
                 fileURLForDrag: @escaping () -> URL? = { nil }) {
         self.onCopy = onCopy; self.onSave = onSave
-        self.onAnnotate = onAnnotate; self.onPin = onPin
+        self.onAnnotate = onAnnotate
         self.onOpen = onOpen; self.onReveal = onReveal
         self.fileURLForDrag = fileURLForDrag
     }
@@ -140,7 +139,6 @@ public final class QuickAccessOverlayController: NSObject {
         case .screenshot:
             stack.addArrangedSubview(button("doc.on.doc", "Copy") { [weak self] in self?.copyAction() })
             stack.addArrangedSubview(button("pencil.tip.crop.circle", "Edit") { [weak self] in self?.annotateAction() })
-            stack.addArrangedSubview(button("pin", "Pin to screen") { [weak self] in self?.pinAction() })
             stack.addArrangedSubview(button("square.and.arrow.down", "Save to screenshots") { [weak self] in self?.saveAction() })
         case .recording:
             stack.addArrangedSubview(button("doc.on.doc", "Copy file") { [weak self] in self?.copyAction() })
@@ -342,12 +340,6 @@ public final class QuickAccessOverlayController: NSObject {
         let a = actions
         dismiss(reason: .actionTaken)
         a?.onAnnotate()
-    }
-    // Pinning replaces the overlay with a floating pin.
-    @objc private func pinAction() {
-        let a = actions
-        dismiss(reason: .actionTaken)
-        a?.onPin()
     }
     // Opening the recording hands off to the default player.
     @objc private func openAction() {

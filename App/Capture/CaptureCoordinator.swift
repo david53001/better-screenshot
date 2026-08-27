@@ -158,7 +158,6 @@ final class CaptureCoordinator {
             // The overlay's download button always lands in the macOS screenshot folder.
             onSave: { [weak self] in self?.save(image, to: SettingsStore.systemScreenshotLocation()) },
             onAnnotate: { [weak self] in self?.annotate(image) },
-            onPin: { [weak self] in self?.pin(image, near: sourceRect) },
             fileURLForDrag: { TempImageWriter.writePNG(image, fileName: FileNamer.fileName(for: Date(), ext: "png")) })
         let corner = settings.settings.overlayCorner
         // visibleFrame excludes the Dock and menu bar, so the overlay sits above
