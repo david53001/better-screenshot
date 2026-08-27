@@ -266,9 +266,9 @@ public final class QuickAccessOverlayController: NSObject {
     /// Luminance extremes of the pixels the button row actually sits on. The card
     /// draws the image `.resizeAspectFill`, so the row's card rect has to be mapped
     /// back through `AspectFillMap` — the image's own bottom strip is often cropped
-    /// off screen. Downscaled so the longest side ≤ 64px and read into a tight RGBA
-    /// buffer. Any failure → dark 0 / bright 0, i.e. light glyphs at the minimum
-    /// scrim, which is what a fully dark shot plans to anyway.
+    /// off screen. Read into a tight RGBA buffer at the band's on-screen resolution.
+    /// Any failure → dark 0 / bright 0, i.e. light glyphs at the minimum scrim,
+    /// which is what a fully dark shot plans to anyway.
     private func sampleBandExtremes(_ cg: CGImage, cardSize: CGSize,
                                     rowFrame: CGRect) -> QuickAccessContrast.BandExtremes {
         let none = QuickAccessContrast.BandExtremes(dark: 0, bright: 0)
@@ -290,11 +290,15 @@ public final class QuickAccessOverlayController: NSObject {
         guard srcRect.width >= 1, srcRect.height >= 1,
               let band = cg.cropping(to: srcRect) else { return none }
 
+        // Downsample no further than the band's own device pixels — that is exactly
+        // the reduction CoreAnimation performs when it draws the layer, so the
+        // percentiles describe what is on screen. Going smaller box-filters a white
+        // headline into its dark surround (0.91 → 0.33 on the measured lock-screen
+        // case) and plans a scrim far too weak for the pixels the user actually sees.
         let sw = band.width, sh = band.height
-        let longest = max(sw, sh)
-        let scale = longest > 64 ? 64.0 / Double(longest) : 1.0
-        let tw = max(1, Int(Double(sw) * scale))
-        let th = max(1, Int(Double(sh) * scale))
+        let backing = NSScreen.main?.backingScaleFactor ?? 2
+        let tw = max(1, min(sw, Int((padded.width * backing).rounded())))
+        let th = max(1, min(sh, Int((padded.height * backing).rounded())))
 
         guard let cs = CGColorSpace(name: CGColorSpace.sRGB),
               let ctx = CGContext(data: nil, width: tw, height: th, bitsPerComponent: 8,
