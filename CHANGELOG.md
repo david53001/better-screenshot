@@ -2,6 +2,26 @@
 
 All notable changes to BetterScreenshot. Versions are git tags; releases are published on [GitHub](../../releases).
 
+## v2.9.0 — 2026-08-27 · Readable overlay buttons on any screenshot
+
+### Fixed
+- **The Quick Access buttons stay readable over multi-colored screenshots.** The post-capture card
+  chose white or near-black glyphs from the *mean* brightness of the image's bottom strip — a
+  statistic that says nothing useful about a strip containing both. A lock-screen capture (near-black
+  starfield behind a large white headline sitting exactly at button height) averaged out "dark", drew
+  white glyphs, and placed them straight on top of the white headline. The card now measures the
+  darkest and brightest pixels actually behind the button row and solves for the scrim strength that
+  guarantees a WCAG 4.5:1 contrast ratio against **both**, choosing whichever glyph tone needs the
+  gentler scrim. Screenshots that are already dark behind the row keep the light, barely-there scrim
+  they had before. Three further faults in the same code path went with it: the scrim faded to ~27%
+  opacity exactly where the glyphs sit (it now holds its computed strength flat across the row), the
+  sampler read the image's own bottom strip instead of the pixels the aspect-fill crop actually shows
+  there, and luminance was computed on gamma-encoded bytes rather than linear light.
+
+### Changed
+- **The Quick Access card's Pin button is gone.** Pin to Screen is unchanged everywhere else — the
+  menu bar's **Pin from Clipboard** and the History window's **Pin** action both still work.
+
 ## v2.8.1 — 2026-08-06 · Menu-bar icon restored (new bundle identifier)
 
 ### Fixed

@@ -7,9 +7,9 @@ A free, open-source screenshot and annotation tool for macOS, living in your men
 - **Capture** an area (`⌘⇧4`), a window (`⌘⇧8`), or the full screen (`⌘⇧6`) — the native `⌘⇧4` is disabled while the app runs and restored on quit
 - **Capture Text (`⌘⇧7`)** — on-device OCR + QR decode straight to the clipboard
 - **Record (`⌘⇧5`)** the full screen, a selected area, or a single window to MP4 or GIF — with system audio, microphone, a camera bubble, click highlights, and a keystroke overlay; an optional 3/5/10-second countdown before recording; and pause/resume that leaves no gap in the saved file
-- **Quick Access overlay** after capture: drag the thumbnail anywhere, copy, save, or jump into the editor; the last 3 captures stack at the screen corner
-- **Capture History** — every capture and recording is remembered locally (capped + 30-day prune); browse, copy, annotate, pin, delete, or clear all from the History window, and restore an accidentally closed thumbnail with Restore Recently Closed
-- **Pin to screen** — float any capture always-on-top (drag, resize, multi-pin)
+- **Quick Access overlay** after capture: drag the thumbnail anywhere, copy, save, or jump into the editor; the last 3 captures stack at the screen corner. Its buttons measure the pixels behind them and pick a glyph tone plus scrim strength that guarantees a WCAG 4.5:1 contrast ratio, so they stay readable over any screenshot
+- **Capture History** — every capture and recording is remembered locally (capped at the 100 most recent, with no time limit); browse, copy, annotate, pin, delete, or clear all from the History window, and restore an accidentally closed thumbnail with Restore Recently Closed
+- **Pin to screen** — float a capture always-on-top (drag, resize, multi-pin), from the History window's Pin action or the menu bar's **Pin from Clipboard**
 - **Annotation editor**: arrow, line, rectangle, ellipse, text, numbered counters, blur & pixelate redaction, crop
   - Undo/redo (`⌘Z` / `⌘⇧Z` / `⌘Y`), drag to select multiple objects, resize handles, bring-to-front / send-to-back
 - **One-button setup** — Screen Recording is the only permission the app needs; the welcome window handles the whole flow and restarts the app for you
