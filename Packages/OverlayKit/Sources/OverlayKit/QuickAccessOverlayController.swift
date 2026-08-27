@@ -121,44 +121,10 @@ public final class QuickAccessOverlayController: NSObject {
             thumb.layer?.addSublayer(imageLayer)
         }
 
-        // Auto-contrast from the bottom strip where the buttons sit.
-        let luminance = cg.map { sampleBottomLuminance($0) } ?? 0.0
-        let tone = QuickAccessContrast.tone(forLuminance: luminance)
-        let palette = QuickAccessContrast.palette(for: tone)
-
-        // Tone-matched scrim so glyphs stay legible over the picture: sits above
-        // the image and below the buttons; a plain layer so it never intercepts
-        // the drag or the button clicks.
-        let scrimH = min(64, size.height * 0.42)
-        let scrim = CAGradientLayer()
-        scrim.frame = CGRect(x: 0, y: 0, width: size.width, height: scrimH)
-        scrim.startPoint = CGPoint(x: 0.5, y: 1.0)   // top of scrim → transparent
-        scrim.endPoint = CGPoint(x: 0.5, y: 0.0)     // card bottom → most opaque
-        scrim.locations = [0.0, 0.5, 1.0]
-        let sc: CGFloat = palette.scrimIsWhite ? 1.0 : 0.0
-        scrim.colors = [
-            CGColor(srgbRed: sc, green: sc, blue: sc, alpha: 0.0),
-            CGColor(srgbRed: sc, green: sc, blue: sc, alpha: CGFloat(0x2E) / 255.0),
-            CGColor(srgbRed: sc, green: sc, blue: sc, alpha: CGFloat(0x8C) / 255.0),
-        ]
-        thumb.layer?.addSublayer(scrim)
-
-        // Subtle top hairline (~15% white) for a crisp card edge.
-        let hairline = CALayer()
-        hairline.frame = CGRect(x: 0, y: size.height - 1, width: size.width, height: 1)
-        hairline.backgroundColor = CGColor(srgbRed: 1, green: 1, blue: 1,
-                                           alpha: CGFloat(0x26) / 255.0)
-        thumb.layer?.addSublayer(hairline)
-
-        container.addSubview(thumb)
-
-        // Overlaid, auto-contrasted action row. Buttons are subviews layered
-        // above the image + scrim, so they receive clicks while the image below
-        // still receives drags.
-        let glyph = Self.nsColor(argb: palette.glyphARGB)
-        let hover = Self.nsColor(argb: palette.hoverARGB)
-        let pressed = Self.nsColor(argb: palette.pressedARGB)
-
+        // Build the action row FIRST: the auto-contrast sample has to read the
+        // pixels this row lands on, so its final frame must be known before the
+        // image is sampled. Colours are applied further down, once the plan exists.
+        var buttons: [QuickAccessIconButton] = []
         let stack = NSStackView()
         stack.orientation = .horizontal
         stack.distribution = .fill
@@ -166,8 +132,9 @@ public final class QuickAccessOverlayController: NSObject {
 
         func button(_ symbol: String, _ tip: String,
                     _ onClick: @escaping () -> Void) -> QuickAccessIconButton {
-            QuickAccessIconButton(symbol: symbol, tip: tip, glyph: glyph,
-                                  hover: hover, pressed: pressed, onClick: onClick)
+            let b = QuickAccessIconButton(symbol: symbol, tip: tip, onClick: onClick)
+            buttons.append(b)
+            return b
         }
         switch kind {
         case .screenshot:
@@ -184,8 +151,59 @@ public final class QuickAccessOverlayController: NSObject {
 
         // Centre the row horizontally, anchored 9pt up from the bottom edge.
         let rowSize = stack.fittingSize
-        stack.frame = NSRect(x: (size.width - rowSize.width) / 2, y: 9,
-                             width: rowSize.width, height: 30)
+        let rowFrame = NSRect(x: (size.width - rowSize.width) / 2, y: 9,
+                              width: rowSize.width, height: 30)
+        stack.frame = rowFrame
+
+        // Auto-contrast from the pixels actually behind the row — not the image's
+        // own bottom strip, which aspect-fill may have cropped off screen. With no
+        // CGImage there is nothing to read: 0/0 plans light glyphs at the minimum
+        // scrim, which is what a dark shot got before.
+        let extremes = cg.map { sampleBandExtremes($0, cardSize: size, rowFrame: rowFrame) }
+            ?? QuickAccessContrast.BandExtremes(dark: 0, bright: 0)
+        let plan = QuickAccessContrast.plan(for: extremes)
+        let palette = plan.palette
+
+        // Tone-matched scrim so glyphs stay legible over the picture: sits above
+        // the image and below the buttons; a plain layer so it never intercepts
+        // the drag or the button clicks. It fades in ABOVE the row and then HOLDS
+        // plan.scrimAlpha flat from the row's top edge down to the card bottom:
+        // the 4.5:1 guarantee is solved for a single alpha over the whole sampled
+        // band, so the scrimmed area has to cover every pixel that was sampled.
+        let fadeH: CGFloat = 28
+        let scrimH = min(rowFrame.maxY + fadeH, size.height)
+        let solidStart = max(0, (scrimH - rowFrame.maxY) / scrimH)
+        let scrim = CAGradientLayer()
+        scrim.frame = CGRect(x: 0, y: 0, width: size.width, height: scrimH)
+        scrim.startPoint = CGPoint(x: 0.5, y: 1.0)   // location 0 → top of the scrim
+        scrim.endPoint = CGPoint(x: 0.5, y: 0.0)     // location 1 → card bottom
+        scrim.locations = [0.0, NSNumber(value: Double(solidStart)), 1.0]
+        let sc: CGFloat = palette.scrimIsWhite ? 1.0 : 0.0
+        let sa = CGFloat(plan.scrimAlpha)
+        scrim.colors = [
+            CGColor(srgbRed: sc, green: sc, blue: sc, alpha: 0.0),
+            CGColor(srgbRed: sc, green: sc, blue: sc, alpha: sa),
+            CGColor(srgbRed: sc, green: sc, blue: sc, alpha: sa),
+        ]
+        thumb.layer?.addSublayer(scrim)
+
+        // Subtle top hairline (~15% white) for a crisp card edge.
+        let hairline = CALayer()
+        hairline.frame = CGRect(x: 0, y: size.height - 1, width: size.width, height: 1)
+        hairline.backgroundColor = CGColor(srgbRed: 1, green: 1, blue: 1,
+                                           alpha: CGFloat(0x26) / 255.0)
+        thumb.layer?.addSublayer(hairline)
+
+        container.addSubview(thumb)
+
+        // Overlaid, auto-contrasted action row. Buttons are subviews layered
+        // above the image + scrim, so they receive clicks while the image below
+        // still receives drags.
+        buttons.forEach {
+            $0.apply(glyph: Self.nsColor(argb: palette.glyphARGB),
+                     hover: Self.nsColor(argb: palette.hoverARGB),
+                     pressed: Self.nsColor(argb: palette.pressedARGB))
+        }
         container.addSubview(stack)
 
         // Full-size, click-through hover layer on top of everything so mouse
@@ -245,19 +263,36 @@ public final class QuickAccessOverlayController: NSObject {
         panel?.setFrameOrigin(origin)
     }
 
-    /// Mean Rec.709 luminance of the bottom 30% of the image, downscaled so the
-    /// longest side ≤ 48px and read into a tight RGBA buffer. Any failure → 0.0
-    /// (treated as dark → light controls).
-    private func sampleBottomLuminance(_ cg: CGImage) -> Double {
+    /// Luminance extremes of the pixels the button row actually sits on. The card
+    /// draws the image `.resizeAspectFill`, so the row's card rect has to be mapped
+    /// back through `AspectFillMap` — the image's own bottom strip is often cropped
+    /// off screen. Downscaled so the longest side ≤ 64px and read into a tight RGBA
+    /// buffer. Any failure → dark 0 / bright 0, i.e. light glyphs at the minimum
+    /// scrim, which is what a fully dark shot plans to anyway.
+    private func sampleBandExtremes(_ cg: CGImage, cardSize: CGSize,
+                                    rowFrame: CGRect) -> QuickAccessContrast.BandExtremes {
+        let none = QuickAccessContrast.BandExtremes(dark: 0, bright: 0)
         let w = cg.width, h = cg.height
-        guard w > 0, h > 0 else { return 0 }
-        let stripH = max(1, Int(Double(h) * 0.30))
-        guard let strip = cg.cropping(to: CGRect(x: 0, y: h - stripH, width: w, height: stripH))
-        else { return 0 }
+        guard w > 0, h > 0 else { return none }
 
-        let sw = strip.width, sh = strip.height
+        // Pad a few points so glyph antialiasing spilling past the row is covered.
+        // The scrim holds its flat alpha over rowFrame.maxY and below, so this stays
+        // a subset of the scrimmed area — the direction the contrast proof allows.
+        let padded = rowFrame.insetBy(dx: -4, dy: -4)
+            .intersection(CGRect(origin: .zero, size: cardSize))
+        guard !padded.isNull, padded.width > 0, padded.height > 0 else { return none }
+        // AspectFillMap (and CGImage.cropping) are top-left; rowFrame is AppKit bottom-left.
+        let topLeftRect = CGRect(x: padded.minX, y: cardSize.height - padded.maxY,
+                                 width: padded.width, height: padded.height)
+        let srcRect = AspectFillMap.sourceRect(cardSize: cardSize,
+                                               imagePixelSize: CGSize(width: w, height: h),
+                                               cardRect: topLeftRect)
+        guard srcRect.width >= 1, srcRect.height >= 1,
+              let band = cg.cropping(to: srcRect) else { return none }
+
+        let sw = band.width, sh = band.height
         let longest = max(sw, sh)
-        let scale = longest > 48 ? 48.0 / Double(longest) : 1.0
+        let scale = longest > 64 ? 64.0 / Double(longest) : 1.0
         let tw = max(1, Int(Double(sw) * scale))
         let th = max(1, Int(Double(sh) * scale))
 
@@ -266,11 +301,11 @@ public final class QuickAccessOverlayController: NSObject {
                                   bytesPerRow: 0, space: cs,
                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
               let data = ctx.data
-        else { return 0 }
-        ctx.draw(strip, in: CGRect(x: 0, y: 0, width: tw, height: th))
+        else { return none }
+        ctx.draw(band, in: CGRect(x: 0, y: 0, width: tw, height: th))
 
         // Copy row-by-row into a tight buffer so any bytesPerRow stride padding
-        // CoreGraphics chose doesn't corrupt the pixel average.
+        // CoreGraphics chose doesn't corrupt the sampled pixels.
         let bpr = ctx.bytesPerRow
         let src = data.bindMemory(to: UInt8.self, capacity: bpr * th)
         let pixelCount = tw * th
@@ -283,7 +318,7 @@ public final class QuickAccessOverlayController: NSObject {
                 for i in 0..<rowBytes { dst[d + i] = src[s + i] }
             }
         }
-        return QuickAccessContrast.averageLuminance(rgba: rgba, pixelCount: pixelCount)
+        return BandLuminance.extremes(rgba: rgba, pixelCount: pixelCount)
     }
 
     private static func nsColor(argb: UInt32) -> NSColor {
@@ -330,16 +365,21 @@ public final class QuickAccessOverlayController: NSObject {
 /// pill that fills on hover / press. Plain NSView (not NSControl) so it stays
 /// visually silent over the image; clicks fire the `onClick` closure.
 private final class QuickAccessIconButton: NSView {
-    private let hoverColor: CGColor
-    private let pressedColor: CGColor
+    private let glyphView: NSImageView
+    private var hoverColor: CGColor?
+    private var pressedColor: CGColor?
     private let onClick: () -> Void
     private var trackingAreaRef: NSTrackingArea?
     private var hovered = false
 
-    init(symbol: String, tip: String, glyph: NSColor,
-         hover: NSColor, pressed: NSColor, onClick: @escaping () -> Void) {
-        self.hoverColor = hover.cgColor
-        self.pressedColor = pressed.cgColor
+    init(symbol: String, tip: String, onClick: @escaping () -> Void) {
+        let img = NSImage(systemSymbolName: symbol, accessibilityDescription: tip)
+            ?? NSImage(size: NSSize(width: 1, height: 1))
+        img.isTemplate = true
+        glyphView = NSImageView(frame: NSRect(x: (32 - 17) / 2.0, y: (30 - 17) / 2.0,
+                                              width: 17, height: 17))
+        glyphView.image = img
+        glyphView.imageScaling = .scaleProportionallyUpOrDown
         self.onClick = onClick
         super.init(frame: NSRect(x: 0, y: 0, width: 32, height: 30))
         wantsLayer = true
@@ -348,18 +388,17 @@ private final class QuickAccessIconButton: NSView {
         toolTip = tip
         setAccessibilityRole(.button)
         setAccessibilityLabel(tip)
-
-        let img = NSImage(systemSymbolName: symbol, accessibilityDescription: tip)
-            ?? NSImage(size: NSSize(width: 1, height: 1))
-        img.isTemplate = true
-        let glyphView = NSImageView(frame: NSRect(x: (32 - 17) / 2.0, y: (30 - 17) / 2.0,
-                                                  width: 17, height: 17))
-        glyphView.image = img
-        glyphView.contentTintColor = glyph
-        glyphView.imageScaling = .scaleProportionallyUpOrDown
         addSubview(glyphView)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    /// Colours land after init: the row has to exist, and be measured, before the
+    /// pixels underneath it can be sampled for the contrast plan.
+    func apply(glyph: NSColor, hover: NSColor, pressed: NSColor) {
+        glyphView.contentTintColor = glyph
+        hoverColor = hover.cgColor
+        pressedColor = pressed.cgColor
+    }
 
     override var intrinsicContentSize: NSSize { NSSize(width: 32, height: 30) }
 
