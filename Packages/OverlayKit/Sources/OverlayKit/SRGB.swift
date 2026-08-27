@@ -1,8 +1,8 @@
 import Foundation
 
 /// WCAG 2.x sRGB primitives. Contrast is only meaningful on *linear* light, so every
-/// luminance here gamma-expands first — unlike the legacy `averageLuminance`, which
-/// weights the gamma-encoded bytes and therefore overstates dark pixels.
+/// luminance here gamma-expands first — weighting the gamma-encoded bytes directly
+/// overstates dark pixels.
 public enum SRGB {
     /// Gamma-expand one sRGB-encoded channel (0...1) to linear.
     public static func expand(_ c: Double) -> Double {
