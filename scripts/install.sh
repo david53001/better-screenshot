@@ -20,22 +20,22 @@ if [ "$MAJOR" -lt 14 ]; then echo "BetterScreenshot needs macOS 14 (Sonoma) or n
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-echo "==> Downloading latest release…"
+echo "==> Downloading latest release..."
 curl -fsSL -o "$TMP/$ASSET" "https://github.com/$REPO/releases/latest/download/$ASSET"
 ditto -x -k "$TMP/$ASSET" "$TMP"
 [ -d "$TMP/BetterScreenshot.app" ] || { echo "error: archive did not contain BetterScreenshot.app" >&2; exit 1; }
 
 if pgrep -xq BetterScreenshot; then
-    echo "==> Quitting the running copy…"
+    echo "==> Quitting the running copy..."
     osascript -e 'tell application "BetterScreenshot" to quit' >/dev/null 2>&1 || pkill -x BetterScreenshot || true
     sleep 1
 fi
 
-echo "==> Installing to $DEST…"
+echo "==> Installing to ${DEST}..."
 rm -rf "$DEST"
 ditto "$TMP/BetterScreenshot.app" "$DEST"
 xattr -dr com.apple.quarantine "$DEST" 2>/dev/null || true
 
-echo "==> Launching…"
+echo "==> Launching..."
 open -a "$DEST"
 echo "Done. Look for the camera icon in your menu bar; the first launch asks for Screen Recording permission."
