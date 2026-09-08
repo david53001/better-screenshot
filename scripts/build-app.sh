@@ -3,18 +3,32 @@
 # Replaces the plans' `xcodegen generate && xcodebuild ...` step (full Xcode is
 # unavailable in this environment; only Command Line Tools are installed).
 #
-# Usage: scripts/build-app.sh [debug|release]   (default: debug)
+# Usage: scripts/build-app.sh [debug|release] [universal]   (default: debug, host arch)
+#   universal — build arm64 + x86_64 slices separately and lipo them, so one
+#   bundle runs on Apple Silicon and Intel Macs. (SwiftPM's own multi-arch
+#   `--arch a --arch b` needs Xcode's xcbuild, which the CLT lacks.)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 CONFIG="${1:-debug}"
 APP_NAME="BetterScreenshot"
 
-echo "==> swift build -c $CONFIG"
-swift build -c "$CONFIG"
-
-BIN_DIR="$(swift build -c "$CONFIG" --show-bin-path)"
-BIN="$BIN_DIR/$APP_NAME"
+if [ "${2:-}" = "universal" ]; then
+    SLICES=()
+    for TRIPLE in arm64-apple-macosx x86_64-apple-macosx; do
+        echo "==> swift build -c $CONFIG --triple $TRIPLE"
+        swift build -c "$CONFIG" --triple "$TRIPLE"
+        SLICES+=("$(swift build -c "$CONFIG" --triple "$TRIPLE" --show-bin-path)/$APP_NAME")
+    done
+    mkdir -p .build/universal
+    BIN=".build/universal/$APP_NAME"
+    lipo -create "${SLICES[@]}" -output "$BIN"
+    echo "==> lipo: $(lipo -archs "$BIN")"
+else
+    echo "==> swift build -c $CONFIG"
+    swift build -c "$CONFIG"
+    BIN="$(swift build -c "$CONFIG" --show-bin-path)/$APP_NAME"
+fi
 if [ ! -x "$BIN" ]; then
     echo "error: built executable not found at $BIN" >&2
     exit 1

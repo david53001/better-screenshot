@@ -2,7 +2,18 @@
 
 All notable changes to BetterScreenshot. Versions are git tags; releases are published on [GitHub](../../releases).
 
-## Unreleased
+## v2.10.0 — 2026-09-08 · Faster Capture Text, runs on Intel Macs too
+
+### Changed
+- **The release build is now a universal binary** (Apple Silicon + Intel) — earlier releases were
+  arm64-only and would not launch on Intel Macs. `scripts/build-app.sh release universal` builds each
+  slice with its own target triple and joins them with `lipo` (SwiftPM's own multi-arch mode needs
+  Xcode's xcbuild, which the Command Line Tools lack); `scripts/package-release.sh` wraps that and
+  zips the bundle with `ditto` so the code signature survives.
+- **One-line install.** `scripts/install.sh` (README → Install) downloads the latest release, installs
+  it to `/Applications`, strips the quarantine flag, and launches it. The README's manual steps now
+  cover the macOS 15+ Gatekeeper flow, where **Open Anyway** in System Settings is the only
+  click-through for an unnotarized app.
 
 ### Improved
 - **Capture Text is faster and cleaner.** Vision's text model unloads after ~20s idle and reloading

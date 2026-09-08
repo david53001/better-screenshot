@@ -23,11 +23,23 @@ A native **Windows port** (.NET 9 + WPF, C#) lives under [`windows/`](windows/) 
 
 ## Install
 
+Works on **any Mac running macOS 14 (Sonoma) or newer — Apple Silicon and Intel** (the release is a universal binary).
+
+**Quickest — one line in Terminal:**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/david53001/BetterScreenshot/main/scripts/install.sh | bash
+```
+
+That downloads the latest release, puts `BetterScreenshot.app` in `/Applications`, clears the quarantine flag, and launches it. (Read it first if you like: [`scripts/install.sh`](scripts/install.sh).)
+
+**Manually:**
+
 1. Download `BetterScreenshot.app.zip` from the [latest release](../../releases/latest)
 2. Unzip and drag `BetterScreenshot.app` into `/Applications`
-3. Open it. macOS will warn that it can't verify the developer — the app is self-signed, not notarized (this project doesn't use a paid Apple Developer account). To open it anyway:
-   - **System Settings → Privacy & Security**, scroll down, click **“Open Anyway”**, or
-   - Terminal: `xattr -d com.apple.quarantine /Applications/BetterScreenshot.app`
+3. Open it. macOS will refuse the first time — the app is self-signed, not notarized (this project doesn't use a paid Apple Developer account). To let it through, either:
+   - Terminal: `xattr -dr com.apple.quarantine /Applications/BetterScreenshot.app`, then open it normally, or
+   - Try to open it once, then go to **System Settings → Privacy & Security**, scroll down to the message about BetterScreenshot, and click **Open Anyway**. (On macOS 15 and newer this is the only click-through path — right-click → Open no longer works for unnotarized apps.)
 4. Click **Enable Screen Recording** in the welcome window, flip the switch in System Settings, and the app restarts itself. Done — look for the camera icon in your menu bar.
 
 > Your first save may also trigger a standard macOS prompt to allow access to the destination folder — click Allow once.
