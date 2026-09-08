@@ -87,6 +87,8 @@ final class CaptureCoordinator {
     func captureText() {
         rememberFrontmostApp()
         guard ensurePermission() else { return }
+        // Load Vision's text model while the user drags — cold start is 0.5–1s.
+        Task.detached(priority: .userInitiated) { TextRecognizer.warmUp() }
         overlay.present { [weak self] result in
             guard let self else { return }
             guard let result else { self.restoreFrontmostApp(); return }
@@ -99,8 +101,9 @@ final class CaptureCoordinator {
             let image = try await service.capture(
                 .area(rect: result.globalRect, displayID: result.displayID))
             // Vision's perform() blocks — keep it off the main actor.
+            let pointWidth = result.globalRect.width
             let recognition = try await Task.detached {
-                try TextRecognizer.recognize(in: image)
+                try TextRecognizer.recognize(in: image, pointWidth: pointWidth)
             }.value
             if let payload = recognition.clipboardString {
                 NSPasteboard.general.clearContents()

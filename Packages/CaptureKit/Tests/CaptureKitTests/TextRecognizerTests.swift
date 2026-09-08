@@ -55,6 +55,25 @@ private let barcodeDetectionAvailable: Bool = {
 
 let textRecognizerTests: [TestCase] = {
     var cases = [
+        TestCase("languagesMapPreferredOntoVisionSupported") { t in
+            let supported = ["en-US", "fr-FR", "ro-RO", "de-DE"]
+            t.equal(TextRecognizer.recognitionLanguages(preferred: ["en-RO", "ro-RO"], supported: supported),
+                    ["en-US", "ro-RO"])
+            // Unsupported languages drop; duplicates collapse; order is kept.
+            t.equal(TextRecognizer.recognitionLanguages(preferred: ["hu-HU", "fr-CA", "en-GB", "en-US"], supported: supported),
+                    ["fr-FR", "en-US"])
+        },
+        TestCase("languagesFallBackToEnglish") { t in
+            t.equal(TextRecognizer.recognitionLanguages(preferred: ["hu-HU"], supported: ["en-US", "fr-FR"]), ["en-US"])
+            t.equal(TextRecognizer.recognitionLanguages(preferred: [], supported: ["en-US"]), ["en-US"])
+        },
+        TestCase("upscaleFactorBringsDensityToTwo") { t in
+            t.equal(TextRecognizer.upscaleFactor(pixelWidth: 800, pointWidth: 400), 1)   // retina: untouched
+            t.equal(TextRecognizer.upscaleFactor(pixelWidth: 1600, pointWidth: 400), 1)  // denser than 2x: untouched
+            t.equal(TextRecognizer.upscaleFactor(pixelWidth: 400, pointWidth: 400), 2)   // 1x display
+            t.equal(TextRecognizer.upscaleFactor(pixelWidth: 600, pointWidth: 400), 4.0 / 3.0) // stretched 1.5x
+            t.equal(TextRecognizer.upscaleFactor(pixelWidth: 400, pointWidth: 0), 1)     // degenerate
+        },
         TestCase("recognizesRenderedText") { t in
             do {
                 let result = try TextRecognizer.recognize(

@@ -2,6 +2,19 @@
 
 All notable changes to BetterScreenshot. Versions are git tags; releases are published on [GitHub](../../releases).
 
+## Unreleased
+
+### Improved
+- **Capture Text is faster and cleaner.** Vision's text model unloads after ~20s idle and reloading
+  it cost 0.5–1s on every "first" capture — most of the delay the owner was seeing. The model is now
+  warmed the moment the Capture Text selection overlay appears, so it loads while you drag; on an
+  M3 a real request right after the warm-up runs at ~370ms instead of 540–1160ms cold. Language
+  detection was replaced by the user's own system languages filtered to what Vision supports (this
+  machine resolves to English + Romanian; the fallback is English), which stops CJK punctuation
+  leaking into Latin-script results ("Open.。"). Captures below 2× pixel density (non-retina or
+  stretched displays) are upscaled before recognition — measured at 1× Vision fragmented single
+  lines into pieces and ran ~60% slower.
+
 ## v2.9.0 — 2026-08-27 · Readable overlay buttons on any screenshot
 
 ### Fixed
