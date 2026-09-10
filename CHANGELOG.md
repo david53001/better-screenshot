@@ -2,6 +2,27 @@
 
 All notable changes to BetterScreenshot. Versions are git tags; releases are published on [GitHub](../../releases).
 
+## v2.11.0 — 2026-09-10 · Capture Text keeps paragraphs together
+
+### Improved
+- **Capture Text (⌘⇧7) now reflows wrapped lines into paragraphs.** Vision returns one result per
+  *visual* line, and the app used to join them with newlines — so a bullet that wrapped over five
+  lines on a slide pasted as five lines. `TextReflow` (CaptureKit, pure + unit-tested) rebuilds the
+  paragraphs from the line boxes: a line continues the one above it only when it sits in the same
+  column, the spacing matches the block's rhythm (no blank-line gap, pitch jump, or font-size
+  change), it doesn't start with a list marker (`•`, `-`, `1.`, `a)`), and the previous line
+  actually wrapped — its width plus the next line's first word would overflow the column edge. That
+  last test is what keeps code screenshots line-per-line: a short line had room for the next word,
+  so it ended on purpose. Also: lines are sorted top-to-bottom (Vision's order isn't guaranteed),
+  side-by-side columns stay separate, fragments Vision splits off one row are glued back, hyphenated
+  breaks join (`portfo-` + `lio`), and look-alike bullet glyphs (`·`, `●`, `◦`) normalize to `•`.
+  Known limit: the longest line of a code block still merges with its follower, since nothing in the
+  column proves it stopped short.
+
+### Docs
+- README gains an **Update** section: re-run the install one-liner (it quits, replaces, and relaunches
+  the app; settings and permissions carry over).
+
 ## v2.10.0 — 2026-09-08 · Faster Capture Text, runs on Intel Macs too
 
 ### Changed

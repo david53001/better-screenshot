@@ -15,6 +15,7 @@ runTests("CaptureKitTests",
     overlayPositionerTests +
     tempImageWriterTests +
     recognitionResolverTests +
+    textReflowTests +
     textRecognizerTests +
     windowPickingTests +
     overlayDismissScaleTests +

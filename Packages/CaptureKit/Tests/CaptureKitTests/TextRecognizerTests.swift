@@ -21,6 +21,24 @@ private func renderTextImage(_ text: String,
     return ctx.makeImage()!
 }
 
+/// Two visual lines of one sentence, wrapped the way a slide or document would.
+private func renderWrappedImage() -> CGImage {
+    let size = CGSize(width: 640, height: 200)
+    let ctx = CGContext(data: nil, width: Int(size.width), height: Int(size.height),
+                        bitsPerComponent: 8, bytesPerRow: 0,
+                        space: CGColorSpaceCreateDeviceRGB(),
+                        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    ctx.setFillColor(CGColor.white)
+    ctx.fill(CGRect(origin: .zero, size: size))
+    NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+    let attrs: [NSAttributedString.Key: Any] = [
+        .font: NSFont.systemFont(ofSize: 36, weight: .medium), .foregroundColor: NSColor.black]
+    ("The quick brown fox jumps over" as NSString).draw(at: CGPoint(x: 20, y: 110), withAttributes: attrs)
+    ("the lazy dog by the river" as NSString).draw(at: CGPoint(x: 20, y: 60), withAttributes: attrs)
+    NSGraphicsContext.current = nil
+    return ctx.makeImage()!
+}
+
 private func renderQRImage(_ payload: String) -> CGImage {
     let filter = CIFilter(name: "CIQRCodeGenerator")!
     filter.setValue(payload.data(using: .utf8)!, forKey: "inputMessage")
@@ -83,6 +101,17 @@ let textRecognizerTests: [TestCase] = {
                 }
                 t.isTrue(s.contains("BetterScreenshot"), "recognized: \(s)")
                 t.isTrue(s.contains("12345"), "recognized: \(s)")
+            } catch {
+                t.fail("TextRecognizer threw: \(error)")
+            }
+        },
+        TestCase("wrappedRenderedLinesReflowIntoOneParagraph") { t in
+            do {
+                let result = try TextRecognizer.recognize(in: renderWrappedImage())
+                guard case .text(let s) = result else {
+                    t.fail("expected .text, got \(result)"); return
+                }
+                t.equal(s, "The quick brown fox jumps over the lazy dog by the river")
             } catch {
                 t.fail("TextRecognizer threw: \(error)")
             }

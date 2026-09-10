@@ -103,6 +103,18 @@ updated. Same release removed the Quick Access card's **Pin** button (Pin to Scr
 menu bar and History); the `sourceRect` plumbing through `CaptureCoordinator.run`/`handle`/`presentOverlay`
 is now unused by the overlay path and only `pin(_:near:)` still reads it.
 
+**Capture Text paragraph reflow** (shipped 2026-09-10, tag `v2.11.0`, built directly without a spec at the
+owner's request): `TextReflow` (`Packages/CaptureKit/Sources/CaptureKit/TextReflow.swift`, pure + unit-tested)
+rebuilds paragraphs from Vision's per-visual-line boxes before `RecognitionResolver` joins them, so a wrapped
+bullet pastes as one line. A line continues the block above only if it overlaps that block's column, the
+spacing matches the block (gap ≤ 1.0× line height, pitch ≤ 1.25× the block's median, height ratio ≤ 1.5),
+it doesn't start with a list marker, and the previous line *wrapped* — its width plus the next line's first
+word overflows the column's right edge (max right of all x-overlapping lines). That fit test is what keeps
+code line-per-line; its known limit is that a code block's longest line merges with its follower. Thresholds
+were measured on the owner's slide screenshot (intra-paragraph pitch jitter ≤ 1.07×, paragraph break 1.33×).
+Vision's confidence is useless for filtering photo junk (it scores "CREAM STEA" at 1.00) — don't try. Same
+release added the README **Update** section (re-run the install one-liner).
+
 **Next up — spec ready** (`superpowers:writing-plans` from the spec, then execute with `superpowers:subagent-driven-development`; the spec lists its own probes/risks — run probe tasks first, and verify named symbols against live code before planning):
 1. **Trim Editor** — `docs/superpowers/specs/2026-06-05-betterscreenshot-trim-editor-design.md`
 

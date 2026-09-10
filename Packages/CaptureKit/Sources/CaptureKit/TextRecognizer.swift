@@ -18,9 +18,16 @@ public enum TextRecognizer {
 
         try VNImageRequestHandler(cgImage: source).perform([textRequest, qrRequest])
 
-        let lines = (textRequest.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+        // Vision boxes are normalized with a bottom-left origin; TextReflow
+        // wants top-left, so flip y.
+        let lines = (textRequest.results ?? []).compactMap { observation -> TextReflow.Line? in
+            guard let text = observation.topCandidates(1).first?.string else { return nil }
+            let b = observation.boundingBox
+            return TextReflow.Line(text: text, box: CGRect(x: b.minX, y: 1 - b.maxY,
+                                                           width: b.width, height: b.height))
+        }
         let qrs = (qrRequest.results ?? []).compactMap { $0.payloadStringValue }
-        return RecognitionResolver.resolve(qrPayloads: qrs, textLines: lines)
+        return RecognitionResolver.resolve(qrPayloads: qrs, textLines: TextReflow.paragraphs(lines))
     }
 
     /// Loads Vision's text model ahead of a real request. Vision drops the

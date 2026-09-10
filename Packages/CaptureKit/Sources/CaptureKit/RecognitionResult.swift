@@ -24,7 +24,8 @@ public enum RecognitionResult: Equatable {
 }
 
 /// Pure decision rule for Capture Text: any QR code wins over recognized text;
-/// text lines join with newlines (spec: linebreaks are kept); blank lines drop.
+/// text lines (one per paragraph after `TextReflow`) join with newlines; blank
+/// lines drop.
 public enum RecognitionResolver {
     public static func resolve(qrPayloads: [String], textLines: [String]) -> RecognitionResult {
         if let qr = qrPayloads.first { return .qr(qr) }
