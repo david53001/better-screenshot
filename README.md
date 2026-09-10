@@ -44,6 +44,18 @@ That downloads the latest release, puts `BetterScreenshot.app` in `/Applications
 
 > Your first save may also trigger a standard macOS prompt to allow access to the destination folder — click Allow once.
 
+## Update
+
+The app has no built-in updater (it never touches the network). To move to the newest release, run the same one-liner again:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/david53001/BetterScreenshot/main/scripts/install.sh | bash
+```
+
+It quits the running copy, replaces `/Applications/BetterScreenshot.app` with the [latest release](../../releases/latest), and relaunches it. Your settings, hotkeys, and capture history carry over, and Screen Recording normally stays granted because every release is signed with the same identity — nothing outside the app bundle is touched. If you installed manually, repeat the manual steps instead; dragging the new app over the old one works the same way.
+
+To see what changed between versions, read the [release notes](../../releases) or [`CHANGELOG.md`](CHANGELOG.md). To check which version you have, select `BetterScreenshot.app` in `/Applications` and press `⌘I` (Get Info).
+
 ## Build from source
 
 Only the Xcode Command Line Tools are needed (no full Xcode):
