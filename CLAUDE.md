@@ -13,6 +13,15 @@ A **free, local macOS clone of CleanShot X** (screenshot + screen-recording tool
 - **No cloud.** No uploads, share links, accounts, or cloud sync — ever. Local features only.
 - **macOS-native, non-sandboxed, menu-bar agent** (`LSUIElement`). Personal/local use; ad-hoc signed (no Apple Developer account required).
 - **Min target: macOS 14 (Sonoma).**
+- **Updates must never cost users their permission, settings, or data** (owner requirement, 2026-09-10).
+  Screen Recording is keyed on the designated requirement `identifier "com.betterscreenshot.mac" and
+  certificate leaf = H"71ec62cd…"` — every release since v2.10.0 is signed with the local identity
+  "BetterScreenshot Code Signing" in `~/Library/Keychains/betterscreenshot-signing.keychain-db`
+  (created by `scripts/setup-signing.sh`). Losing or regenerating that keychain changes the hash and
+  forces every user to re-grant. Back it up; never release from a machine without it. `scripts/install.sh`
+  may only ever replace `/Applications/BetterScreenshot.app` — settings live in
+  `~/Library/Preferences/com.betterscreenshot.mac.plist`, history in
+  `~/Library/Application Support/BetterScreenshot/History/`.
 - **Bundle id is `com.betterscreenshot.mac` — never change it back to `com.betterscreenshot.app`.**
   macOS 26's ControlCenter holds an unremovable blocked-host record for the old id that permanently
   hides the menu-bar icon on the owner's machine (v2.8.1; forensics in

@@ -52,7 +52,14 @@ The app has no built-in updater (it never touches the network). To move to the n
 curl -fsSL https://raw.githubusercontent.com/david53001/BetterScreenshot/main/scripts/install.sh | bash
 ```
 
-It quits the running copy, replaces `/Applications/BetterScreenshot.app` with the [latest release](../../releases/latest), and relaunches it. Your settings, hotkeys, and capture history carry over, and Screen Recording normally stays granted because every release is signed with the same identity — nothing outside the app bundle is touched. If you installed manually, repeat the manual steps instead; dragging the new app over the old one works the same way.
+It quits the running copy, replaces `/Applications/BetterScreenshot.app` with the [latest release](../../releases/latest), and relaunches it. Nothing else is touched, so everything carries over:
+
+- **Settings and keyboard shortcuts** — stored in `~/Library/Preferences/com.betterscreenshot.mac.plist`
+- **Capture history** — stored in `~/Library/Application Support/BetterScreenshot/History/`
+- **Your screenshots and recordings** — in whatever folder you chose in Settings
+- **Screen Recording permission** — macOS ties it to the app's bundle id and signing certificate, and every release is signed with the same one, so it stays granted and the app does not ask again
+
+If you installed manually, repeat the manual steps instead; dragging the new app over the old one preserves the same things.
 
 To see what changed between versions, read the [release notes](../../releases) or [`CHANGELOG.md`](CHANGELOG.md). To check which version you have, select `BetterScreenshot.app` in `/Applications` and press `⌘I` (Get Info).
 
