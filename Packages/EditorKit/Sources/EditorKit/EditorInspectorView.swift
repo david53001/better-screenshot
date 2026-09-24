@@ -178,7 +178,10 @@ final class EditorInspectorView: NSVisualEffectView {
     private func makeSection(_ section: InspectorSection) -> [NSView] {
         switch section {
         case .colour: return makeColourRows()
-        case .stroke: return makeStrokeRows()
+        case .stroke: return makeStrokeRows(presets: Self.strokePresets, range: Self.strokeRange)
+        case .highlighterStroke:
+            return makeStrokeRows(presets: HighlighterPen.widthPresets,
+                                  range: Double(HighlighterPen.widthRange.lowerBound)...Double(HighlighterPen.widthRange.upperBound))
         case .font: return makeFontRows()
         case .background: return makeBackgroundRows()
         case .redaction: return makeRedactionRows()
@@ -276,8 +279,8 @@ final class EditorInspectorView: NSVisualEffectView {
 
     // MARK: Stroke — width slider + Thin / Medium / Thick
 
-    private func makeStrokeRows() -> [NSView] {
-        let slider = LabeledSliderRow(label: "Width", range: Self.strokeRange,
+    private func makeStrokeRows(presets widths: [CGFloat], range: ClosedRange<Double>) -> [NSView] {
+        let slider = LabeledSliderRow(label: "Width", range: range,
                                       tooltip: "Line width in image pixels") { "\(Int($0.rounded())) px" }
         slider.onChange = { [unowned self] v, finished in
             let w = CGFloat(v.rounded())
@@ -289,16 +292,19 @@ final class EditorInspectorView: NSVisualEffectView {
         presets.segmentStyle = .rounded
         presets.controlSize = .small
         presets.segmentDistribution = .fillEqually
-        for (i, w) in Self.strokePresets.enumerated() { presets.setToolTip("\(Int(w)) px", forSegment: i) }
+        for (i, w) in widths.enumerated() {
+            presets.setToolTip("\(Int(w)) px", forSegment: i)
+            presets.setTag(Int(w), forSegment: i)
+        }
         refreshers.append { [unowned self] in
             slider.value = Double(style.lineWidth)
-            presets.selectedSegment = Self.strokePresets.firstIndex(of: style.lineWidth) ?? -1
+            presets.selectedSegment = widths.firstIndex(of: style.lineWidth) ?? -1
         }
         return [slider, presets]
     }
 
     @objc private func strokePresetChosen(_ sender: NSSegmentedControl) {
-        let w = Self.strokePresets[max(0, sender.selectedSegment)]
+        let w = CGFloat(sender.tag(forSegment: max(0, sender.selectedSegment)))
         onStyleEdit?({ $0.lineWidth = w }, nil)
     }
 

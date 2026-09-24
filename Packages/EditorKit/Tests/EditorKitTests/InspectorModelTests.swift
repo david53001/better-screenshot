@@ -50,6 +50,18 @@ let inspectorModelTests: [TestCase] = [
                 [.colour, .stroke, .opacity, .arrange])
         t.equal(InspectorModel.content(tool: .select, selection: [.arrow, .pixelate]).sections, [.arrange])
     },
+    TestCase("highlighterShowsColourItsOwnStrokeOpacity") { t in
+        let c = InspectorModel.content(tool: .highlighter, selection: [])
+        t.equal(c.title, "Highlighter")
+        t.equal(c.sections, [.colour, .highlighterStroke, .opacity])
+        t.equal(InspectorSection.highlighterStroke.title, "Stroke")
+        t.equal(InspectorModel.content(tool: .select, selection: [.highlighter, .arrow]).sections,
+                [.colour, .opacity, .arrange], "marker and line widths don't share one slider")
+        t.equal(EditorTool.highlighter.tooltip, "Highlighter (H)")
+        t.isTrue(InspectorModel.hint(tool: .highlighter, selection: [], editingText: false).contains("⇧"))
+        t.equal(InspectorModel.hint(tool: .select, selection: [.highlighter], editingText: false),
+                "Drag to move it, or press Delete to remove it.")
+    },
     TestCase("redactionSelectionsShareStrengthOnlyWithinOneMode") { t in
         t.equal(InspectorModel.content(tool: .select, selection: [.blur, .blur]).sections,
                 [.redaction, .strength, .arrange])

@@ -31,6 +31,8 @@ public struct AnnotationStyle: Equatable, Codable {
     public var blurRadius: CGFloat = 12
     /// Pixelate block size, image px (`pixelSizeRange`).
     public var pixelSize: CGFloat = 12
+    /// The Highlighter tool's own sticky colour / width / opacity (HighlighterAnnotation.swift).
+    public var highlighterPen: HighlighterPen = .default
 
     public init(strokeColor: RGBAColor, fillColor: RGBAColor,
                 lineWidth: CGFloat, fontSize: CGFloat, textBackground: Bool = false,
@@ -47,7 +49,7 @@ public struct AnnotationStyle: Equatable, Codable {
     private enum CodingKeys: String, CodingKey {
         case strokeColor, fillColor, lineWidth, fontSize, textBackground
         case fontFamily, fontBold, fontItalic, textAlignment, opacity
-        case redactionMode, blurRadius, pixelSize
+        case redactionMode, blurRadius, pixelSize, highlighterPen
     }
 
     public init(from decoder: Decoder) throws {
@@ -69,6 +71,7 @@ public struct AnnotationStyle: Equatable, Codable {
         redactionMode = (try? container.decodeIfPresent(RedactionMode.self, forKey: .redactionMode)) ?? .blur
         blurRadius = Self.clamp(try container.decodeIfPresent(CGFloat.self, forKey: .blurRadius) ?? 12, Self.blurRadiusRange)
         pixelSize = Self.clamp(try container.decodeIfPresent(CGFloat.self, forKey: .pixelSize) ?? 12, Self.pixelSizeRange)
+        highlighterPen = ((try? container.decodeIfPresent(HighlighterPen.self, forKey: .highlighterPen)) ?? .default).clamped
     }
 
     static func clamp(_ v: CGFloat, _ r: ClosedRange<CGFloat>) -> CGFloat { min(max(v, r.lowerBound), r.upperBound) }

@@ -4,7 +4,7 @@
 /// `InspectorModel.objectSections(for:)` / `toolSections(for:)` for the tools that show it, and
 /// build its controls in `EditorInspectorView.makeSection(_:)`.
 public enum InspectorSection: String, CaseIterable {
-    case colour, stroke, font, background, redaction, strength, opacity, arrange
+    case colour, stroke, highlighterStroke, font, background, redaction, strength, opacity, arrange
     /// Explanatory text only — the Crop tool and Select with nothing selected.
     case cropHelp, selectHelp
 
@@ -12,7 +12,7 @@ public enum InspectorSection: String, CaseIterable {
     public var title: String? {
         switch self {
         case .colour: return "Colour"
-        case .stroke: return "Stroke"
+        case .stroke, .highlighterStroke: return "Stroke"
         case .font: return "Font"
         case .background: return "Background"
         case .redaction: return "Redaction"
@@ -55,6 +55,8 @@ public enum InspectorModel {
         case .text: return [.colour, .font, .background, .opacity]
         case .blur, .pixelate: return [.redaction, .strength]
         case .blackout: return [.redaction]   // a solid box has no strength
+        // Its own Stroke section: marker widths (12–32 px) don't share a scale with lines (2–7).
+        case .highlighter: return [.colour, .highlighterStroke, .opacity]
         case .select, .crop: return []
         }
     }
@@ -110,6 +112,7 @@ public enum InspectorModel {
         case .blur: return "Drag over anything you want to hide — it's blurred when you let go."
         case .pixelate: return "Drag over anything you want to hide — it's pixelated when you let go."
         case .blackout: return "Drag over anything you want to hide — it's covered in solid black when you let go."
+        case .highlighter: return "Drag to highlight, like a marker pen — hold ⇧ for a straight line."
         case .crop: return "Drag over the area to keep — everything outside is cut away (⌘Z undoes it)."
         }
     }

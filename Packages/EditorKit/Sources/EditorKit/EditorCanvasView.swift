@@ -363,6 +363,12 @@ public final class EditorCanvasView: NSView {
             inProgress = FilledRectangleAnnotation(frame: rect(start, p), style: style)
         case .ellipse:
             inProgress = EllipseAnnotation(frame: rect(start, p), style: style)
+        case .highlighter:
+            // Follow the pointer; ⇧ makes it a straight line from where the drag began.
+            var points = (inProgress as? HighlighterAnnotation)?.points ?? [start]
+            if event.modifierFlags.contains(.shift) { points = [points[0], p] }
+            else if let last = points.last, hypot(p.x - last.x, p.y - last.y) >= 0.5 { points.append(p) }
+            inProgress = HighlighterAnnotation(points: points, style: style)
         case .blur, .pixelate, .blackout, .crop:
             regionMarquee = rect(start, p)
         case .text:
