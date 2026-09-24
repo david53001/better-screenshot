@@ -363,7 +363,7 @@ public final class EditorCanvasView: NSView {
             inProgress = FilledRectangleAnnotation(frame: rect(start, p), style: style)
         case .ellipse:
             inProgress = EllipseAnnotation(frame: rect(start, p), style: style)
-        case .blur, .pixelate, .crop:
+        case .blur, .pixelate, .blackout, .crop:
             regionMarquee = rect(start, p)
         case .text:
             if let hi = activeHandleIndex {
@@ -396,7 +396,7 @@ public final class EditorCanvasView: NSView {
                     selectedIDs = Set(document.ids(intersecting: m))
                     marqueeRect = nil
                 }
-            case .blur, .pixelate:
+            case .blur, .pixelate, .blackout:
                 let box = r.intersection(CGRect(origin: .zero, size: document.size))
                 if box.width >= 2, box.height >= 2, let mode = tool.redactionMode {
                     var s = style; s.redactionMode = mode

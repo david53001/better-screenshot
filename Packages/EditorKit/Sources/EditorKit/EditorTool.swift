@@ -1,6 +1,8 @@
 public enum EditorTool: String, CaseIterable {
     case select, arrow, line, rectangle, filledRectangle, ellipse
     case text, counter, blur, pixelate, crop
+    /// v3 Part 3. Black-out has no toolbar button (it's the Redaction switch's third segment).
+    case blackout
 }
 
 // Per-tool metadata: name, toolbar icon and single-key shortcut. Adding a tool means
@@ -20,6 +22,7 @@ public extension EditorTool {
         case .blur: return "Blur"
         case .pixelate: return "Pixelate"
         case .crop: return "Crop"
+        case .blackout: return "Black-out"
         }
     }
 
@@ -37,6 +40,7 @@ public extension EditorTool {
         case .blur: return "drop.fill"
         case .pixelate: return "square.grid.3x3.fill"
         case .crop: return "crop"
+        case .blackout: return "rectangle.inset.filled"
         }
     }
 
@@ -54,6 +58,7 @@ public extension EditorTool {
         case .blur: return "b"
         case .pixelate: return "p"
         case .crop: return "c"
+        case .blackout: return "x"
         }
     }
 

@@ -4,7 +4,7 @@
 /// `InspectorModel.objectSections(for:)` / `toolSections(for:)` for the tools that show it, and
 /// build its controls in `EditorInspectorView.makeSection(_:)`.
 public enum InspectorSection: String, CaseIterable {
-    case colour, stroke, font, background, redaction, opacity, arrange
+    case colour, stroke, font, background, redaction, strength, opacity, arrange
     /// Explanatory text only — the Crop tool and Select with nothing selected.
     case cropHelp, selectHelp
 
@@ -18,6 +18,7 @@ public enum InspectorSection: String, CaseIterable {
         case .redaction: return "Redaction"
         case .opacity: return "Opacity"
         case .arrange: return "Arrange"
+        case .strength: return "Strength"
         case .cropHelp, .selectHelp: return nil   // the panel heading already names the tool
         }
     }
@@ -52,14 +53,15 @@ public enum InspectorModel {
         case .arrow, .line, .rectangle, .ellipse: return [.colour, .stroke, .opacity]
         case .filledRectangle, .counter: return [.colour, .opacity]
         case .text: return [.colour, .font, .background, .opacity]
-        case .blur, .pixelate, .select, .crop: return []
+        case .blur, .pixelate: return [.redaction, .strength]
+        case .blackout: return [.redaction]   // a solid box has no strength
+        case .select, .crop: return []
         }
     }
 
     /// Sections while `tool` is active (and it isn't Select).
     public static func toolSections(for tool: EditorTool) -> [InspectorSection] {
         switch tool {
-        case .blur, .pixelate: return [.redaction]
         case .crop: return [.cropHelp]
         case .select: return [.selectHelp]
         default: return objectSections(for: tool)
@@ -78,6 +80,8 @@ public enum InspectorModel {
         }
         let shared = InspectorSection.allCases.filter { s in
             selection.allSatisfy { objectSections(for: $0).contains(s) }
+                // One Strength slider can't show a blur radius and a pixel size at once.
+                && (s != .strength || Set(selection).count == 1)
         }
         let title = selection.count == 1 ? first.displayName : "\(selection.count) objects"
         return InspectorContent(title: title, sections: shared + [.arrange])
@@ -92,7 +96,7 @@ public enum InspectorModel {
             switch selection.first {
             case nil: return "Click an object to select it, or drag across empty space to select several."
             case .text?: return "Drag to move it, drag a side handle to set the box width, or double-click to edit the text."
-            case .rectangle?, .filledRectangle?, .ellipse?, .blur?, .pixelate?:
+            case .rectangle?, .filledRectangle?, .ellipse?, .blur?, .pixelate?, .blackout?:
                 return "Drag to move it, drag a handle to resize it, or press Delete to remove it."
             default: return "Drag to move it, or press Delete to remove it."
             }
@@ -105,6 +109,7 @@ public enum InspectorModel {
         case .counter: return "Click to place the next numbered step."
         case .blur: return "Drag over anything you want to hide — it's blurred when you let go."
         case .pixelate: return "Drag over anything you want to hide — it's pixelated when you let go."
+        case .blackout: return "Drag over anything you want to hide — it's covered in solid black when you let go."
         case .crop: return "Drag over the area to keep — everything outside is cut away (⌘Z undoes it)."
         }
     }

@@ -337,7 +337,12 @@ public final class EditorWindowController: NSWindowController {
         inspector.onStyleEdit = { [weak self] edit, group in self?.applyStyleEdit(edit, group: group) }
         inspector.onStyleEditEnded = { [weak self] in self?.canvas.endStyleEditGroup() }
         inspector.onRecentColorsChanged = { [weak self] in self?.onRecentColorsChanged?($0) }
-        inspector.onRedactTool = { [weak self] in self?.selectTool($0) }
+        inspector.onRedactTool = { [weak self] tool in
+            // Under a redaction tool the switch changes the tool (keeping the just-drawn, just-
+            // converted object selected); under Select it only converted the selection.
+            guard let self, self.canvas.tool.redactionMode != nil else { return }
+            self.selectTool(tool, keepSelection: true)
+        }
         inspector.onArrange = { [weak self] action in
             guard let canvas = self?.canvas else { return }
             switch action {
@@ -380,10 +385,10 @@ public final class EditorWindowController: NSWindowController {
 
     // MARK: - Tools + keyboard
 
-    private func selectTool(_ tool: EditorTool) {
+    private func selectTool(_ tool: EditorTool, keepSelection: Bool = false) {
         if tool != canvas.tool { canvas.commitPendingText() }
         // A drawing tool starts fresh; Select keeps the selection (e.g. the object just drawn).
-        if tool != .select { canvas.clearSelection() }
+        if tool != .select, !keepSelection { canvas.clearSelection() }
         canvas.tool = tool
         for (t, b) in toolButtons { b.isSelectedTool = (t == tool) }
         refreshChrome()
@@ -391,7 +396,7 @@ public final class EditorWindowController: NSWindowController {
 
     @objc private func toolButtonClicked(_ sender: IconToolButton) { selectTool(sender.tool) }
 
-    /// Single-key tool shortcuts (V A L R F O T N B P C). Keys reach the window controller
+    /// Single-key tool shortcuts (V A L R F O T N B P X C). Keys reach the window controller
     /// through the responder chain only when nothing else used them — the inline text
     /// editor consumes typing, so shortcuts are off while text is being edited.
     public override func keyDown(with event: NSEvent) {

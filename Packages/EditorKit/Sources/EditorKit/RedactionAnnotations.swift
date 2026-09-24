@@ -1,8 +1,9 @@
 import AppKit
 
-/// How a redaction hides what's under it.
+/// How a redaction hides what's under it. Black-out is a solid black box — the strongest:
+/// blur and pixelate can sometimes be partly reversed on text, a solid box can't.
 public enum RedactionMode: String, Codable, CaseIterable {
-    case blur, pixelate
+    case blur, pixelate, blackout
 }
 
 /// A redaction box. Its patch is rendered from `source` (the document's base image) for the
@@ -37,10 +38,10 @@ public struct RedactionAnnotation: Annotation {
         frame.integral.intersection(CGRect(x: 0, y: 0, width: source.width, height: source.height))
     }
 
-    /// The redacted pixels for the current frame, mode and strength.
+    /// The redacted pixels for the current frame, mode and strength (nil for Black-out).
     public func patch() -> CGImage? {
         let rect = patchRect
-        guard !rect.isEmpty else { return nil }
+        guard !rect.isEmpty, style.redactionMode != .blackout else { return nil }
         let key = PatchCache.Key(source: source, rect: rect, mode: style.redactionMode,
                                  strength: style.redactionStrength)
         if let hit = cache.patch(for: key) { return hit }
@@ -48,15 +49,19 @@ public struct RedactionAnnotation: Annotation {
         switch style.redactionMode {
         case .blur: patch = Redactor.blur(source, region: rect, radius: style.blurRadius)
         case .pixelate: patch = Redactor.pixelate(source, region: rect, blockSize: style.pixelSize)
+        case .blackout: patch = nil
         }
         cache.store(patch, for: key)
         return patch
     }
 
     public func draw() {
-        guard let patch = patch() else { return }
         let r = patchRect
-        NSImage(cgImage: patch, size: r.size).draw(in: r)
+        if style.redactionMode == .blackout {
+            NSColor.black.setFill(); NSBezierPath(rect: r).fill()
+        } else if let patch = patch() {
+            NSImage(cgImage: patch, size: r.size).draw(in: r)
+        }
     }
 }
 
@@ -64,11 +69,13 @@ public extension AnnotationStyle {
     static let blurRadiusRange: ClosedRange<CGFloat> = 2...40
     static let pixelSizeRange: ClosedRange<CGFloat> = 4...48
 
-    /// The strength of the current redaction mode, in image px (blur radius / pixel size).
+    /// The strength of the current redaction mode, in image px (blur radius / pixel size;
+    /// Black-out has none).
     var redactionStrength: CGFloat {
         switch redactionMode {
         case .blur: return blurRadius
         case .pixelate: return pixelSize
+        case .blackout: return 0
         }
     }
 }
@@ -97,8 +104,12 @@ public extension RedactionMode {
         switch self {
         case .blur: return .blur
         case .pixelate: return .pixelate
+        case .blackout: return .blackout
         }
     }
+
+    /// Segment label in the panel's Redaction switch.
+    var label: String { tool.displayName }
 }
 
 public extension EditorTool {

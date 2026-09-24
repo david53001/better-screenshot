@@ -22,7 +22,8 @@ final class EditorInspectorView: NSVisualEffectView {
     /// A slider was released — the next edit starts a new undo step.
     var onStyleEditEnded: (() -> Void)?
     var onRecentColorsChanged: (([RGBAColor]) -> Void)?
-    /// Blur ↔ Pixelate switch (changes the active tool).
+    /// Blur / Pixelate / Black-out switch: the window makes an active redaction tool follow it
+    /// (the switch also converts the selected redactions, through `onStyleEdit`).
     var onRedactTool: ((EditorTool) -> Void)?
     var onArrange: ((ArrangeAction) -> Void)?
 
@@ -181,6 +182,7 @@ final class EditorInspectorView: NSVisualEffectView {
         case .font: return makeFontRows()
         case .background: return makeBackgroundRows()
         case .redaction: return makeRedactionRows()
+        case .strength: return makeStrengthRows()
         case .opacity: return makeOpacityRows()
         case .arrange: return makeArrangeRows()
         case .cropHelp, .selectHelp: return [InspectorStyle.note(section.note ?? "")]
@@ -412,22 +414,60 @@ final class EditorInspectorView: NSVisualEffectView {
         onStyleEdit?({ $0.textBackground = on }, nil)
     }
 
-    // MARK: Redaction — Blur / Pixelate (Part 3 adds Strength)
+    // MARK: Redaction — Blur / Pixelate / Black-out, then Strength
+
+    /// The mode shown: the active redaction tool's, else the selected redaction's.
+    private var redactionMode: RedactionMode { tool.redactionMode ?? style.redactionMode }
 
     private func makeRedactionRows() -> [NSView] {
-        let seg = NSSegmentedControl(labels: ["Blur", "Pixelate"], trackingMode: .selectOne,
+        let modes = RedactionMode.allCases
+        let seg = NSSegmentedControl(labels: modes.map(\.label), trackingMode: .selectOne,
                                      target: self, action: #selector(redactChanged(_:)))
         seg.segmentStyle = .rounded
         seg.controlSize = .small
         seg.segmentDistribution = .fillEqually
-        seg.setToolTip("Blur (B)", forSegment: 0)
-        seg.setToolTip("Pixelate (P)", forSegment: 1)
-        refreshers.append { [unowned self] in seg.selectedSegment = tool == .pixelate ? 1 : 0 }
-        return [seg]
+        for (i, m) in modes.enumerated() { seg.setToolTip(m.tool.tooltip, forSegment: i) }
+        let note = InspectorStyle.note("")
+        refreshers.append { [unowned self] in
+            seg.selectedSegment = modes.firstIndex(of: redactionMode) ?? 0
+            note.stringValue = Self.redactionNote(redactionMode)
+        }
+        return [seg, note]
+    }
+
+    static func redactionNote(_ mode: RedactionMode) -> String {
+        switch mode {
+        case .blur: return "Softens what's underneath. Raise the strength until it can't be read."
+        case .pixelate: return "Turns what's underneath into blocks. Bigger blocks hide more."
+        case .blackout: return "Covers it with solid black — the safest choice, nothing can be recovered."
+        }
     }
 
     @objc private func redactChanged(_ sender: NSSegmentedControl) {
-        onRedactTool?(sender.selectedSegment == 1 ? .pixelate : .blur)
+        let mode = RedactionMode.allCases[max(0, sender.selectedSegment)]
+        onStyleEdit?({ $0.redactionMode = mode }, nil)   // converts the selected redaction(s)
+        onRedactTool?(mode.tool)
+    }
+
+    private func makeStrengthRows() -> [NSView] {
+        let range = AnnotationStyle.blurRadiusRange
+        let slider = LabeledSliderRow(label: nil, range: Double(range.lowerBound)...Double(range.upperBound),
+                                      tooltip: "") { "\(Int($0.rounded())) px" }
+        slider.onChange = { [unowned self] v, finished in
+            let px = CGFloat(v.rounded()), pixelate = redactionMode == .pixelate
+            onStyleEdit?({ if pixelate { $0.pixelSize = px } else { $0.blurRadius = px } }, "redactionStrength")
+            if finished { onStyleEditEnded?() }
+        }
+        refreshers.append { [unowned self] in
+            // Blur and Pixelate share this section, so the range follows the mode.
+            let pixelate = redactionMode == .pixelate
+            let r = pixelate ? AnnotationStyle.pixelSizeRange : AnnotationStyle.blurRadiusRange
+            slider.slider.minValue = Double(r.lowerBound)
+            slider.slider.maxValue = Double(r.upperBound)
+            slider.slider.toolTip = pixelate ? "Size of each block, in image pixels" : "Blur radius, in image pixels"
+            slider.value = Double(pixelate ? style.pixelSize : style.blurRadius)
+        }
+        return [slider]
     }
 
     // MARK: Opacity

@@ -19,8 +19,10 @@ let inspectorModelTests: [TestCase] = [
                 [.colour, .font, .background, .opacity])
     },
     TestCase("redactionAndCropTools") { t in
-        t.equal(InspectorModel.content(tool: .blur, selection: []).sections, [.redaction])
-        t.equal(InspectorModel.content(tool: .pixelate, selection: []).sections, [.redaction])
+        t.equal(InspectorModel.content(tool: .blur, selection: []).sections, [.redaction, .strength])
+        t.equal(InspectorModel.content(tool: .pixelate, selection: []).sections, [.redaction, .strength])
+        t.equal(InspectorModel.content(tool: .blackout, selection: []).sections, [.redaction], "a solid box has no strength")
+        t.equal(InspectorModel.content(tool: .blackout, selection: []).title, "Black-out")
         t.equal(InspectorModel.content(tool: .crop, selection: []).sections, [.cropHelp])
     },
     TestCase("drawingToolIgnoresItsSelectionForSections") { t in
@@ -37,7 +39,8 @@ let inspectorModelTests: [TestCase] = [
         let c = InspectorModel.content(tool: .select, selection: [.text])
         t.equal(c.title, "Text")
         t.equal(c.sections, [.colour, .font, .background, .opacity, .arrange])
-        t.equal(InspectorModel.content(tool: .select, selection: [.blur]).sections, [.arrange])
+        t.equal(InspectorModel.content(tool: .select, selection: [.blur]).sections, [.redaction, .strength, .arrange])
+        t.equal(InspectorModel.content(tool: .select, selection: [.blackout]).title, "Black-out")
     },
     TestCase("selectWithSeveralShowsSharedSectionsPlusArrange") { t in
         let c = InspectorModel.content(tool: .select, selection: [.arrow, .text])
@@ -46,6 +49,14 @@ let inspectorModelTests: [TestCase] = [
         t.equal(InspectorModel.content(tool: .select, selection: [.arrow, .rectangle]).sections,
                 [.colour, .stroke, .opacity, .arrange])
         t.equal(InspectorModel.content(tool: .select, selection: [.arrow, .pixelate]).sections, [.arrange])
+    },
+    TestCase("redactionSelectionsShareStrengthOnlyWithinOneMode") { t in
+        t.equal(InspectorModel.content(tool: .select, selection: [.blur, .blur]).sections,
+                [.redaction, .strength, .arrange])
+        t.equal(InspectorModel.content(tool: .select, selection: [.blur, .pixelate]).sections,
+                [.redaction, .arrange], "one slider can't be a blur radius and a pixel size at once")
+        t.equal(InspectorModel.content(tool: .select, selection: [.pixelate, .blackout]).sections,
+                [.redaction, .arrange])
     },
     TestCase("sectionsKeepPanelOrder") { t in
         for tool in EditorTool.allCases {

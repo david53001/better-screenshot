@@ -52,7 +52,55 @@ private func highContrastPairCount(_ image: CGImage) -> Int {
     return count
 }
 
+/// Deterministic RGB noise — every pixel differs from its neighbours.
+private func makeNoiseBase(_ n: Int = 400) -> CGImage {
+    var buf = [UInt8](repeating: 255, count: n * n * 4)
+    var seed: UInt32 = 7
+    for i in 0..<(n * n) {
+        for c in 0..<3 { seed = seed &* 1664525 &+ 1013904223; buf[i * 4 + c] = UInt8(truncatingIfNeeded: seed >> 24) }
+    }
+    return CGContext(data: &buf, width: n, height: n, bitsPerComponent: 8, bytesPerRow: n * 4,
+        space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!.makeImage()!
+}
+
+/// Local variation: mean absolute difference between horizontally and vertically adjacent
+/// pixels (red channel). Pixelate keeps whole blocks of one colour, so fewer, bigger blocks
+/// mean fewer changes between neighbours.
+private func localVariation(_ image: CGImage) -> Double {
+    let w = image.width, h = image.height, buf = pixels(image)
+    var sum = 0, count = 0
+    for y in 0..<(h - 1) {
+        for x in 0..<(w - 1) {
+            let v = Int(buf[(y * w + x) * 4])
+            sum += abs(v - Int(buf[(y * w + x + 1) * 4])) + abs(v - Int(buf[((y + 1) * w + x) * 4]))
+            count += 2
+        }
+    }
+    return Double(sum) / Double(count)
+}
+
+/// Variance of the red channel over the patch. Lower = flatter = less of the original survives.
+/// (A strong blur's neighbour differences all round to the 8-bit floor, so blur uses this.)
+private func variance(_ image: CGImage) -> Double {
+    let buf = pixels(image)
+    let reds = stride(from: 0, to: buf.count, by: 4).map { Double(buf[$0]) }
+    let mean = reds.reduce(0, +) / Double(reds.count)
+    return reds.reduce(0) { $0 + ($1 - mean) * ($1 - mean) } / Double(reds.count)
+}
+
 let redactorTests: [TestCase] = [
+    TestCase("higherBlurStrengthLeavesLessDetail") { t in
+        let base = makeNoiseBase(), region = CGRect(x: 120, y: 140, width: 160, height: 120)
+        let v = [2, 6, 12, 24, 40].compactMap { Redactor.blur(base, region: region, radius: CGFloat($0)) }.map(variance)
+        t.equal(v.count, 5)
+        t.isTrue(zip(v, v.dropFirst()).allSatisfy { $0 > $1 }, "variance falls as the radius grows: \(v)")
+    },
+    TestCase("biggerPixelsLeaveLessDetail") { t in
+        let base = makeNoiseBase(), region = CGRect(x: 120, y: 140, width: 160, height: 120)
+        let v = [4, 8, 16, 32, 48].compactMap { Redactor.pixelate(base, region: region, blockSize: CGFloat($0)) }.map(localVariation)
+        t.equal(v.count, 5)
+        t.isTrue(zip(v, v.dropFirst()).allSatisfy { $0 > $1 }, "variance falls as the blocks grow: \(v)")
+    },
     TestCase("pixelatePatchHasRegionSize") { t in
         let region = CGRect(x: 10, y: 10, width: 40, height: 30)
         let patch = Redactor.pixelate(makeBase(), region: region, blockSize: 10)

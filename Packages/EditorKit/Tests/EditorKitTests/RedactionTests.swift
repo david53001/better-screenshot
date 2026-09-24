@@ -49,7 +49,7 @@ let redactionTests: [TestCase] = [
     TestCase("movedRedactionRedactsItsNewRegion") { t in
         // The bug: the patch was baked at creation, so a moved box showed the old area's blur.
         let base = noiseBase()
-        for mode in RedactionMode.allCases {
+        for mode in RedactionMode.allCases where mode != .blackout {
             var doc = EditorDocument(baseImage: base)
             let r = RedactionAnnotation(frame: CGRect(x: 10, y: 10, width: 30, height: 20),
                                         source: base, style: style(mode))
@@ -121,6 +121,45 @@ let redactionTests: [TestCase] = [
             t.equal(mode.tool.redactionMode, mode)
         }
         t.isNil(EditorTool.arrow.redactionMode)
+    },
+    TestCase("blackoutIsSolidBlackAndHasNoPatch") { t in
+        let base = noiseBase()
+        var doc = EditorDocument(baseImage: base)
+        let r = RedactionAnnotation(frame: CGRect(x: 20.4, y: 10.6, width: 30, height: 20), source: base, style: style(.blackout))
+        doc.add(r)
+        t.isNil(r.patch())
+        guard let out = t.unwrap(DocumentRenderer.render(doc)),
+              let box = t.unwrap(out.cropping(to: CGRect(x: 20, y: 10, width: 31, height: 21))) else { return }
+        // Snapped outward to whole pixels, so no sliver of the original survives at the edges.
+        t.isTrue(stride(from: 0, to: pixels(box).count, by: 4).allSatisfy { i in
+            let p = pixels(box); return p[i] == 0 && p[i + 1] == 0 && p[i + 2] == 0 && p[i + 3] == 255
+        }, "every pixel of the (outward-snapped) box is opaque black")
+    },
+    TestCase("switchingModeConvertsTheSelectedRedactionInPlace") { t in
+        let base = noiseBase()
+        let c = EditorCanvasView(document: EditorDocument(baseImage: base))
+        c.insert(RedactionAnnotation(frame: CGRect(x: 10, y: 10, width: 40, height: 30), source: base, style: style(.blur)))
+        let id = c.currentDocument().annotations[0].id
+        c.applyStyleEdit({ $0.redactionMode = .pixelate })
+        t.equal(c.selectedTools, [.pixelate])
+        t.equal(c.currentDocument().annotations[0].id, id, "same object, same place in the stack")
+        c.applyStyleEdit({ $0.redactionMode = .blackout })
+        t.equal(c.selectedTools, [.blackout])
+        c.undo()
+        t.equal(EditorTool.maker(of: c.currentDocument().annotations[0]), .pixelate, "each conversion is one undo step")
+    },
+    TestCase("strengthEditsRestyleTheSelectedRedaction") { t in
+        let base = noiseBase()
+        let c = EditorCanvasView(document: EditorDocument(baseImage: base))
+        c.insert(RedactionAnnotation(frame: CGRect(x: 10, y: 10, width: 40, height: 30), source: base, style: style(.blur)))
+        let before = (c.currentDocument().annotations[0] as? RedactionAnnotation)?.patch()
+        for v in [16, 24, 32] { c.applyStyleEdit({ $0.blurRadius = CGFloat(v) }, group: "redactionStrength") }
+        c.endStyleEditGroup()
+        guard let r = t.unwrap(c.currentDocument().annotations[0] as? RedactionAnnotation) else { return }
+        t.approxEqual(Double(r.style.blurRadius), 32)
+        t.isFalse(before === r.patch(), "the patch re-rendered at the new strength")
+        c.undo()
+        t.approxEqual(Double(c.currentDocument().annotations[0].style.blurRadius), 12, tol: 1e-9)
     },
     TestCase("legacyStyleDecodesRedactionDefaults") { t in
         let json = """
