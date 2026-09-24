@@ -25,10 +25,15 @@ public enum Redactor {
     public static func pixelate(_ base: CGImage, region: CGRect, blockSize: CGFloat) -> CGImage? {
         patch(base, region: region) { img, out in
             // Only the region's own pixels; clamped so edge blocks sample real pixels rather
-            // than transparency. Blocks are centred on the region's centre.
-            img.clampedToExtent().applyingFilter("CIPixellate", parameters: [
-                kCIInputScaleKey: blockSize,
-                kCIInputCenterKey: CIVector(x: out.midX, y: out.midY)])
+            // than transparency. CIPixellate takes one sample per block, so a box blur the size
+            // of a block goes first — each block shows its average colour (a classic mosaic),
+            // not whichever pixel of a letter its centre happened to land on. Blocks are
+            // centred on the region's centre.
+            img.clampedToExtent()
+                .applyingFilter("CIBoxBlur", parameters: [kCIInputRadiusKey: blockSize / 2])
+                .applyingFilter("CIPixellate", parameters: [
+                    kCIInputScaleKey: blockSize,
+                    kCIInputCenterKey: CIVector(x: out.midX, y: out.midY)])
         }
     }
 
