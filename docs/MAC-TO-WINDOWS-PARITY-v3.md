@@ -130,9 +130,9 @@ font keys decodes to System / bold / not italic / left; all four font fields rou
 
 (Part 6 replaces the window's UI with the cut editor and Part 0 changes what Cancel does — port those
 sections for the UI; the **export rules, names and strings** below carry over.)
-- **Entry points:** a **Trim** button (`scissors`, tooltip "Trim") on the Quick Access card of **MP4**
+- **Entry points:** an **Edit video** button (`scissors`, tooltip "Edit video" — it was "Trim" until the Part 6 editor landed) on the Quick Access card of **MP4**
   recordings only — the recording card becomes Copy file · Trim · Open · Show in Finder · Close (5 × 32 pt
-  buttons; GIF cards keep 4) — and **"Trim…"** in the History window (action bar + right-click menu),
+  buttons; GIF cards keep 4) — and **"Edit Video…"** (was "Trim…") in the History window (action bar + right-click menu),
   enabled for a single MP4 recording whose file still exists. One trim window at a time; opening another
   file closes the current window.
 - **v1 window:** title "Trim — <file name>", 900×600 (min 640×480): video player above a 52 pt action bar:
@@ -186,7 +186,7 @@ runs **exactly once, when the window closes, whatever closed it**:
 - The restored card is a *new* card built the normal way (`presentCard(for:image:historyID:)` on macOS)
   with the **same History id** as the original, a **fresh thumbnail** (first frame, ≤ 640 px) and the
   normal corner / auto-dismiss settings. If the file no longer exists (thumbnail fails), no card.
-- Opening the window from the **History** window's **Trim…** passes no callback: nothing is restored
+- Opening the window from the **History** window's **Edit Video…** passes no callback: nothing is restored
   (there was no card).
 - Only one trim window exists at a time. Opening a *different* file closes the current window first
   (which restores *its* card). Opening the *same* file again just brings the window forward; if that
@@ -1094,7 +1094,7 @@ segments with `-c copy` at stop**. A running ffmpeg can't change its inputs or r
 ## Part 6 — Video editor v2 (cut, per-segment speed/mute, GIF export)
 
 **What it is.** The recording trim window (opened by a recording's Quick Access card ✂ **Trim** button,
-or History's **Trim…**; MP4 only) is now a small video editor. It replaces AVKit's single-range "yellow
+or History's **Edit Video…**; MP4 only) is now a small video editor. It replaces AVKit's single-range "yellow
 handles" trim mode with our own filmstrip timeline: split the clip at the playhead, delete segments,
 drag segment edges, give each segment a speed (1× / 1.5× / 2× / 4×) or mute it, undo / redo, and export
 as a copy, as a GIF, or over the original. Nothing touches the original file until an export. The Part 0
@@ -1370,7 +1370,7 @@ leaves only the original, now 2 s; a failed export leaves the original's bytes u
   the card from `Controls/DarkSection.cs`-style chrome.
 - Entry points: `QuickAccessActions.OnTrim` (`Overlays/QuickAccessTypes.cs`) + a Trim button on MP4
   recording cards (`Overlays/QuickAccessWindow.xaml`), wired in `Capture/CaptureCoordinator.ShowRecordingCard`
-  with the Part 0 `restoreCard`; a `Trim…` command in `History/HistoryWindow.xaml(.cs)`. Copy / GIF
+  with the Part 0 `restoreCard`; an `Edit Video…` command in `History/HistoryWindow.xaml(.cs)`. Copy / GIF
   results go through `CaptureCoordinator.OnRecordingFinished(path, thumbnail)`.
 - Running ffmpeg: `windows/src/BetterScreenshot.Platform/FfmpegRunner.RunAsync` (add a progress callback
   that parses `-progress pipe:1` output); GIF via `Recording/GifExporter.ConvertAsync` (it deletes its

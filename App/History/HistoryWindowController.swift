@@ -129,7 +129,7 @@ struct HistoryView: View {
                 .disabled(soleSelection?.kind != .screenshot)
             Button("Pin") { if let e = soleSelection { pin(e) } }
                 .disabled(soleSelection?.kind != .screenshot)
-            Button("Trim…") { if let url = soleSelection.flatMap(trimmableURL) { actions.trim(url) } }
+            Button("Edit Video…") { if let url = soleSelection.flatMap(trimmableURL) { actions.trim(url) } }
                 .disabled(soleSelection.flatMap(trimmableURL) == nil)
             Button("Show in Finder") { history.revealInFinder(selectedEntries) }
                 .disabled(!selectedEntries.contains { history.canReveal($0) })
@@ -180,7 +180,7 @@ struct HistoryView: View {
             Button("Pin") { pin(entry) }
         }
         if group.count == 1, let url = trimmableURL(entry) {
-            Button("Trim…") { actions.trim(url) }
+            Button("Edit Video…") { actions.trim(url) }
         }
         if group.contains(where: { history.canReveal($0) }) {
             Button("Show in Finder") { history.revealInFinder(targets(for: entry)) }
