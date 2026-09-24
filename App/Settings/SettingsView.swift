@@ -260,6 +260,8 @@ struct SettingsView: View {
                                           (value: 3, label: "3s"),
                                           (value: 5, label: "5s"),
                                           (value: 10, label: "10s")])
+                switchRow("Show stop button in recording", SettingsHelp.controlsInRecording,
+                          isOn: bindRec(\.controlsInRecording))
             }
         }
     }

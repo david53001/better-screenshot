@@ -149,6 +149,12 @@ enum SettingsHelp {
         example: "Choose 3s to switch to the right window before capture begins."
     )
 
+    static let controlsInRecording = HelpText(
+        "Show stop button in recording",
+        "While recording, a floating pill with the timer, Pause and Stop is always on screen. Off: it's hidden from the video itself. On: it's recorded like any other window.",
+        example: "Leave off for clean tutorials; window recordings never include it either way."
+    )
+
     // MARK: - Shortcuts
 
     static let captureArea = HelpText(

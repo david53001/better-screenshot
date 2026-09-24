@@ -29,6 +29,9 @@ public struct RecordingConfig: Equatable {
     public var clickHighlights: Bool
     public var keystrokeOverlay: Bool
     public var countdownSeconds: Int     // 0 = off; otherwise 3 / 5 / 10
+    /// Whether the floating stop/pause controls appear in the recorded video.
+    /// Off = they're excluded from the capture (still visible on screen).
+    public var controlsInRecording: Bool
 
     public static let gifFPS = 10
     public static let gifMaxWidth: CGFloat = 960
@@ -36,11 +39,11 @@ public struct RecordingConfig: Equatable {
     public static let `default` = RecordingConfig(
         format: .mp4, fps: 30, systemAudio: true, microphone: false,
         camera: false, cameraSize: .small, clickHighlights: true,
-        keystrokeOverlay: false, countdownSeconds: 0)
+        keystrokeOverlay: false, countdownSeconds: 0, controlsInRecording: false)
 
     public init(format: RecordingFormat, fps: Int, systemAudio: Bool, microphone: Bool,
                 camera: Bool, cameraSize: CameraSize, clickHighlights: Bool,
-                keystrokeOverlay: Bool, countdownSeconds: Int) {
+                keystrokeOverlay: Bool, countdownSeconds: Int, controlsInRecording: Bool = false) {
         self.format = format
         self.fps = fps
         self.systemAudio = systemAudio
@@ -50,6 +53,7 @@ public struct RecordingConfig: Equatable {
         self.clickHighlights = clickHighlights
         self.keystrokeOverlay = keystrokeOverlay
         self.countdownSeconds = countdownSeconds
+        self.controlsInRecording = controlsInRecording
     }
 
     /// H.264 AVAssetWriter video settings. Bitrate heuristic w·h·fps·0.12,
@@ -76,7 +80,8 @@ public struct RecordingConfig: Equatable {
          "cameraSize": cameraSize.rawValue,
          "clickHighlights": clickHighlights ? "true" : "false",
          "keystrokeOverlay": keystrokeOverlay ? "true" : "false",
-         "countdownSeconds": String(countdownSeconds)]
+         "countdownSeconds": String(countdownSeconds),
+         "controlsInRecording": controlsInRecording ? "true" : "false"]
     }
 
     public init(dictionary: [String: String]) {
@@ -92,5 +97,6 @@ public struct RecordingConfig: Equatable {
         self.keystrokeOverlay = (dictionary["keystrokeOverlay"] ?? "\(d.keystrokeOverlay)") == "true"
         let cd = Int(dictionary["countdownSeconds"] ?? "")
         self.countdownSeconds = (cd == 3 || cd == 5 || cd == 10) ? cd! : 0
+        self.controlsInRecording = (dictionary["controlsInRecording"] ?? "\(d.controlsInRecording)") == "true"
     }
 }

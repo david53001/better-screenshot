@@ -18,6 +18,7 @@ final class RecordingCoordinator {
     private let countdown = CountdownOverlayController()
     private let windowPicker = WindowPickerController()
     private let hud = HUDController()
+    private let controls = RecordingControlsController()
     // Shared with CaptureCoordinator: finished recordings join the same
     // bottom-corner thumbnail stack that screenshots use.
     private let quickAccess: QuickAccessStackController
@@ -43,6 +44,8 @@ final class RecordingCoordinator {
         strip.onArea = { [weak self] in self?.beginAreaSelection() }
         strip.onWindow = { [weak self] in self?.beginWindowSelection() }
         strip.onCancel = { [weak self] in self?.cancelStrip() }
+        controls.onStop = { [weak self] in self?.stopFromControls() }
+        controls.onPauseResume = { [weak self] in self?.pauseResume() }
         recorder.onStreamError = { [weak self] _ in
             Task { @MainActor in self?.streamFailed() }
         }
@@ -81,6 +84,15 @@ final class RecordingCoordinator {
         }
     }
 
+    /// The floating pill's Stop: cancels during the countdown, stops once recording.
+    private func stopFromControls() {
+        switch state {
+        case .armed: cancelStrip()
+        case .recording, .paused: Task { await stop() }
+        default: break
+        }
+    }
+
     private func arm() {
         guard PermissionManager.hasScreenRecordingPermission else {
             presentSetup?()
@@ -98,6 +110,7 @@ final class RecordingCoordinator {
         selection.cancel()
         countdown.cancel()
         windowPicker.cancel()
+        controls.hide()
         strip.hide()
         state.transition(.reset)
     }
@@ -180,9 +193,12 @@ final class RecordingCoordinator {
         // were up — only proceed if we're still armed.
         guard case .armed = state else { return }
         var config = settings.recording
+        // Shown before the content query so the pill is a known SCWindow we can exclude.
+        controls.show(on: screen)
+        notify()
         do {
-            let content = try await SCShareableContent.excludingDesktopWindows(
-                false, onScreenWindowsOnly: true)
+            let content = try await shareableContent(containing: config.controlsInRecording
+                                                     ? nil : controls.windowID)
             let scale = screen.backingScaleFactor
             let filter: SCContentFilter
             var sourceRect: CGRect?
@@ -203,7 +219,10 @@ final class RecordingCoordinator {
                     sourceRect = local
                     pixelSize = CGSize(width: local.width * scale, height: local.height * scale)
                 }
-                filter = SCContentFilter(display: display, excludingWindows: [])
+                let hidden = config.controlsInRecording ? [] : content.windows.filter {
+                    $0.windowID == controls.windowID
+                }
+                filter = SCContentFilter(display: display, excludingWindows: hidden)
                 cameraAnchor = globalRect ?? screen.frame
             case .window(let windowID):
                 guard let window = content.windows.first(where: { $0.windowID == windowID })
@@ -267,6 +286,7 @@ final class RecordingCoordinator {
 
     private func stop() async {
         guard state.transition(.finish) else { return }
+        controls.hide()
         stopTimer()
         notify()
         let config = settings.recording
@@ -334,6 +354,7 @@ final class RecordingCoordinator {
     }
 
     private func tearDownPanels() {
+        controls.hide()
         bubble.hide()
         clicks.stop()
         keystrokes.stop()
@@ -353,6 +374,20 @@ final class RecordingCoordinator {
     private func notify() {
         onStateChange?(isRecording, state.elapsedString(now: Date()))
         onPauseStateChange?(isRecording, isPaused)
+        controls.update(elapsed: state.elapsedString(now: Date()), paused: isPaused)
+    }
+
+    /// On-screen shareable content. A just-ordered-in panel can take a moment to
+    /// reach the window server's list, so when `windowID` must be present (to be
+    /// excluded) retry briefly before giving up and recording without the exclusion.
+    private func shareableContent(containing windowID: CGWindowID?) async throws -> SCShareableContent {
+        var content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        guard let windowID else { return content }
+        for _ in 0..<5 where !content.windows.contains(where: { $0.windowID == windowID }) {
+            try await Task.sleep(nanoseconds: 50_000_000)
+            content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        }
+        return content
     }
 
     /// Post-save tail for every finished recording: add it to capture history,

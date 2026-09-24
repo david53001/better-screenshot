@@ -14,8 +14,10 @@ let recordingConfigTests: [TestCase] = [
         t.isTrue(d.clickHighlights)
         t.isFalse(d.keystrokeOverlay)
         t.equal(d.countdownSeconds, 0)   // off by default
+        t.isFalse(d.controlsInRecording) // stop/pause pill hidden from the video by default
         var c = d
         c.format = .gif; c.fps = 60; c.microphone = true; c.cameraSize = .medium; c.countdownSeconds = 5
+        c.controlsInRecording = true
         t.equal(RecordingConfig(dictionary: c.dictionary), c)
         // Malformed/missing keys fall back to defaults.
         t.equal(RecordingConfig(dictionary: [:]), .default)
