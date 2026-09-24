@@ -1,7 +1,8 @@
 import Foundation
 
-/// The kept part of a recording, in seconds. Pure — the trim window reads AVKit's
-/// handle times into one of these and the exporter turns it back into a CMTimeRange.
+/// The kept part of a recording, in seconds. Pure — the single-segment case of a
+/// `CutList` (a plain start/end trim, which exports losslessly) and the home of the
+/// editor's "m:ss.t" timestamp format.
 public struct TrimRange: Equatable {
     public var start: Double
     public var end: Double
