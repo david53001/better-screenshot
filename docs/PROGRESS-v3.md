@@ -15,7 +15,7 @@ keep the Mac responsive.
 | 1 | Editor foundation | Part 1 | **merged** into `main` (`5ec3353`) | `c4970e4`, `7ae880f`, `98c394c` |
 | 1 | Video | Part 0 → Part 6 | launched 2026-09-24 | — |
 | 1 | Recording setup | Part 4 | launched 2026-09-24 | — |
-| 1 | Live pill | Part 5 | launched 2026-09-24 | — |
+| 1 | Live pill | Part 5 | **merged** into `main` (`85b214b`) — also fixed a pre-existing A/V drift after pausing on a static screen | `f88cf6c`…`82fc870` |
 | 2 | Text | Part 2 | launched 2026-09-24 (based on `5ec3353`) | — |
 | 2 | Redaction + tools | Part 3 | launched 2026-09-24 (based on `5ec3353`) | — |
 | — | Coordinator | Windows doc §A (2026-09-24 features) done (`6a1304e`); merges, docs | in progress | `main` |
@@ -23,6 +23,15 @@ keep the Mac responsive.
 **Known cross-lane follow-ups** (do after both lanes merge):
 - Mid-recording microphone device switch from the live pill (needs Part 4's device catalog + Part 5's
   pill) — spec §8.
+
+**Merge-time checks for Part 4** (it lands after Part 5): Part 5's `RecordingCoordinator.pillStatus()`
+reads `settings.recording.microphone` / `.systemAudio`, and `toggleCamera()` calls
+`bubble.show(near:on:diameter:)` — adapt them if Part 4 renamed those fields or added a camera-device
+parameter. Part 5 found that window recordings only capture that window's app audio.
+
+**Gotcha (stale root build):** after merging a branch that adds files to a `Packages/*` library, the
+root `swift build` may fail with "cannot find X in scope" — delete `.build/debug.yaml` (the cached
+build plan; regenerated) and rebuild. A full `swift package clean` also works but rebuilds everything.
 
 **Gotcha:** the Agent tool's `isolation: worktree` creates worktrees from `origin/main` (`d577e0f`),
 not local `main` — every agent must first `git merge --ff-only <local main hash>`.
