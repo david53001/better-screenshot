@@ -1,7 +1,7 @@
 #!/bin/bash
 # One-line installer for BetterScreenshot (macOS 14+, Apple Silicon or Intel):
 #
-#   curl -fsSL https://raw.githubusercontent.com/david53001/BetterScreenshot/main/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/david53001/better-screenshot/main/scripts/install.sh | bash
 #
 # Downloads the latest GitHub release, puts BetterScreenshot.app in /Applications,
 # removes the quarantine flag (the app is self-signed, not notarized — this
@@ -9,7 +9,7 @@
 # refuse to open it), and launches it.
 set -euo pipefail
 
-REPO="david53001/BetterScreenshot"
+REPO="david53001/better-screenshot"
 ASSET="BetterScreenshot.app.zip"
 DEST="/Applications/BetterScreenshot.app"
 

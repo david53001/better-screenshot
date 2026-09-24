@@ -28,7 +28,7 @@ Works on **any Mac running macOS 14 (Sonoma) or newer — Apple Silicon and Inte
 **Quickest — one line in Terminal:**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/david53001/BetterScreenshot/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/david53001/better-screenshot/main/scripts/install.sh | bash
 ```
 
 That downloads the latest release, puts `BetterScreenshot.app` in `/Applications`, clears the quarantine flag, and launches it. (Read it first if you like: [`scripts/install.sh`](scripts/install.sh).)
@@ -49,7 +49,7 @@ That downloads the latest release, puts `BetterScreenshot.app` in `/Applications
 The app has no built-in updater (it never touches the network). To move to the newest release, run the same one-liner again:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/david53001/BetterScreenshot/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/david53001/better-screenshot/main/scripts/install.sh | bash
 ```
 
 It quits the running copy, replaces `/Applications/BetterScreenshot.app` with the [latest release](../../releases/latest), and relaunches it. Nothing else is touched, so everything carries over:
@@ -69,8 +69,8 @@ Only the Xcode Command Line Tools are needed (no full Xcode):
 
 ```sh
 xcode-select --install     # if you don't have the CLT yet
-git clone https://github.com/david53001/BetterScreenshot.git
-cd BetterScreenshot
+git clone https://github.com/david53001/better-screenshot.git
+cd better-screenshot
 ./scripts/build-app.sh     # → dist/BetterScreenshot.app
 ```
 
