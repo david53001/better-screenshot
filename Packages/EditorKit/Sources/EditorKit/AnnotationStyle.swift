@@ -49,6 +49,21 @@ public struct AnnotationStyle: Equatable, Codable {
     public static let textBackgroundCornerRadiusRange: ClosedRange<CGFloat> = 0...40
     public static let textOutlineWidthRange: ClosedRange<CGFloat> = 1...20
 
+    // Redaction (v3 Part 3; ranges + helpers in RedactionAnnotations.swift). Defaults here so
+    // older persisted styles decode and the memberwise init needn't list them.
+    /// Blur / Pixelate — a redaction's mode (the active tool picks it for new ones).
+    public var redactionMode: RedactionMode = .blur
+    /// Blur radius, image px (`blurRadiusRange`).
+    public var blurRadius: CGFloat = 12
+    /// Pixelate block size, image px (`pixelSizeRange`).
+    public var pixelSize: CGFloat = 12
+    /// The Highlighter tool's own sticky colour / width / opacity (HighlighterAnnotation.swift).
+    public var highlighterPen: HighlighterPen = .default
+    /// Spotlight hole shape (⌥-drag always draws an ellipse).
+    public var spotlightShape: SpotlightShape = .rectangle
+    /// How dark the area outside the spotlights gets, 0…1 black (`spotlightDimRange`).
+    public var spotlightDim: CGFloat = 0.6
+
     public init(strokeColor: RGBAColor, fillColor: RGBAColor,
                 lineWidth: CGFloat, fontSize: CGFloat,
                 fontFamily: String = TextFont.system, fontBold: Bool = true,
@@ -65,6 +80,7 @@ public struct AnnotationStyle: Equatable, Codable {
         case fontFamily, fontBold, fontItalic, textAlignment, opacity
         case textBackgroundMode, textBackgroundColor, textBackgroundPadding, textBackgroundCornerRadius
         case textUnderline, textStrikethrough, textOutline, textOutlineColor, textOutlineWidth, textShadow
+        case redactionMode, blurRadius, pixelSize, highlighterPen, spotlightShape, spotlightDim
     }
     /// Keys only read from older styles.
     private enum LegacyKeys: String, CodingKey { case textBackground }
@@ -105,7 +121,16 @@ public struct AnnotationStyle: Equatable, Codable {
             textOutlineWidth = w.clamped(to: Self.textOutlineWidthRange)
         }
         textShadow = try container.decodeIfPresent(Bool.self, forKey: .textShadow) ?? false
+        // Part 3 fields: missing → defaults; out-of-range strengths are clamped.
+        redactionMode = (try? container.decodeIfPresent(RedactionMode.self, forKey: .redactionMode)) ?? .blur
+        blurRadius = Self.clamp(try container.decodeIfPresent(CGFloat.self, forKey: .blurRadius) ?? 12, Self.blurRadiusRange)
+        pixelSize = Self.clamp(try container.decodeIfPresent(CGFloat.self, forKey: .pixelSize) ?? 12, Self.pixelSizeRange)
+        highlighterPen = ((try? container.decodeIfPresent(HighlighterPen.self, forKey: .highlighterPen)) ?? .default).clamped
+        spotlightShape = (try? container.decodeIfPresent(SpotlightShape.self, forKey: .spotlightShape)) ?? .rectangle
+        spotlightDim = Self.clamp(try container.decodeIfPresent(CGFloat.self, forKey: .spotlightDim) ?? 0.6, Self.spotlightDimRange)
     }
+
+    static func clamp(_ v: CGFloat, _ r: ClosedRange<CGFloat>) -> CGFloat { min(max(v, r.lowerBound), r.upperBound) }
 
     public static let `default` = AnnotationStyle(
         strokeColor: RGBAColor(r: 1, g: 0.23, b: 0.19, a: 1),

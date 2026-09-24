@@ -33,6 +33,11 @@ renderer. Imported by the `App/` target (capture flow opens the editor).
   `CanvasZoomController`, which resizes the canvas; the canvas maps view ↔ image through `scale`).
 - `RecentColors.swift` — last 6 custom colours (pure); the host persists them (`editorRecentColors`).
 - Rendering/geometry: `DocumentRenderer.swift`, `Redactor.swift`, `ArrowGeometry.swift`.
+- v3 Part 3: `RedactionAnnotations.swift` (one `RedactionAnnotation`; mode Blur/Pixelate/Black-out +
+  strength live in the style, so panel edits convert/restyle selected ones), `HighlighterAnnotation.swift`
+  (multiply `blendMode`; the tool's own sticky `HighlighterPen`, swapped in by the window),
+  `SpotlightAnnotation.swift` (+ `AnnotationPainter`: the draw order both canvas and renderer use),
+  `ToolDefaults.swift`.
 
 ## How to add an inspector section
 (The "inspector" is the editor's right-side panel. Parts 2/3 = text v2 and redaction/highlighter/spotlight
@@ -64,6 +69,10 @@ in `docs/superpowers/specs/2026-09-24-betterscreenshot-editor-recording-v3-desig
 - Switching to a drawing tool clears the selection; Select keeps it. A just-drawn object stays selected,
   so the panel restyles it straight away.
 - The bottom-bar **Stack** button is wired in the app to `keepInStack` (add to Quick Access), not Pin.
+- **Redactions render from the base image for their current frame** (cached) — never store a baked patch;
+  a crop rebases them (`EditorDocument.cropped`). They are always opaque.
+- **Draw order** (`AnnotationPainter`): base → spotlight dim layer → objects in stacking order, with the dim
+  re-applied over each redaction. Draw through it (or `drawComposited()`), never a bare `draw()` loop.
 
 ## Verify
 `swift run -j 2 --package-path Packages/EditorKit EditorKitTests`. UI: headless probe (synthetic

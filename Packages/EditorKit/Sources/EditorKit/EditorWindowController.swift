@@ -37,8 +37,8 @@ public final class EditorWindowController: NSWindowController {
     private let toolGroups: [[EditorTool]] = [
         [.select],
         [.arrow, .line, .rectangle, .filledRectangle, .ellipse],
-        [.text, .counter],
-        [.blur, .pixelate],
+        [.text, .counter, .highlighter],
+        [.blur, .pixelate, .spotlight],
         [.crop],
     ]
 
@@ -86,7 +86,7 @@ public final class EditorWindowController: NSWindowController {
         canvas.onEditText = { [weak self] textStyle in
             // Show the edited text's own style; not persisted until the user changes it.
             guard let self else { return }
-            self.style = textStyle
+            self.style = textStyle.keepingToolDefaults(of: self.style)
             self.canvas.style = textStyle
             self.selectTool(.text)
         }
@@ -337,7 +337,12 @@ public final class EditorWindowController: NSWindowController {
         inspector.onStyleEdit = { [weak self] edit, group in self?.applyStyleEdit(edit, group: group) }
         inspector.onStyleEditEnded = { [weak self] in self?.canvas.endStyleEditGroup() }
         inspector.onRecentColorsChanged = { [weak self] in self?.onRecentColorsChanged?($0) }
-        inspector.onRedactTool = { [weak self] in self?.selectTool($0) }
+        inspector.onRedactTool = { [weak self] tool in
+            // Under a redaction tool the switch changes the tool (keeping the just-drawn, just-
+            // converted object selected); under Select it only converted the selection.
+            guard let self, self.canvas.tool.redactionMode != nil else { return }
+            self.selectTool(tool, keepSelection: true)
+        }
         inspector.onArrange = { [weak self] action in
             guard let canvas = self?.canvas else { return }
             switch action {
@@ -351,11 +356,30 @@ public final class EditorWindowController: NSWindowController {
     /// An inspector edit changes the default style (new objects, the live text editor, the
     /// persisted sticky default) and every selected object (one undo step).
     private func applyStyleEdit(_ edit: StyleEdit, group: AnyHashable?) {
-        edit(&style)
-        canvas.style = style
+        if editsHighlighterPen {
+            var pen = style.withHighlighterPen
+            edit(&pen)
+            style.rememberHighlighterPen(from: pen)
+        } else {
+            edit(&style)
+        }
+        canvas.style = defaultStyle(for: canvas.tool)
         canvas.applyStyleEdit(edit, group: group)
         onStyleChanged?(style)
         refreshChrome()
+    }
+
+    /// The highlighter keeps its own sticky colour / width / opacity (`HighlighterPen`): panel
+    /// edits go to it while the Highlighter is active or only highlighter strokes are selected.
+    private var editsHighlighterPen: Bool {
+        let selection = canvas.selectedTools
+        return canvas.tool == .highlighter
+            || (canvas.tool == .select && !selection.isEmpty && selection.allSatisfy { $0 == .highlighter })
+    }
+
+    /// The style new objects of `tool` get (and the panel shows while nothing is selected).
+    private func defaultStyle(for tool: EditorTool) -> AnnotationStyle {
+        tool == .highlighter ? style.withHighlighterPen : style
     }
 
     @objc private func toggleInspector() { setInspectorShown(inspector.isHidden) }
@@ -380,18 +404,19 @@ public final class EditorWindowController: NSWindowController {
 
     // MARK: - Tools + keyboard
 
-    private func selectTool(_ tool: EditorTool) {
+    private func selectTool(_ tool: EditorTool, keepSelection: Bool = false) {
         if tool != canvas.tool { canvas.commitPendingText() }
         // A drawing tool starts fresh; Select keeps the selection (e.g. the object just drawn).
-        if tool != .select { canvas.clearSelection() }
+        if tool != .select, !keepSelection { canvas.clearSelection() }
         canvas.tool = tool
+        canvas.style = defaultStyle(for: tool)
         for (t, b) in toolButtons { b.isSelectedTool = (t == tool) }
         refreshChrome()
     }
 
     @objc private func toolButtonClicked(_ sender: IconToolButton) { selectTool(sender.tool) }
 
-    /// Single-key tool shortcuts (V A L R F O T N B P C). Keys reach the window controller
+    /// Single-key tool shortcuts (V A L R F O T N H B P X S C). Keys reach the window controller
     /// through the responder chain only when nothing else used them — the inline text
     /// editor consumes typing, so shortcuts are off while text is being edited.
     public override func keyDown(with event: NSEvent) {
@@ -456,7 +481,7 @@ public final class EditorWindowController: NSWindowController {
         redoButton.isEnabled = canvas.canRedo
         let selection = canvas.selectedTools
         inspector.update(content: InspectorModel.content(tool: canvas.tool, selection: selection),
-                         tool: canvas.tool, style: canvas.selectionStyle ?? style)
+                         tool: canvas.tool, style: canvas.selectionStyle ?? defaultStyle(for: canvas.tool))
         hintLabel.stringValue = InspectorModel.hint(tool: canvas.tool, selection: selection,
                                                     editingText: canvas.isEditingText)
         zoom.refresh()   // crop / undo may have changed the image size

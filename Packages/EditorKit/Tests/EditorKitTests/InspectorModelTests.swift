@@ -19,8 +19,10 @@ let inspectorModelTests: [TestCase] = [
                 [.styles, .colour, .font, .background, .effects, .opacity])
     },
     TestCase("redactionAndCropTools") { t in
-        t.equal(InspectorModel.content(tool: .blur, selection: []).sections, [.redaction])
-        t.equal(InspectorModel.content(tool: .pixelate, selection: []).sections, [.redaction])
+        t.equal(InspectorModel.content(tool: .blur, selection: []).sections, [.redaction, .strength])
+        t.equal(InspectorModel.content(tool: .pixelate, selection: []).sections, [.redaction, .strength])
+        t.equal(InspectorModel.content(tool: .blackout, selection: []).sections, [.redaction], "a solid box has no strength")
+        t.equal(InspectorModel.content(tool: .blackout, selection: []).title, "Black-out")
         t.equal(InspectorModel.content(tool: .crop, selection: []).sections, [.cropHelp])
     },
     TestCase("drawingToolIgnoresItsSelectionForSections") { t in
@@ -37,7 +39,8 @@ let inspectorModelTests: [TestCase] = [
         let c = InspectorModel.content(tool: .select, selection: [.text])
         t.equal(c.title, "Text")
         t.equal(c.sections, [.styles, .colour, .font, .background, .effects, .opacity, .arrange])
-        t.equal(InspectorModel.content(tool: .select, selection: [.blur]).sections, [.arrange])
+        t.equal(InspectorModel.content(tool: .select, selection: [.blur]).sections, [.redaction, .strength, .arrange])
+        t.equal(InspectorModel.content(tool: .select, selection: [.blackout]).title, "Black-out")
     },
     TestCase("selectWithSeveralShowsSharedSectionsPlusArrange") { t in
         let c = InspectorModel.content(tool: .select, selection: [.arrow, .text])
@@ -46,6 +49,39 @@ let inspectorModelTests: [TestCase] = [
         t.equal(InspectorModel.content(tool: .select, selection: [.arrow, .rectangle]).sections,
                 [.colour, .stroke, .opacity, .arrange])
         t.equal(InspectorModel.content(tool: .select, selection: [.arrow, .pixelate]).sections, [.arrange])
+    },
+    TestCase("highlighterShowsColourItsOwnStrokeOpacity") { t in
+        let c = InspectorModel.content(tool: .highlighter, selection: [])
+        t.equal(c.title, "Highlighter")
+        t.equal(c.sections, [.colour, .highlighterStroke, .opacity])
+        t.equal(InspectorSection.highlighterStroke.title, "Stroke")
+        t.equal(InspectorModel.content(tool: .select, selection: [.highlighter, .arrow]).sections,
+                [.colour, .opacity, .arrange], "marker and line widths don't share one slider")
+        t.equal(EditorTool.highlighter.tooltip, "Highlighter (H)")
+        t.isTrue(InspectorModel.hint(tool: .highlighter, selection: [], editingText: false).contains("⇧"))
+        t.equal(InspectorModel.hint(tool: .select, selection: [.highlighter], editingText: false),
+                "Drag to move it, or press Delete to remove it.")
+    },
+    TestCase("spotlightShowsShapeAndDim") { t in
+        let c = InspectorModel.content(tool: .spotlight, selection: [])
+        t.equal(c.title, "Spotlight")
+        t.equal(c.sections, [.spotlightShape, .spotlightDim])
+        t.equal(InspectorSection.spotlightShape.title, "Shape")
+        t.equal(InspectorSection.spotlightDim.title, "Dim outside")
+        t.equal(InspectorModel.content(tool: .select, selection: [.spotlight]).sections,
+                [.spotlightShape, .spotlightDim, .arrange])
+        t.equal(EditorTool.spotlight.tooltip, "Spotlight (S)")
+        t.equal(EditorTool.blackout.tooltip, "Black-out (X)")
+        t.isTrue(InspectorModel.hint(tool: .spotlight, selection: [], editingText: false).contains("⌥"))
+        t.isTrue(InspectorModel.hint(tool: .select, selection: [.spotlight], editingText: false).contains("resize"))
+    },
+    TestCase("redactionSelectionsShareStrengthOnlyWithinOneMode") { t in
+        t.equal(InspectorModel.content(tool: .select, selection: [.blur, .blur]).sections,
+                [.redaction, .strength, .arrange])
+        t.equal(InspectorModel.content(tool: .select, selection: [.blur, .pixelate]).sections,
+                [.redaction, .arrange], "one slider can't be a blur radius and a pixel size at once")
+        t.equal(InspectorModel.content(tool: .select, selection: [.pixelate, .blackout]).sections,
+                [.redaction, .arrange])
     },
     TestCase("sectionsKeepPanelOrder") { t in
         for tool in EditorTool.allCases {

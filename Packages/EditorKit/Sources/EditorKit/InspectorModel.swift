@@ -6,7 +6,8 @@
 public enum InspectorSection: String, CaseIterable {
     /// Text style presets (Label, Callout, …) — first, so a look is one click away.
     case styles
-    case colour, stroke, font, background, effects, redaction, opacity, arrange
+    case colour, stroke, highlighterStroke, font, background, effects, redaction, strength
+    case spotlightShape, spotlightDim, opacity, arrange
     /// Explanatory text only — the Crop tool and Select with nothing selected.
     case cropHelp, selectHelp
 
@@ -15,13 +16,16 @@ public enum InspectorSection: String, CaseIterable {
         switch self {
         case .styles: return "Styles"
         case .colour: return "Colour"
-        case .stroke: return "Stroke"
+        case .stroke, .highlighterStroke: return "Stroke"
         case .font: return "Font"
         case .background: return "Background"
         case .effects: return "Effects"
         case .redaction: return "Redaction"
         case .opacity: return "Opacity"
         case .arrange: return "Arrange"
+        case .strength: return "Strength"
+        case .spotlightShape: return "Shape"
+        case .spotlightDim: return "Dim outside"
         case .cropHelp, .selectHelp: return nil   // the panel heading already names the tool
         }
     }
@@ -56,14 +60,18 @@ public enum InspectorModel {
         case .arrow, .line, .rectangle, .ellipse: return [.colour, .stroke, .opacity]
         case .filledRectangle, .counter: return [.colour, .opacity]
         case .text: return [.styles, .colour, .font, .background, .effects, .opacity]
-        case .blur, .pixelate, .select, .crop: return []
+        case .blur, .pixelate: return [.redaction, .strength]
+        case .blackout: return [.redaction]   // a solid box has no strength
+        // Its own Stroke section: marker widths (12–32 px) don't share a scale with lines (2–7).
+        case .highlighter: return [.colour, .highlighterStroke, .opacity]
+        case .spotlight: return [.spotlightShape, .spotlightDim]
+        case .select, .crop: return []
         }
     }
 
     /// Sections while `tool` is active (and it isn't Select).
     public static func toolSections(for tool: EditorTool) -> [InspectorSection] {
         switch tool {
-        case .blur, .pixelate: return [.redaction]
         case .crop: return [.cropHelp]
         case .select: return [.selectHelp]
         default: return objectSections(for: tool)
@@ -82,6 +90,8 @@ public enum InspectorModel {
         }
         let shared = InspectorSection.allCases.filter { s in
             selection.allSatisfy { objectSections(for: $0).contains(s) }
+                // One Strength slider can't show a blur radius and a pixel size at once.
+                && (s != .strength || Set(selection).count == 1)
         }
         let title = selection.count == 1 ? first.displayName : "\(selection.count) objects"
         return InspectorContent(title: title, sections: shared + [.arrange])
@@ -97,7 +107,7 @@ public enum InspectorModel {
             case nil: return "Click an object to select it, or drag across empty space to select several."
             case .text?:
                 return "Drag to move it, drag a corner to resize the text, drag a side to change the box width, or double-click to edit."
-            case .rectangle?, .filledRectangle?, .ellipse?, .blur?, .pixelate?:
+            case .rectangle?, .filledRectangle?, .ellipse?, .blur?, .pixelate?, .blackout?, .spotlight?:
                 return "Drag to move it, drag a handle to resize it, or press Delete to remove it."
             default: return "Drag to move it, or press Delete to remove it."
             }
@@ -110,6 +120,9 @@ public enum InspectorModel {
         case .counter: return "Click to place the next numbered step."
         case .blur: return "Drag over anything you want to hide — it's blurred when you let go."
         case .pixelate: return "Drag over anything you want to hide — it's pixelated when you let go."
+        case .blackout: return "Drag over anything you want to hide — it's covered in solid black when you let go."
+        case .highlighter: return "Drag to highlight, like a marker pen — hold ⇧ for a straight line."
+        case .spotlight: return "Drag over what matters — everything else is dimmed. Hold ⌥ for an ellipse."
         case .crop: return "Drag over the area to keep — everything outside is cut away (⌘Z undoes it)."
         }
     }

@@ -1,6 +1,8 @@
 public enum EditorTool: String, CaseIterable {
     case select, arrow, line, rectangle, filledRectangle, ellipse
     case text, counter, blur, pixelate, crop
+    /// v3 Part 3. Black-out has no toolbar button (it's the Redaction switch's third segment).
+    case blackout, highlighter, spotlight
 }
 
 // Per-tool metadata: name, toolbar icon and single-key shortcut. Adding a tool means
@@ -20,6 +22,9 @@ public extension EditorTool {
         case .blur: return "Blur"
         case .pixelate: return "Pixelate"
         case .crop: return "Crop"
+        case .blackout: return "Black-out"
+        case .highlighter: return "Highlighter"
+        case .spotlight: return "Spotlight"
         }
     }
 
@@ -37,6 +42,9 @@ public extension EditorTool {
         case .blur: return "drop.fill"
         case .pixelate: return "square.grid.3x3.fill"
         case .crop: return "crop"
+        case .blackout: return "rectangle.inset.filled"
+        case .highlighter: return "highlighter"
+        case .spotlight: return "flashlight.on.fill"
         }
     }
 
@@ -54,6 +62,9 @@ public extension EditorTool {
         case .blur: return "b"
         case .pixelate: return "p"
         case .crop: return "c"
+        case .blackout: return "x"
+        case .highlighter: return "h"
+        case .spotlight: return "s"
         }
     }
 
@@ -78,8 +89,9 @@ public extension EditorTool {
         case is EllipseAnnotation: return .ellipse
         case is TextAnnotation: return .text
         case is CounterAnnotation: return .counter
-        case is BlurAnnotation: return .blur
-        case is PixelateAnnotation: return .pixelate
+        case let r as RedactionAnnotation: return r.style.redactionMode.tool
+        case is HighlighterAnnotation: return .highlighter
+        case is SpotlightAnnotation: return .spotlight
         default: return nil
         }
     }

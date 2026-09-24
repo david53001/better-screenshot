@@ -164,8 +164,8 @@ public final class EditorCanvasView: NSView {
         guard let id = soleSelectedID, let i = document.index(of: id) else { return nil }
         let a = document.annotations[i]
         guard a is RectangleAnnotation || a is FilledRectangleAnnotation
-           || a is EllipseAnnotation   || a is BlurAnnotation
-           || a is PixelateAnnotation  || a is TextAnnotation else { return nil }
+           || a is EllipseAnnotation   || a is RedactionAnnotation
+           || a is SpotlightAnnotation || a is TextAnnotation else { return nil }
         let bb = a.boundingBox()
         return NSRect(x: bb.minX / scale, y: bb.minY / scale,
                       width: bb.width / scale, height: bb.height / scale)
@@ -194,10 +194,10 @@ public final class EditorCanvasView: NSView {
             var c = f; c.frame = newImageFrame; updated = c
         case let e as EllipseAnnotation:
             var c = e; c.frame = newImageFrame; updated = c
-        case let b as BlurAnnotation:
-            var c = b; c.frame = newImageFrame; updated = c
-        case let p as PixelateAnnotation:
-            var c = p; c.frame = newImageFrame; updated = c
+        case let r as RedactionAnnotation:
+            var c = r; c.frame = newImageFrame; updated = c   // its patch re-renders for the new frame
+        case let s as SpotlightAnnotation:
+            var c = s; c.frame = newImageFrame; updated = c
         case let t as TextAnnotation:
             // Side handles set the box width (text reflows); height follows the text.
             // The frame includes the padding of the box behind the text, if any.
@@ -233,8 +233,8 @@ public final class EditorCanvasView: NSView {
         let toView = NSAffineTransform()
         toView.scale(by: 1 / scale)
         toView.concat()
-        for a in document.annotations where a.id != editingID { a.drawComposited() }
-        inProgress?.drawComposited()
+        AnnotationPainter.draw(document.annotations.filter { $0.id != editingID } + [inProgress].compactMap { $0 },
+                               imageSize: document.size)
         // The live text's box / outline, behind the editor's NSTextView (which draws the letters),
         // laid out at the editor's width so it matches what the text view shows.
         if let field = activeField {
@@ -372,7 +372,17 @@ public final class EditorCanvasView: NSView {
             inProgress = FilledRectangleAnnotation(frame: rect(start, p), style: style)
         case .ellipse:
             inProgress = EllipseAnnotation(frame: rect(start, p), style: style)
-        case .blur, .pixelate, .crop:
+        case .highlighter:
+            // Follow the pointer; ⇧ makes it a straight line from where the drag began.
+            var points = (inProgress as? HighlighterAnnotation)?.points ?? [start]
+            if event.modifierFlags.contains(.shift) { points = [points[0], p] }
+            else if let last = points.last, hypot(p.x - last.x, p.y - last.y) >= 0.5 { points.append(p) }
+            inProgress = HighlighterAnnotation(points: points, style: style)
+        case .spotlight:
+            var s = style
+            if event.modifierFlags.contains(.option) { s.spotlightShape = .ellipse }
+            inProgress = SpotlightAnnotation(frame: rect(start, p), style: s)   // live dim preview
+        case .blur, .pixelate, .blackout, .crop:
             regionMarquee = rect(start, p)
         case .text:
             if let hi = activeHandleIndex {
@@ -404,18 +414,18 @@ public final class EditorCanvasView: NSView {
                     selectedIDs = Set(document.ids(intersecting: m))
                     marqueeRect = nil
                 }
-            case .blur:
-                if r.width >= 2, r.height >= 2,
-                   let patch = Redactor.blur(document.baseImage, region: r, radius: 12) {
-                    insert(BlurAnnotation(frame: r, patch: patch))
-                }
-            case .pixelate:
-                if r.width >= 2, r.height >= 2,
-                   let patch = Redactor.pixelate(document.baseImage, region: r, blockSize: 12) {
-                    insert(PixelateAnnotation(frame: r, patch: patch))
+            case .blur, .pixelate, .blackout:
+                let box = r.intersection(CGRect(origin: .zero, size: document.size))
+                if box.width >= 2, box.height >= 2, let mode = tool.redactionMode {
+                    var s = style; s.redactionMode = mode
+                    insert(RedactionAnnotation(frame: box, source: document.baseImage, style: s))
                 }
             case .crop:
                 if r.width >= 4, r.height >= 4 { applyCrop(to: r) }
+            case .spotlight:
+                // A slip of the mouse shouldn't dim the whole image around a pinhole.
+                if let s = inProgress as? SpotlightAnnotation, s.frame.width >= 4, s.frame.height >= 4 { insert(s) }
+                inProgress = nil
             case .text:
                 guard textPressPending else { break }
                 textPressPending = false
@@ -683,6 +693,16 @@ public final class EditorCanvasView: NSView {
             guard s != a.style else { continue }
             a.style = s
             changed.append(a)
+        }
+        // Spotlights share one dim layer, so a dim change reaches every spotlight — with or
+        // without a selection (e.g. the Dim slider under the Spotlight tool right after switching).
+        for a in document.annotations where a is SpotlightAnnotation && !selectedIDs.contains(a.id) {
+            var s = a.style
+            edit(&s)
+            guard s.spotlightDim != a.style.spotlightDim else { continue }
+            var c = a
+            c.style.spotlightDim = s.spotlightDim
+            changed.append(c)
         }
         guard !changed.isEmpty else { return }
         if group == nil || group != openStyleGroup { snapshot() }
