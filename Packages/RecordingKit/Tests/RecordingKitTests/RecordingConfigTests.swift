@@ -35,6 +35,8 @@ let recordingConfigTests: [TestCase] = [
         let bitrate = props?[AVKey.bitRate] as? Int
         // 1920*1080*30*0.12 ≈ 7.46 Mbps — inside the 2–40 Mbps clamp.
         t.equal(bitrate, Int(1920.0 * 1080.0 * 30.0 * 0.12))
+        // A keyframe every 0.5 s so lossless trims land close to the chosen frame.
+        t.equal(props?[AVKey.maxKeyFrameIntervalDuration] as? Double, 0.5)
         // Tiny recordings clamp up to 2 Mbps.
         let tiny = RecordingConfig.default.videoSettings(width: 100, height: 100)
         let tinyRate = (tiny[AVKey.compression] as? [String: Any])?[AVKey.bitRate] as? Int

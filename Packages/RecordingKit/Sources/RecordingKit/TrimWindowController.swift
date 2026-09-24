@@ -199,8 +199,8 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
 
     @objc private func saveCopy() {
         let muted = muteBox.state == .on
-        export { [url, range] in
-            try await TrimExporter.exportCopy(source: url, range: range, muted: muted)
+        export { [url, range, duration] in
+            try await TrimExporter.exportCopy(source: url, cuts: range.map { CutList(range: $0, duration: duration) } ?? CutList(duration: duration), muted: muted)
         } done: { [weak self] newURL in
             self?.onSavedCopy?(newURL)
             self?.close()
@@ -209,8 +209,8 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
 
     @objc private func replaceOriginal() {
         let muted = muteBox.state == .on
-        export { [url, range] in
-            try await TrimExporter.replaceOriginal(source: url, range: range, muted: muted)
+        export { [url, range, duration] in
+            try await TrimExporter.replaceOriginal(source: url, cuts: range.map { CutList(range: $0, duration: duration) } ?? CutList(duration: duration), muted: muted)
             return url
         } done: { [weak self] url in
             guard let self else { return }
