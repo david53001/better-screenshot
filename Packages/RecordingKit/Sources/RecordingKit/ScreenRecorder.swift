@@ -30,6 +30,15 @@ public final class ScreenRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
     private var lastVideoPTS: CMTime?
     private var frameDuration = CMTime(value: 1, timescale: 60)
     private var timeline = PauseTimeline()
+    // Live mute: also flipped on `sampleQueue`. A muted source keeps appending,
+    // but silent copies (SilenceFill), so its track stays continuous and in sync.
+    // Deliberately NOT reset by start()/stop(): they're the session's live toggles
+    // (a Restart keeps them); the caller clears them for a new session.
+    private var micMuted = false
+    private var systemAudioMuted = false
+    /// The configuration the stream started with, kept so `retarget` changes only
+    /// where the content comes from and where it lands in the frame.
+    private var streamConfig: SCStreamConfiguration?
 
     /// Stream died underneath us (display unplugged, etc.). Fired on sampleQueue.
     public var onStreamError: ((Error) -> Void)?
@@ -107,6 +116,7 @@ public final class ScreenRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
         self.lastVideoPTS = nil
         self.timeline = PauseTimeline()
         self.stream = stream
+        self.streamConfig = sc
 
         if config.microphone, micInput != nil {
             let capturer = MicCapturer()
@@ -158,10 +168,46 @@ public final class ScreenRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
         sampleQueue.sync { paused = false; pendingResume = true }
     }
 
+    /// Mute/unmute the microphone track (silence, not a gap). Serialized on the
+    /// sample queue, so the next mic buffer honours it. No-op without a mic track.
+    public func setMicMuted(_ muted: Bool) {
+        sampleQueue.sync { micMuted = muted }
+    }
+
+    /// Mute/unmute the system-audio track, like `setMicMuted`.
+    public func setSystemAudioMuted(_ muted: Bool) {
+        sampleQueue.sync { systemAudioMuted = muted }
+    }
+
+    /// Whether the current recording has a microphone / system-audio track —
+    /// muting only affects tracks that exist (they're fixed at start).
+    public var recordsMicrophone: Bool { micInput != nil }
+    public var recordsSystemAudio: Bool { systemAudioInput != nil }
+    /// The file being written (nil when idle) — lets a discard delete it even if
+    /// finalizing fails.
+    public var currentOutputURL: URL? { outputURL }
+
+    /// Points the running stream at new content — another window, or another
+    /// display area (`sourceRect`: display-relative, top-left origin, points) —
+    /// without stopping. The output pixel size stays as configured at start, so
+    /// content of another shape is scaled to fit and centred with black bars
+    /// (`LetterboxFit`; window streams would otherwise pin it top-left).
+    public func retarget(filter: SCContentFilter, sourceRect: CGRect?) async throws {
+        guard let stream, let streamConfig else { throw RecorderError.notRecording }
+        let output = CGSize(width: streamConfig.width, height: streamConfig.height)
+        streamConfig.sourceRect = sourceRect ?? .null
+        streamConfig.destinationRect = LetterboxFit.rect(
+            content: sourceRect?.size ?? filter.contentRect.size, output: output)
+        streamConfig.scalesToFit = true         // window streams: scale small windows up too
+        streamConfig.preservesAspectRatio = true
+        try await stream.updateContentFilter(filter)
+        try await stream.updateConfiguration(streamConfig)
+    }
+
     private func reset() {
         stream = nil; writer = nil; videoInput = nil
         systemAudioInput = nil; micInput = nil; micCapturer = nil
-        outputURL = nil; sessionStarted = false; sessionStartPTS = nil
+        outputURL = nil; sessionStarted = false; sessionStartPTS = nil; streamConfig = nil
         paused = false; pendingResume = false; lastVideoPTS = nil
         timeline = PauseTimeline()
     }
@@ -236,7 +282,8 @@ public final class ScreenRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
             guard sessionStarted, !paused,
                   let systemAudioInput, systemAudioInput.isReadyForMoreMediaData else { return }
             if pendingResume { clearPendingResume(firstPTS: sampleBuffer.presentationTimeStamp) }
-            appendRetimed(sampleBuffer, to: systemAudioInput)
+            guard let buffer = Self.audible(sampleBuffer, muted: systemAudioMuted) else { return }
+            appendRetimed(buffer, to: systemAudioInput)
         default:
             break
         }
@@ -247,7 +294,14 @@ public final class ScreenRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
               buffer.presentationTimeStamp >= sessionStartPTS,
               let micInput, micInput.isReadyForMoreMediaData else { return }
         if pendingResume { clearPendingResume(firstPTS: buffer.presentationTimeStamp) }
+        guard let buffer = Self.audible(buffer, muted: micMuted) else { return }
         appendRetimed(buffer, to: micInput)
+    }
+
+    /// `buffer` itself, or a silent copy while its source is muted. Nil (drop the
+    /// buffer) if no silent copy can be made — a muted source must never leak sound.
+    private static func audible(_ buffer: CMSampleBuffer, muted: Bool) -> CMSampleBuffer? {
+        muted ? SilenceFill.silentCopy(of: buffer) : buffer
     }
 
     // MARK: - SCStreamDelegate
