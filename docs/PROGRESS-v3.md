@@ -1,5 +1,12 @@
 # v3 build progress (editor & recording overhaul)
 
+**Status 2026-09-24: all Parts 0–6 built and merged into local `main`; not pushed, not tagged, no
+version bump.** Verified: `scripts/test.sh` all green (388 tests), `scripts/build-app.sh release`
+builds + signs. Nothing has been clicked through by a human yet — agents verified UI with headless
+probes (synthetic events + snapshots in `docs/parity-v3/`). Suggested manual pass: record a real
+window with mic + system audio (mute, switch window, pause), edit it (split/delete/speed/GIF), and
+annotate a screenshot (text styles, corner scaling, highlighter, spotlight, blur strength, zoom).
+
 Spec (approved by the owner 2026-09-24; the owner said **no separate implementation plans** — build
 straight from the spec): `docs/superpowers/specs/2026-09-24-betterscreenshot-editor-recording-v3-design.md`.
 Windows handoff (every part fills its section): `docs/MAC-TO-WINDOWS-PARITY-v3.md`.
@@ -17,8 +24,8 @@ keep the Mac responsive.
 | 1 | Recording setup | Part 4 | **merged** into `main` (`9308009`) — "Only this app" audio dropped (SCK single-app capture misses helper processes, e.g. browsers); fixed window recordings having no system audio | `cfdd8c8`…`82d1b08` |
 | 1 | Live pill | Part 5 | **merged** into `main` (`85b214b`) — also fixed a pre-existing A/V drift after pausing on a static screen | `f88cf6c`…`82fc870` |
 | 2 | Text | Part 2 | **merged** into `main` (`4347104`) | `c206a2f`, `0b324b9`, `f275179` |
-| 2 | Redaction + tools | Part 3 | launched 2026-09-24 (based on `5ec3353`) | — |
-| — | Coordinator | Windows doc §A (2026-09-24 features) done (`6a1304e`); merges, docs | in progress | `main` |
+| 2 | Redaction + tools | Part 3 | **merged** into `main` (`dc1c11e`) | `9b40dfe`…`fc056b0` |
+| — | Coordinator | Windows doc §A (`6a1304e`), all merges, CHANGELOG/README/CLAUDE.md, full verification | **done** 2026-09-24 | `main` |
 
 **Known follow-ups** (after all lanes merge):
 - Mid-recording microphone device switch from the live pill (needs Part 4's device catalog + Part 5's

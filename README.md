@@ -10,9 +10,9 @@ A free, open-source screenshot and annotation tool for macOS, living in your men
 - **Quick Access overlay** after capture: drag the thumbnail anywhere, copy, save, or jump into the editor; the last 3 captures stack at the screen corner. Its buttons measure the pixels behind them and pick a glyph tone plus scrim strength that guarantees a WCAG 4.5:1 contrast ratio, so they stay readable over any screenshot
 - **Capture History** — every capture and recording is remembered locally (capped at the 100 most recent, with no time limit); browse, copy, annotate, pin, delete, or clear all from the History window, and restore an accidentally closed thumbnail with Restore Recently Closed
 - **Pin to screen** — float a capture always-on-top (drag, resize, multi-pin), from the History window's Pin action or the menu bar's **Pin from Clipboard**
-- **Annotation editor**: arrow, line, rectangle, ellipse, text (any installed font, B/I/U/S, alignment, resizable and corner-scalable text boxes, solid/auto background, outline, shadow, one-click styles), numbered counters, blur & pixelate redaction, crop
+- **Annotation editor**: arrow, line, rectangle, ellipse, text (any installed font, B/I/U/S, alignment, resizable and corner-scalable text boxes, solid/auto background, outline, shadow, one-click styles), numbered counters, highlighter, spotlight, blur / pixelate / black-out redaction with adjustable strength, crop
   - A labelled options panel on the right that follows the tool or selection, opacity for every object, recent colours + eyedropper, and a hint line explaining the current tool
-  - Zoom (pinch, `⌘`-scroll, `⌘+`/`⌘−`, `⌘0` fit, `⌘1` 100%) and single-key tools (V A L R F O T N B P C)
+  - Zoom (pinch, `⌘`-scroll, `⌘+`/`⌘−`, `⌘0` fit, `⌘1` 100%) and single-key tools (V A L R F O T N H B P S X C)
   - Undo/redo (`⌘Z` / `⌘⇧Z` / `⌘Y`), drag to select multiple objects, resize handles, bring-to-front / send-to-back
 - **One-button setup** — Screen Recording is the only permission the app needs; the welcome window handles the whole flow and restarts the app for you
 - Saves PNG or JPG to a folder you choose; copy lands on the clipboard

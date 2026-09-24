@@ -15,12 +15,20 @@ port notes: `docs/MAC-TO-WINDOWS-PARITY-v3.md`.
   default for new objects. Every object has an **Opacity** slider; the Colour section keeps your last
   6 custom colours and has a **Pick from Screen** eyedropper.
 - **Zoom:** pinch, ⌘-scroll, ⌘+ / ⌘−, ⌘0 (fit), ⌘1 (100%), up to 800%, with a "Fit · 57%" menu in
-  the bottom bar. **Single-key tools:** V A L R F O T N B P C, Esc = Select.
+  the bottom bar. **Single-key tools:** V A L R F O T N H B P S X C, Esc = Select.
 - **Text:** drag a corner of a selected text to scale the whole thing (font, box and outline
   together); side handles still set the box width. **Background** is None / Solid / Auto with any
   colour, Padding and Corners — and you see it while typing. **B I U S**, an **outline** with colour
   and width, a soft **shadow**, and one-click **styles**: Label, Callout, Note, Code, Title, Subtle.
   Older saved styles keep their look (the old "contrasting box" becomes Auto).
+- **Blur / pixelate strength** is adjustable live (blur radius 2–40 px, pixel size 4–48 px) for new
+  and selected redactions; a **Blur / Pixelate / Black-out** switch converts a selected redaction in
+  place (Black-out, key X, is a solid black box that can't be reversed). Pixelate now shows a proper
+  mosaic and strong blurs no longer streak at the edges.
+- **Highlighter** tool (H): a translucent marker that keeps text readable, with its own remembered
+  colour, width and opacity; hold ⇧ for a straight line.
+- **Spotlight** tool (S): dims everything outside one or more rectangles (⌥ for ellipses), with an
+  adjustable dim amount.
 
 ### Recording
 - **Record strip redesigned:** labelled Full Screen / Area / Window buttons and **Microphone, System
@@ -40,6 +48,8 @@ port notes: `docs/MAC-TO-WINDOWS-PARITY-v3.md`.
   0.5 s so lossless trims land closer to the chosen frame.
 
 ### Fixed
+- A moved or resized blur/pixelate box now redacts what's under it — it used to keep showing the
+  original area's blur, or stretch it.
 - Closing the trim/edit window with Cancel no longer loses the recording's Quick Access card — it comes
   back (showing the edited video after Replace Original; after Save as Copy both cards show).
 - After pausing while the screen wasn't changing, the video could run ~1 s ahead of the audio.
