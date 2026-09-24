@@ -23,6 +23,15 @@ public struct AnnotationStyle: Equatable, Codable {
 
     public static let opacityRange: ClosedRange<CGFloat> = 0.1...1
 
+    // Redaction (v3 Part 3; ranges + helpers in RedactionAnnotations.swift). Defaults here so
+    // older persisted styles decode and the memberwise init needn't list them.
+    /// Blur / Pixelate — a redaction's mode (the active tool picks it for new ones).
+    public var redactionMode: RedactionMode = .blur
+    /// Blur radius, image px (`blurRadiusRange`).
+    public var blurRadius: CGFloat = 12
+    /// Pixelate block size, image px (`pixelSizeRange`).
+    public var pixelSize: CGFloat = 12
+
     public init(strokeColor: RGBAColor, fillColor: RGBAColor,
                 lineWidth: CGFloat, fontSize: CGFloat, textBackground: Bool = false,
                 fontFamily: String = TextFont.system, fontBold: Bool = true,
@@ -38,6 +47,7 @@ public struct AnnotationStyle: Equatable, Codable {
     private enum CodingKeys: String, CodingKey {
         case strokeColor, fillColor, lineWidth, fontSize, textBackground
         case fontFamily, fontBold, fontItalic, textAlignment, opacity
+        case redactionMode, blurRadius, pixelSize
     }
 
     public init(from decoder: Decoder) throws {
@@ -55,7 +65,13 @@ public struct AnnotationStyle: Equatable, Codable {
         // Opacity arrived in v3; older styles are opaque. Clamped so a bad value can't hide objects.
         let o = try container.decodeIfPresent(CGFloat.self, forKey: .opacity) ?? 1
         opacity = min(max(o, Self.opacityRange.lowerBound), Self.opacityRange.upperBound)
+        // Part 3 fields: missing → defaults; out-of-range strengths are clamped.
+        redactionMode = (try? container.decodeIfPresent(RedactionMode.self, forKey: .redactionMode)) ?? .blur
+        blurRadius = Self.clamp(try container.decodeIfPresent(CGFloat.self, forKey: .blurRadius) ?? 12, Self.blurRadiusRange)
+        pixelSize = Self.clamp(try container.decodeIfPresent(CGFloat.self, forKey: .pixelSize) ?? 12, Self.pixelSizeRange)
     }
+
+    static func clamp(_ v: CGFloat, _ r: ClosedRange<CGFloat>) -> CGFloat { min(max(v, r.lowerBound), r.upperBound) }
 
     public static let `default` = AnnotationStyle(
         strokeColor: RGBAColor(r: 1, g: 0.23, b: 0.19, a: 1),

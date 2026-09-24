@@ -60,7 +60,12 @@ public struct EditorDocument {
               let newBase = baseImage.cropping(to: clamped) else { return nil }
         var d = EditorDocument(baseImage: newBase)
         let delta = CGVector(dx: -clamped.minX, dy: -clamped.minY)
-        for a in annotations { d.add(a.moved(by: delta)) }
+        for a in annotations {
+            var moved = a.moved(by: delta)
+            // A redaction renders from the base image, so it follows the base into the crop.
+            if var r = moved as? RedactionAnnotation { r.source = newBase; moved = r }
+            d.add(moved)
+        }
         return d
     }
 }

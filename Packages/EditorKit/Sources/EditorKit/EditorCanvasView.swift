@@ -159,8 +159,8 @@ public final class EditorCanvasView: NSView {
         guard let id = soleSelectedID, let i = document.index(of: id) else { return nil }
         let a = document.annotations[i]
         guard a is RectangleAnnotation || a is FilledRectangleAnnotation
-           || a is EllipseAnnotation   || a is BlurAnnotation
-           || a is PixelateAnnotation  || a is TextAnnotation else { return nil }
+           || a is EllipseAnnotation   || a is RedactionAnnotation
+           || a is TextAnnotation else { return nil }
         let bb = a.boundingBox()
         return NSRect(x: bb.minX / scale, y: bb.minY / scale,
                       width: bb.width / scale, height: bb.height / scale)
@@ -189,10 +189,8 @@ public final class EditorCanvasView: NSView {
             var c = f; c.frame = newImageFrame; updated = c
         case let e as EllipseAnnotation:
             var c = e; c.frame = newImageFrame; updated = c
-        case let b as BlurAnnotation:
-            var c = b; c.frame = newImageFrame; updated = c
-        case let p as PixelateAnnotation:
-            var c = p; c.frame = newImageFrame; updated = c
+        case let r as RedactionAnnotation:
+            var c = r; c.frame = newImageFrame; updated = c   // its patch re-renders for the new frame
         case let t as TextAnnotation:
             // Side handles set the box width (text reflows); height follows the text.
             var c = t
@@ -398,15 +396,11 @@ public final class EditorCanvasView: NSView {
                     selectedIDs = Set(document.ids(intersecting: m))
                     marqueeRect = nil
                 }
-            case .blur:
-                if r.width >= 2, r.height >= 2,
-                   let patch = Redactor.blur(document.baseImage, region: r, radius: 12) {
-                    insert(BlurAnnotation(frame: r, patch: patch))
-                }
-            case .pixelate:
-                if r.width >= 2, r.height >= 2,
-                   let patch = Redactor.pixelate(document.baseImage, region: r, blockSize: 12) {
-                    insert(PixelateAnnotation(frame: r, patch: patch))
+            case .blur, .pixelate:
+                let box = r.intersection(CGRect(origin: .zero, size: document.size))
+                if box.width >= 2, box.height >= 2, let mode = tool.redactionMode {
+                    var s = style; s.redactionMode = mode
+                    insert(RedactionAnnotation(frame: box, source: document.baseImage, style: s))
                 }
             case .crop:
                 if r.width >= 4, r.height >= 4 { applyCrop(to: r) }

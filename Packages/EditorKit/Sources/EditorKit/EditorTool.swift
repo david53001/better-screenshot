@@ -78,8 +78,7 @@ public extension EditorTool {
         case is EllipseAnnotation: return .ellipse
         case is TextAnnotation: return .text
         case is CounterAnnotation: return .counter
-        case is BlurAnnotation: return .blur
-        case is PixelateAnnotation: return .pixelate
+        case let r as RedactionAnnotation: return r.style.redactionMode.tool
         default: return nil
         }
     }
