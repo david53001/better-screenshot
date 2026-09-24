@@ -240,17 +240,14 @@ struct SettingsView: View {
                                segments: [(value: 30, label: "30"),
                                           (value: 60, label: "60")])
                 Rectangle().fill(SettingsTheme.border).frame(height: 1)
-                switchRow("Record system audio", SettingsHelp.recordSystemAudio,
-                          isOn: bindRec(\.systemAudio))
-                switchRow("Record microphone", SettingsHelp.recordMicrophone,
-                          isOn: bindRec(\.microphone))
-                switchRow("Show camera bubble", SettingsHelp.showCameraBubble,
-                          isOn: bindRec(\.camera))
+                sourceMenus
                 segmentedField("Camera size", SettingsHelp.cameraSize,
                                selection: bindRec(\.cameraSize),
                                segments: [(value: .small, label: "Small"),
                                           (value: .medium, label: "Medium")],
                                disabled: !store.recording.camera)
+                switchRow("Show mouse cursor", SettingsHelp.showCursor,
+                          isOn: bindRec(\.showsCursor))
                 switchRow("Highlight mouse clicks", SettingsHelp.highlightClicks,
                           isOn: bindRec(\.clickHighlights))
                 keystrokeRow
@@ -262,6 +259,47 @@ struct SettingsView: View {
                                           (value: 10, label: "10s")])
                 switchRow("Show stop button in recording", SettingsHelp.controlsInRecording,
                           isOn: bindRec(\.controlsInRecording))
+            }
+        }
+    }
+
+    /// Microphone / System audio / Camera menus — the same choices and persisted values
+    /// as the record strip's source columns. GIFs are silent, so the audio menus dim.
+    private var sourceMenus: some View {
+        let mics = AudioInputCatalog().snapshot()
+        let cameras = CameraCatalog().snapshot()
+        let isGIF = store.recording.format == .gif
+        return VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 6) {
+                fieldLabel("Microphone", SettingsHelp.microphone)
+                MonoComboField(
+                    selection: Binding(
+                        get: { mics.choice(enabled: store.recording.microphone,
+                                           saved: store.recording.microphoneDeviceID) },
+                        set: { store.recording.setMicrophone($0); store.persist() }),
+                    options: mics.options.map { (value: $0.choice, label: $0.title) })
+                    .disabled(isGIF).opacity(isGIF ? 0.4 : 1)
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                fieldLabel("System audio", SettingsHelp.systemAudio)
+                MonoComboField(selection: bindRec(\.systemAudioMode),
+                               options: SystemAudioMode.allCases.map { (value: $0, label: $0.title) })
+                    .disabled(isGIF).opacity(isGIF ? 0.4 : 1)
+                if isGIF {
+                    Text("GIFs have no sound. Switch Format to MP4 to record audio.")
+                        .font(SettingsTheme.Font.rowSubLabel)
+                        .foregroundColor(SettingsTheme.subLabel)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                fieldLabel("Camera", SettingsHelp.camera)
+                MonoComboField(
+                    selection: Binding(
+                        get: { cameras.choice(enabled: store.recording.camera,
+                                              saved: store.recording.cameraDeviceID) },
+                        set: { store.recording.setCamera($0); store.persist() }),
+                    options: cameras.options.map { (value: $0.choice, label: $0.title) })
             }
         }
     }

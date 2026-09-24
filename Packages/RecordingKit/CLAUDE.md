@@ -4,7 +4,11 @@ Screen recording (ScreenCaptureKit), GIF export, and the on-screen recording ove
 `App/` target (`App/Recording`).
 
 ## Key files (`Sources/RecordingKit/`)
-- `ScreenRecorder.swift` — the recording engine. Live controls: `setMicMuted`/`setSystemAudioMuted`
+- `ScreenRecorder.swift` — the recording engine. `start(…systemAudioFilter:)`: when set, system audio
+  comes from a separate audio-only `SCStream` on that (display) filter instead of the video filter —
+  window filters only hear the window's own process — so a window `retarget` leaves the audio stream
+  running. Honours `showsCursor` and `systemAudioMode.excludesOwnAudio` (`excludesCurrentProcessAudio`).
+  Live controls: `setMicMuted`/`setSystemAudioMuted`
   (muted tracks keep appending `SilenceFill` copies — continuous, in sync), `retarget(filter:sourceRect:)`
   (`SCStream.updateContentFilter` + `updateConfiguration`; new content letterboxed via `LetterboxFit`
   as `destinationRect`). Pause/resume: the resume gap is anchored on the last audio end (or the pause
@@ -13,11 +17,21 @@ Screen recording (ScreenCaptureKit), GIF export, and the on-screen recording ove
   new frames).
 - `SilenceFill.swift`, `LetterboxFit.swift` — pure helpers for the above (tested).
 - `RecorderState.swift`, `RecordingConfig.swift` — recording state machine + config (pure, tested).
+  Config v3 keys: `systemAudioMode` (off/all/excludeSelf; legacy `systemAudio` Bool still read and
+  written, and kept as a get/set view), `microphoneDeviceID` / `cameraDeviceID` (`uniqueID`, nil =
+  default), `showsCursor`.
+- `DeviceChoice.swift` (pure, tested) — `DeviceList` (saved → default → first resolution, menu choice,
+  Off + de-duplicated device rows) behind the `DeviceCatalog` protocol; `DeviceCatalog.swift` —
+  `AudioInputCatalog` / `CameraCatalog` (AVFoundation discovery; listing never prompts for access).
+  Reuse these for any later device menu (e.g. the mid-recording mic switch).
+- `MicLevel.swift` (pure, tested) — dBFS → meter fraction (−60 dB floor), smoothing, lit segments.
 - `GIFExporter.swift`, `GIFTiming.swift` — GIF output + frame timing.
-- `MicCapturer.swift` — microphone audio.
+- `MicCapturer.swift` — microphone audio from a chosen device (`start(deviceID:)`, falls back to the
+  default), per-buffer power via `onLevel`; start/stop serialized on one queue so a quick start→stop
+  can't orphan a running session.
 - `CameraBubbleController.swift`, `KeystrokeOverlayController.swift`, `ClickHighlighter.swift` —
-  camera bubble + keystroke/click visualizers shown during recording. The bubble's `setHidden(_:)`
-  hides/re-shows it in place (live pill's Camera toggle).
+  camera bubble (`show(…deviceID:)`) + keystroke/click visualizers shown during recording. The
+  bubble's `setHidden(_:)` hides/re-shows it in place (live pill's Camera toggle).
 - Video editor (trim / cut; opened from a recording's Quick Access ✂ or History's Trim…):
   - `CutList.swift` (pure, tested) — the edit: ordered kept segments of the source, each with speed
     (1× / 1.5× / 2× / 4×) and mute; split / remove / edge trims / in-out points, output↔source↔timeline
@@ -40,7 +54,7 @@ Screen recording (ScreenCaptureKit), GIF export, and the on-screen recording ove
 - Recordings are written with a keyframe at least every 0.5 s (`RecordingConfig.keyFrameInterval`) so
   passthrough trims land close to the chosen frame.
 
-`RecorderState`, `RecordingConfig`, `SilenceFill`, `LetterboxFit`, `CutList`, and the trim/export pieces (except the window) are unit-tested; the AV/overlay pieces are verified manually or with headless probes (retarget, mute, pause sync — see `docs/MAC-TO-WINDOWS-PARITY-v3.md` Part 5; the video editor — Part 6).
+`RecorderState`, `RecordingConfig`, `DeviceList`, `MicLevel`, `SilenceFill`, `LetterboxFit`, `CutList`, and the trim/export pieces (except the window) are unit-tested; the AV/overlay pieces are verified manually or with headless probes (retarget, mute, pause sync — see `docs/MAC-TO-WINDOWS-PARITY-v3.md` Part 5; record strip, device menus, window-recording audio — Part 4; the video editor — Part 6).
 
 ## Verify
 `swift run --package-path Packages/RecordingKit RecordingKitTests`.

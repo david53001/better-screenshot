@@ -107,22 +107,35 @@ enum SettingsHelp {
         example: "60 fps for smoother motion, 30 fps for a smaller file."
     )
 
-    static let recordSystemAudio = HelpText(
-        "Record system audio",
-        "Includes the Mac's sound output — app audio, video, music — in the recording.",
-        example: "Turn on to capture a video call's audio along with the screen."
+    static let microphone = HelpText(
+        "Microphone",
+        "Which microphone records your voice, or Off for none. If the chosen mic is "
+            + "unplugged, your Mac's default mic is used instead. The record strip shows "
+            + "a live level meter for it.",
+        example: "Pick your AirPods or a USB mic to narrate a tutorial."
     )
 
-    static let recordMicrophone = HelpText(
-        "Record microphone",
-        "Includes audio from your Mac's microphone in the recording.",
-        example: "Turn on to narrate a tutorial while you record."
+    static let systemAudio = HelpText(
+        "System audio",
+        "The sound your Mac plays — videos, calls, music, alerts — recorded along with "
+            + "the screen. \"All apps except BetterScreenshot\" leaves out this app's own "
+            + "sounds, like its capture sound. GIF recordings never have sound.",
+        example: "All apps to capture a video call's audio along with the screen."
     )
 
-    static let showCameraBubble = HelpText(
-        "Show camera bubble",
-        "Overlays a small circular webcam feed in the corner of the recording.",
+    static let camera = HelpText(
+        "Camera",
+        "Shows your webcam in a round bubble on screen while you record, so it ends up "
+            + "in the video. Pick which camera (including an iPhone via Continuity Camera), "
+            + "or Off.",
         example: "Turn on for a face-cam picture-in-picture during a walkthrough video."
+    )
+
+    static let showCursor = HelpText(
+        "Show mouse cursor",
+        "Draws the mouse pointer into the recording. Turn off for a clean video without "
+            + "the pointer.",
+        example: "Turn off when recording a slideshow or video you won't be clicking through."
     )
 
     static let cameraSize = HelpText(

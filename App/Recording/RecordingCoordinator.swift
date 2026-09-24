@@ -219,6 +219,8 @@ final class RecordingCoordinator {
         guard case .armed = state else { return }
         activeTarget = (target, screen)
         var config = settings.recording
+        // GIFs are silent: don't open the mic (or ask for it) for a track that's thrown away.
+        if config.format == .gif { config.microphone = false; config.systemAudio = false }
         // Shown before the content query so the pill is a known SCWindow we can exclude.
         controls.show(on: screen)
         notify()
@@ -230,6 +232,7 @@ final class RecordingCoordinator {
             var sourceRect: CGRect?
             var pixelSize: CGSize
             let cameraAnchor: CGRect
+            var systemAudioFilter: SCContentFilter?
             switch target {
             case .display(let globalRect):
                 guard let displayID = screen.deviceDescription[
@@ -257,6 +260,14 @@ final class RecordingCoordinator {
                                    height: window.frame.height * scale)
                 filter = SCContentFilter(desktopIndependentWindow: window)
                 cameraAnchor = screen.frame   // camera bubble is screen-level (v1)
+                // A window filter only hears that window's own process; take system
+                // audio from the whole display so "All apps" means all apps.
+                if config.systemAudio, let display = content.displays.first(where: {
+                    $0.displayID == screen.deviceDescription[
+                        NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
+                }) ?? content.displays.first {
+                    systemAudioFilter = SCContentFilter(display: display, excludingWindows: [])
+                }
             }
 
             // Even pixel dimensions keep H.264 encoders happy.
@@ -268,7 +279,8 @@ final class RecordingCoordinator {
                 hud.show("Mic access denied — recording without microphone", on: screen)
             }
             if config.camera, await CameraBubbleController.ensurePermission() {
-                bubble.show(near: cameraAnchor, on: screen, diameter: config.cameraSize.diameter)
+                bubble.show(near: cameraAnchor, on: screen, diameter: config.cameraSize.diameter,
+                            deviceID: config.cameraDeviceID)
             }
             if config.clickHighlights { clicks.start(on: screen) }
             if config.keystrokeOverlay { keystrokes.start(on: screen) }
@@ -291,7 +303,8 @@ final class RecordingCoordinator {
             try FileManager.default.createDirectory(at: settings.saveDirectory,
                                                     withIntermediateDirectories: true)
             try await recorder.start(filter: filter, pixelSize: pixelSize,
-                                     sourceRect: sourceRect, config: config, outputURL: url)
+                                     sourceRect: sourceRect, config: config, outputURL: url,
+                                     systemAudioFilter: systemAudioFilter)
             guard state.transition(.begin(Date())) else {
                 // Cancelled (⌘⇧5) during engine startup: stop and discard.
                 _ = try? await recorder.stop()
@@ -410,19 +423,22 @@ final class RecordingCoordinator {
     private static let noMicTip = "Mic wasn't on when this recording started — there's no mic track to mute"
     private static let noSoundTip =
         "System audio wasn't on when this recording started — there's no sound track to mute"
+    private static let gifTip = "GIFs have no sound — there's no audio track to mute"
 
     private func pillStatus() -> RecordingControlsController.Status {
         let running = isRecording
         let rec = settings.recording
         // Audio tracks are fixed when the engine starts; during the countdown,
         // show what it's about to record (mic permission was settled by then).
+        // GIFs record no audio at all (begin() drops both sources).
+        let isGIF = rec.format == .gif
         let hasMic = running ? recorder.recordsMicrophone
-            : rec.microphone && AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
-        let hasSound = running ? recorder.recordsSystemAudio : rec.systemAudio
+            : !isGIF && rec.microphone && AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        let hasSound = running ? recorder.recordsSystemAudio : !isGIF && rec.systemAudio
         var s = RecordingControlsController.Status(elapsed: state.elapsedString(now: Date()),
                                                    paused: isPaused, running: running)
-        s.mic = hasMic ? (micMuted ? .off : .on) : .unavailable(Self.noMicTip)
-        s.sound = hasSound ? (soundMuted ? .off : .on) : .unavailable(Self.noSoundTip)
+        s.mic = hasMic ? (micMuted ? .off : .on) : .unavailable(isGIF ? Self.gifTip : Self.noMicTip)
+        s.sound = hasSound ? (soundMuted ? .off : .on) : .unavailable(isGIF ? Self.gifTip : Self.noSoundTip)
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .denied, .restricted:
             s.camera = .unavailable("Camera access is off — allow BetterScreenshot in System Settings › "
@@ -465,7 +481,8 @@ final class RecordingCoordinator {
                   activeTarget != nil else { notify(); return }
             let anchor: CGRect
             if case .display(let rect?) = active.target { anchor = rect } else { anchor = active.screen.frame }
-            bubble.show(near: anchor, on: active.screen, diameter: settings.recording.cameraSize.diameter)
+            bubble.show(near: anchor, on: active.screen, diameter: settings.recording.cameraSize.diameter,
+                        deviceID: settings.recording.cameraDeviceID)
             notify()
         }
     }
