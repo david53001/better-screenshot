@@ -18,10 +18,12 @@ public final class CameraBubbleController {
         }
     }
 
-    /// Shows the bubble near the bottom-right of `rect` (screen coords, points).
-    public func show(near rect: CGRect, on screen: NSScreen, diameter: CGFloat) {
+    /// Shows the bubble near the bottom-right of `rect` (screen coords, points), fed by
+    /// `deviceID` (`uniqueID`), or the default camera when that one isn't connected.
+    public func show(near rect: CGRect, on screen: NSScreen, diameter: CGFloat,
+                     deviceID: String? = nil) {
         guard panel == nil else { return }
-        guard let device = AVCaptureDevice.default(for: .video),
+        guard let device = AVCaptureDevice.connected(deviceID, else: .video),
               let input = try? AVCaptureDeviceInput(device: device) else { return }
         let session = AVCaptureSession()
         session.sessionPreset = .medium

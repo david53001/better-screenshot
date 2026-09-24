@@ -12,12 +12,15 @@ public enum RecorderError: Error {
 /// on `sampleQueue`; start/stop are called from the main actor.
 public final class ScreenRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
     private var stream: SCStream?
+    /// Audio-only stream supplying system audio for window recordings (see `start`).
+    private var audioStream: SCStream?
     private var writer: AVAssetWriter?
     private var videoInput: AVAssetWriterInput?
     private var systemAudioInput: AVAssetWriterInput?
     private var micInput: AVAssetWriterInput?
     private var micCapturer: MicCapturer?
     private let sampleQueue = DispatchQueue(label: "betterscreenshot.recorder.samples")
+    private let discardFrames = DiscardFrames()
     private var sessionStarted = false
     private var sessionStartPTS: CMTime?
     private var outputURL: URL?
@@ -45,8 +48,13 @@ public final class ScreenRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 
     /// Begin recording `filter` at `pixelSize` to `outputURL`.
     /// `sourceRect` (display-relative, top-left-origin, points) crops the display.
+    /// `systemAudioFilter`, when set, supplies system audio from a separate audio-only
+    /// stream instead of `filter`: a single-window filter only hears that window's own
+    /// process (not even its helpers — a browser's tab audio is silent), so window
+    /// recordings pass a display filter here to hear all apps.
     public func start(filter: SCContentFilter, pixelSize: CGSize, sourceRect: CGRect?,
-                      config: RecordingConfig, outputURL: URL) async throws {
+                      config: RecordingConfig, outputURL: URL,
+                      systemAudioFilter: SCContentFilter? = nil) async throws {
         let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
         let pure = config.videoSettings(width: Int(pixelSize.width), height: Int(pixelSize.height))
         // Map the pure-model dictionary onto the real AVFoundation constants.
@@ -82,15 +90,29 @@ public final class ScreenRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
         sc.height = Int(pixelSize.height)
         if let sourceRect { sc.sourceRect = sourceRect }
         sc.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(config.fps))
-        sc.showsCursor = true
-        sc.capturesAudio = config.systemAudio
+        sc.showsCursor = config.showsCursor
+        let audioOnMainStream = config.systemAudio && systemAudioFilter == nil
+        sc.capturesAudio = audioOnMainStream
+        sc.excludesCurrentProcessAudio = config.systemAudioMode.excludesOwnAudio
         sc.pixelFormat = kCVPixelFormatType_32BGRA
         sc.queueDepth = 6
 
         let stream = SCStream(filter: filter, configuration: sc, delegate: self)
         try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: sampleQueue)
-        if config.systemAudio {
+        if audioOnMainStream {
             try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: sampleQueue)
+        }
+        var audioStream: SCStream?
+        if config.systemAudio, let systemAudioFilter {
+            let ac = SCStreamConfiguration()
+            ac.width = 2; ac.height = 2   // its video is discarded
+            ac.minimumFrameInterval = CMTime(value: 1, timescale: 1)
+            ac.capturesAudio = true
+            ac.excludesCurrentProcessAudio = sc.excludesCurrentProcessAudio
+            let s = SCStream(filter: systemAudioFilter, configuration: ac, delegate: self)
+            try s.addStreamOutput(self, type: .audio, sampleHandlerQueue: sampleQueue)
+            try s.addStreamOutput(discardFrames, type: .screen, sampleHandlerQueue: sampleQueue)
+            audioStream = s
         }
 
         guard writer.startWriting() else { throw writer.error ?? RecorderError.writerFailed }
@@ -107,17 +129,24 @@ public final class ScreenRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
         self.lastVideoPTS = nil
         self.timeline = PauseTimeline()
         self.stream = stream
+        self.audioStream = audioStream
 
         if config.microphone, micInput != nil {
             let capturer = MicCapturer()
             self.micCapturer = capturer
-            try? capturer.start(queue: sampleQueue) { [weak self] buffer in
+            try? capturer.start(deviceID: config.microphoneDeviceID, queue: sampleQueue) { [weak self] buffer in
                 self?.appendMic(buffer)
             }
         }
 
         do {
             try await stream.startCapture()
+            if let audioStream {
+                do { try await audioStream.startCapture() } catch {
+                    try? await stream.stopCapture()
+                    throw error
+                }
+            }
         } catch {
             // Don't leak a running mic session / half-configured writer.
             micCapturer?.stop()
@@ -131,6 +160,7 @@ public final class ScreenRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
     public func stop() async throws -> URL {
         guard let writer, let outputURL else { throw RecorderError.notRecording }
         if let stream { try? await stream.stopCapture() }
+        if let audioStream { try? await audioStream.stopCapture() }
         micCapturer?.stop()
         // Finish on the sample queue so an in-flight append can't land after
         // markAsFinished (AVAssetWriterInput.append traps post-finish).
@@ -159,7 +189,7 @@ public final class ScreenRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
     }
 
     private func reset() {
-        stream = nil; writer = nil; videoInput = nil
+        stream = nil; audioStream = nil; writer = nil; videoInput = nil
         systemAudioInput = nil; micInput = nil; micCapturer = nil
         outputURL = nil; sessionStarted = false; sessionStartPTS = nil
         paused = false; pendingResume = false; lastVideoPTS = nil
@@ -255,4 +285,11 @@ public final class ScreenRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
     public func stream(_ stream: SCStream, didStopWithError error: Error) {
         onStreamError?(error)
     }
+}
+
+/// Swallows the audio-only stream's 2×2 frames (without a screen output SCK logs
+/// "stream output NOT found" for every frame).
+private final class DiscardFrames: NSObject, SCStreamOutput {
+    func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
+                of type: SCStreamOutputType) {}
 }

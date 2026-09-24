@@ -195,6 +195,8 @@ final class RecordingCoordinator {
         // were up — only proceed if we're still armed.
         guard case .armed = state else { return }
         var config = settings.recording
+        // GIFs are silent: don't open the mic (or ask for it) for a track that's thrown away.
+        if config.format == .gif { config.microphone = false; config.systemAudio = false }
         // Shown before the content query so the pill is a known SCWindow we can exclude.
         controls.show(on: screen)
         notify()
@@ -206,6 +208,7 @@ final class RecordingCoordinator {
             var sourceRect: CGRect?
             var pixelSize: CGSize
             let cameraAnchor: CGRect
+            var systemAudioFilter: SCContentFilter?
             switch target {
             case .display(let globalRect):
                 guard let displayID = screen.deviceDescription[
@@ -233,6 +236,14 @@ final class RecordingCoordinator {
                                    height: window.frame.height * scale)
                 filter = SCContentFilter(desktopIndependentWindow: window)
                 cameraAnchor = screen.frame   // camera bubble is screen-level (v1)
+                // A window filter only hears that window's own process; take system
+                // audio from the whole display so "All apps" means all apps.
+                if config.systemAudio, let display = content.displays.first(where: {
+                    $0.displayID == screen.deviceDescription[
+                        NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
+                }) ?? content.displays.first {
+                    systemAudioFilter = SCContentFilter(display: display, excludingWindows: [])
+                }
             }
 
             // Even pixel dimensions keep H.264 encoders happy.
@@ -244,7 +255,8 @@ final class RecordingCoordinator {
                 hud.show("Mic access denied — recording without microphone", on: screen)
             }
             if config.camera, await CameraBubbleController.ensurePermission() {
-                bubble.show(near: cameraAnchor, on: screen, diameter: config.cameraSize.diameter)
+                bubble.show(near: cameraAnchor, on: screen, diameter: config.cameraSize.diameter,
+                            deviceID: config.cameraDeviceID)
             }
             if config.clickHighlights { clicks.start(on: screen) }
             if config.keystrokeOverlay { keystrokes.start(on: screen) }
@@ -267,7 +279,8 @@ final class RecordingCoordinator {
             try FileManager.default.createDirectory(at: settings.saveDirectory,
                                                     withIntermediateDirectories: true)
             try await recorder.start(filter: filter, pixelSize: pixelSize,
-                                     sourceRect: sourceRect, config: config, outputURL: url)
+                                     sourceRect: sourceRect, config: config, outputURL: url,
+                                     systemAudioFilter: systemAudioFilter)
             guard state.transition(.begin(Date())) else {
                 // Cancelled (⌘⇧5) during engine startup: stop and discard.
                 _ = try? await recorder.stop()
