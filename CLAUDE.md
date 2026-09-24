@@ -135,7 +135,14 @@ font family / bold / italic / alignment; drag = text box (`TextAnnotation.wrapWi
 capture unless `RecordingConfig.controlsInRecording`; `TrimWindowController` + `TrimExporter` in
 RecordingKit trim MP4s losslessly (Save as Copy / Replace Original, which reloads the player).
 
-**Next up:** nothing spec-ready. See "Later" below.
+**In progress — v3 editor & recording overhaul (spec approved 2026-09-24; status in `docs/PROGRESS-v3.md`):**
+`docs/superpowers/specs/2026-09-24-betterscreenshot-editor-recording-v3-design.md` — Parts 0–6: trim
+Cancel restores the card (bug), editor inspector redesign, text v2 (corner-scale, background colour,
+outline/presets), redaction strength (+ fix: blur/pixelate patches are baked at creation so moving or
+resizing shows stale content), labelled recording strip with device menus, expanded live recording
+pill (mute mic/system audio, switch window), and a cut/split video editor. Built straight from the
+spec (owner: no per-part plan documents); every part must also update `docs/MAC-TO-WINDOWS-PARITY-v3.md` (exact layout/behaviour for the
+`windows-port` C#/WPF port — spec §12).
 
 (Recording Controls — countdown · window target · pause/resume — shipped as `v2.4.0` on 2026-06-25.)
 
