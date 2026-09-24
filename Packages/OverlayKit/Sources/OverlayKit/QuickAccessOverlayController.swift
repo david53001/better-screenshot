@@ -147,7 +147,7 @@ public final class QuickAccessOverlayController: NSObject {
         case .recording:
             stack.addArrangedSubview(button("doc.on.doc", "Copy file") { [weak self] in self?.copyAction() })
             if actions.onTrim != nil {
-                stack.addArrangedSubview(button("scissors", "Trim") { [weak self] in self?.trimAction() })
+                stack.addArrangedSubview(button("scissors", "Edit video") { [weak self] in self?.trimAction() })
             }
             stack.addArrangedSubview(button("play.fill", "Open") { [weak self] in self?.openAction() })
             stack.addArrangedSubview(button("folder", "Show in Finder") { [weak self] in self?.revealAction() })

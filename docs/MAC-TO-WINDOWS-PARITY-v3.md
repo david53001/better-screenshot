@@ -130,9 +130,9 @@ font keys decodes to System / bold / not italic / left; all four font fields rou
 
 (Part 6 replaces the window's UI with the cut editor and Part 0 changes what Cancel does — port those
 sections for the UI; the **export rules, names and strings** below carry over.)
-- **Entry points:** a **Trim** button (`scissors`, tooltip "Trim") on the Quick Access card of **MP4**
+- **Entry points:** an **Edit video** button (`scissors`, tooltip "Edit video" — it was "Trim" until the Part 6 editor landed) on the Quick Access card of **MP4**
   recordings only — the recording card becomes Copy file · Trim · Open · Show in Finder · Close (5 × 32 pt
-  buttons; GIF cards keep 4) — and **"Trim…"** in the History window (action bar + right-click menu),
+  buttons; GIF cards keep 4) — and **"Edit Video…"** (was "Trim…") in the History window (action bar + right-click menu),
   enabled for a single MP4 recording whose file still exists. One trim window at a time; opening another
   file closes the current window.
 - **v1 window:** title "Trim — <file name>", 900×600 (min 640×480): video player above a 52 pt action bar:
@@ -168,7 +168,52 @@ sections for the UI; the **export rules, names and strings** below carry over.)
 
 ## Part 0 — Trim window: Cancel restores the Quick Access card
 
-_(pending — filled when Part 0 lands)_
+**The bug (macOS, fixed).** A recording's Quick Access card has a ✂ **Trim** button. Pressing it
+dismisses the card (reason `actionTaken`, so it is *not* added to "Restore Recently Closed") and opens
+the trim / video-editor window. Closing that window never brought the card back, so cancelling looked
+like it had deleted the recording.
+
+**Behaviour now (port exactly).** The window that the card opens takes a `restoreCard` callback that
+runs **exactly once, when the window closes, whatever closed it**:
+
+| How the window closes | Cards afterwards |
+|---|---|
+| **Cancel** button or the window's close box, nothing saved | the original's card comes back in its corner |
+| **Replace Original**, then **Done** / close box | the original's card comes back, its thumbnail re-extracted from the file (so it shows the *edited* file's first frame) |
+| **Save as Copy** (the window closes itself) | the copy gets its own new card + History entry (as before) **and** the original's card comes back |
+| **Export as GIF** (Part 6; window stays open), later closed | the GIF's card appears right after export; the original's card comes back on close |
+
+- The restored card is a *new* card built the normal way (`presentCard(for:image:historyID:)` on macOS)
+  with the **same History id** as the original, a **fresh thumbnail** (first frame, ≤ 640 px) and the
+  normal corner / auto-dismiss settings. If the file no longer exists (thumbnail fails), no card.
+- Opening the window from the **History** window's **Edit Video…** passes no callback: nothing is restored
+  (there was no card).
+- Only one trim window exists at a time. Opening a *different* file closes the current window first
+  (which restores *its* card). Opening the *same* file again just brings the window forward; if that
+  request came from another card of the same file, its restore is chained onto the window's close so
+  both cards come back.
+
+**macOS code.** `App/Recording/RecordingCoordinator.swift`: `presentTrim(url:restoreCard:)` (the
+callback runs from the window's `onClosed`), `presentCard(for:image:historyID:)` (the card's `onTrim`
+passes `restoreCard: { bringBackCard(for: url, historyID: historyID) }`), `bringBackCard(for:historyID:)`
+(fresh thumbnail → `presentCard`). `TrimWindowController.onClosed` fires from `windowWillClose`, i.e. on
+every close path including Save as Copy's own `close()`.
+
+**Verified by** a headless probe (synthetic button clicks on a generated MP4): Cancel → restore ×1,
+copy ×0 · close box → restore ×1 · Save as Copy → copy card ×1 **and** restore ×1 · Replace Original →
+window stays open, Cancel reads "Done" → Done → restore ×1.
+
+**Where it goes in the port.** The port has no trim window yet (it arrives with Part 6). Recording cards
+are shown by `CaptureCoordinator.ShowRecordingCard(path, thumbnail, historyId)` in
+`windows/src/BetterScreenshot.App/Capture/CaptureCoordinator.cs` (called from `OnRecordingFinished`);
+`QuickAccessActions` (`windows/src/BetterScreenshot.App/Overlays/QuickAccessTypes.cs`) needs an optional
+`OnTrim` (MP4 only), and the card's Trim button must dismiss with `DismissReason.ActionTaken` and then
+open the editor with a `restoreCard` delegate that calls `ShowRecordingCard(path, freshThumb, historyId)`.
+
+**Platform note.** The port's recording thumbnail today is a *screen grab taken at stop time*
+(`RecordingCoordinator.CaptureThumb`), not a video frame. For the restored card after Replace Original,
+extract the new first frame with ffmpeg instead:
+`ffmpeg -v error -i "<file>.mp4" -frames:v 1 -vf "scale='min(640,iw)':-2" -y "<temp>.png"`.
 
 ---
 
@@ -467,7 +512,241 @@ property is missing; clamp in the setter or after load), and an `EditorRecentCol
 
 ## Part 2 — Text v2 (corner scaling, background, outline, presets)
 
-_(pending — filled when Part 2 lands)_
+**What changed, in one paragraph.** A selected text now has **corner handles that scale the whole text**
+(font size, box width, box padding / corner radius, outline width — like scaling an image) besides the side
+handles that set the box width. The old "contrasting box" checkbox became a real **Background** with three modes
+— **None / Solid / Auto** — a box colour, **Padding** and **Corners**. Text also gets **Underline**,
+**Strikethrough**, an **Outline** (colour + width) and a **Shadow**, and six one-click **style presets** (Label,
+Callout, Note, Code, Title, Subtle) at the top of the Text panel. While typing, the box and outline show behind the
+text so it looks like the result. **Prerequisites in the port:** §A.1 (fonts, `wrapWidth` text boxes, the growing
+inline editor) and Part 1 (the side panel) — Part 2 builds on both. macOS code (`Packages/EditorKit/Sources/EditorKit/`):
+`AnnotationStyle.swift`, `TextAnnotation.swift`, `TextChip.swift`, `TextScale.swift`, `TextStylePreset.swift`,
+`EditorCanvasView.swift` (handles, live box), `EditorInspectorView.swift` (sections), `EditorChrome.swift`
+(`TextPresetChip`, `LabeledSliderRow(labelWidth:)`), `InspectorModel.swift`.
+
+Snapshots from the headless probe (synthetic screenshot, Retina): `docs/parity-v3/part2-selected-text.png` (Select
+tool, one text with a Solid box + outline + underline selected — note the 6 handles), `docs/parity-v3/part2-panel-text-tool.png`
+(Text tool, default style — Background None, Outline off), `docs/parity-v3/part2-panel-solid-box.png` (Background
+Solid: box palette, Recent, well, Padding, Corners), `docs/parity-v3/part2-panel-effects.png` (panel scrolled to
+the bottom in a short window: Outline on with its Width row, Shadow on, Opacity, Arrange),
+`docs/parity-v3/part2-rendered-results.png` (exported pixels: every preset, outline on a busy strip, shadow alone and
+under a box, underline, strikethrough, Auto box, a 16 px / 40 px "pill").
+
+### 2.1 Layout (exact, as built)
+
+Text sections, top to bottom: **Styles · Colour · Font · Background · Effects · Opacity** (+ **Arrange** under
+Select). The panel-wide order is now: Styles, Colour, Stroke, Font, Background, Effects, Redaction, Opacity, Arrange.
+Everything else about the panel (264 pt, 232 pt content column, captions, 8 pt row gap, hairlines) is as in §1.1.
+
+```
+┌──────────────────────────────┐
+│ Text                         │ ← heading (tool / selection name, §1.2)
+│ STYLES                       │
+│ [ Label ] [Callout] [ Note ] │ ← 3 chips per row, equal width (72 pt), 28 pt tall, 8 pt apart
+│ [ Code  ] [ Title ] [Subtle] │    each drawn as a preview of its look; active one ringed
+│ ──────────────────────────── │
+│ COLOUR   (unchanged, §1.1)   │
+│ ──────────────────────────── │
+│ FONT                         │
+│ [System                 ⌃⌄]  │
+│ [24 pt ⌃⌄]  [ B | I | U | S ] │ ← size 84 pt + four 30 pt toggles
+│ [  ≡  |  ≡  |  ≡  ]          │
+│ ──────────────────────────── │
+│ BACKGROUND                   │
+│ [  None  | Solid |  Auto  ]  │ ← full width, equal segments
+│ ● ● ● ● ● ● ● ●              │ ← Solid only: box palette (Black = 80 %)
+│ RECENT ● ● ●                 │ ← Solid only, hidden when empty
+│ [▬▬] [⌖ Pick from Screen]    │ ← Solid only: box colour well + eyedropper
+│ Dark or light — whichever …  │ ← Auto only (note)
+│ Padding  ────●────── 6 px    │ ← Solid and Auto
+│ Corners  ──●──────── 4 px    │ ← Solid and Auto
+│ ──────────────────────────── │
+│ EFFECTS                      │
+│ ☑ Outline              [▬▬]  │ ← checkbox left, outline colour well right
+│     Width ──●─────── 3 px    │ ← only while Outline is on; indented 20 pt
+│ ☐ Shadow                     │
+│ ──────────────────────────── │
+│ OPACITY  (unchanged)         │
+└──────────────────────────────┘
+```
+
+| Section (caption) | Rows (exact) |
+|---|---|
+| **Styles** | Two rows of three `TextPresetChip`s, `fillEqually`, 8 pt apart; each 28 pt tall. Chip drawing: rounded rect (radius 6) inset 1.5 pt; fill = the preset's box colour, or white 6 % for presets without a box (Title, Subtle); border 1 px white 16 %; **active** (the current style already has that look, `TextStylePreset.isApplied`) = 2 px accent-colour border; hover = white 10 % overlay. Label = the preset's name, centred, in the preset's font family and weight at 12 pt (Title: 15 pt), in the preset's text colour (Title keeps the user's colour, so its chip label is white 92 %). Tooltips: "Label — bold white text on a black box", "Callout — bold white text on a red box", "Note — black text on a yellow box", "Code — light monospaced text on a dark box", "Title — 48 pt bold, no box (keeps the colour)", "Subtle — 18 pt regular grey, no box". |
+| **Font** | As §1.1, except row ② is now size pop-up (84 pt) · a **four**-segment toggle group (select-any, 30 pt per segment): SF `bold`, `italic`, `underline`, `strikethrough`; tooltips "Bold", "Italic", "Underline", "Strikethrough". |
+| **Background** | ① Segmented **None / Solid / Auto**, full width, equal segments; tooltips "No box behind the text", "A box in the colour you pick below", "A dark or light box, whichever stands out against the text colour". ② *(Solid only)* the Colour section's three rows, but editing the **box** colour: 8 swatches with the same colours and names except the last is **black at 80 % alpha**, tooltip "Black (80%)"; the shared RECENT row; a second colour well 44×24 (tooltip "Custom box colour — opens the colour picker") + "Pick from Screen" (same tooltip as §1.1; the picked colour becomes the box colour — handy for covering old text with the page's own colour). ③ *(Auto only)* note, 12 pt white 62 %: "Dark or light — whichever stands out against the text colour." ④ *(Solid and Auto)* slider row "Padding" (label 56 pt wide), 0…40 whole px, value "6 px", tooltip "Space between the text and the edge of the box". ⑤ *(Solid and Auto)* slider row "Corners" (label 56 pt), 0…40 whole px, value "4 px", tooltip "How rounded the box's corners are". Hidden rows take no space. |
+| **Effects** | ① Checkbox **"Outline"** (12 pt, white 88 %; tooltip "An edge around every letter — keeps text readable on busy screenshots") · flexible space · outline colour well 44×24 (tooltip "Outline colour — picking one turns the outline on"). ② *(only while Outline is on)* slider row indented 20 pt: "Width" (44 pt label), 1…20 whole px, value "3 px", tooltip "Outline thickness in image pixels". ③ Checkbox **"Shadow"** (tooltip "A soft drop shadow under the text (and its box)"). |
+
+**Canvas handles.** A single selected text shows **six** handles: the four corners (**scale**) and middle-left /
+middle-right (**box width**) — top-/bottom-middle are not shown. Handles are the usual 8×8 view-pt white squares with
+a 1 px blue border (screen-sized at any zoom), hit area +2 pt; where handles overlap on a tiny text, corners win.
+All handles and the dashed selection outline sit on the **box** (text + padding) when the text has a background.
+
+**Hint line** (§1.3) — one sentence changed: *Select, one text* → "Drag to move it, drag a corner to resize the
+text, drag a side to change the box width, or double-click to edit."
+
+### 2.2 Behaviour
+
+- **Corner scaling** (`TextScale` + `TextAnnotation.scaled(dragging:by:)`), always computed from the text as it was
+  at mouse-down (never incrementally), with `drag` = pointer − mouse-down point in image px (so grabbing a handle
+  slightly off its centre doesn't jump):
+  1. `box` = the text's bounding box (incl. background padding); `A` = the corner opposite the dragged one (fixed);
+     `C` = the dragged corner; `d = C − A`.
+  2. `factor = ((C + drag − A) · d) / (d · d)` — the drag projected onto the diagonal (moving across the diagonal
+     does nothing; past `A` gives ≤ 0). A zero-size box → factor 1.
+  3. `newSize = clamp(round(fontSize × factor), 8, 400)`; `k = newSize / fontSize` (the factor actually applied).
+  4. `wrapWidth × k` (nil stays nil — a free label stays free, so line breaks stay put), `padding × k` clamped
+     0…40, `cornerRadius × k` clamped 0…40, `outlineWidth × k` clamped 1…20. Nothing else changes.
+  5. Place the result so its new bounding box's corner opposite the dragged one is exactly at `A`
+     (`TextScale.placed(size:anchor:corner:)`), by shifting `origin`.
+  - The panel's size pop-up follows **live** during the drag (it lists the current size, e.g. "37 pt", when it
+    isn't a preset size). The whole drag is **one undo step**. Works at any zoom (all maths in image px). The drag
+    changes only that object, not the sticky default style.
+- **Side handles** set `wrapWidth` = dragged box width − 2 × padding (minimum = the font size in px); the text's
+  x origin = box left + padding. With no background, padding = 0 (exactly §A.1).
+- **Background geometry:** box = the text's layout rect expanded by `padding` left/right and `padding / 2`
+  top/bottom (the line box already includes leading; 6 → 6 × 3 = the pre-v3 chip exactly). Corner radius =
+  `min(radius, boxW / 2, boxH / 2)`. One box around all lines. **Solid** fills `textBackgroundColor`; **Auto** fills
+  `#18181A` behind light text or `#F4F4F6` behind dark text, decided at draw time from the text colour's luminance
+  `0.2126 R + 0.7152 G + 0.0722 B > 0.5` (so it follows colour changes automatically).
+- **Bounding box** (selection outline, handles, hit-testing, marquee, keep-on-canvas while moving) = the box when
+  there is one, else the text's layout rect.
+- **Draw order:** (shadow layer begins) → box → outline pass → letters (→ shadow layer ends); the whole thing then
+  goes through the object's opacity layer (§1.4). *Outline pass* = the same text stroked (not filled) in the outline
+  colour with a pen of **2 × outline width** and **round joins**, then the normal letters on top — so the visible
+  edge is outline-width wide and sits outside the letters. *Underline / strikethrough* are normal single text
+  decorations in the text colour (not outlined).
+- **Shadow** (fixed, no settings): black 45 %, offset **straight down** by `max(1, 0.05 × fontSize)` px, blur
+  `max(2, 0.15 × fontSize)` px (24 pt → 1.2 px down, 3.6 px blur). Box + outline + letters cast **one** shadow as a
+  group, so a boxed text's shadow falls from the box. It scales with the text.
+- **While typing** (inline editor): the canvas draws the box and outline (and their shadow) behind the text field at
+  the field's width; the field draws the letters (with underline/strikethrough, which are text attributes). Known
+  small difference: a shadow on *plain* text (no box, no outline) appears only once the text is committed.
+- **Presets** (`TextStylePreset.apply`) set only these fields, and apply to the selected text(s) and the default style
+  as **one undo step** like any style edit. All presets also switch off italic, underline, strikethrough, outline and
+  shadow. They never touch alignment, opacity, line width or box width.
+
+  | Preset | Text colour (sRGB) | Size | Font / weight | Background |
+  |---|---|---|---|---|
+  | Label | white (1, 1, 1) | kept | System, bold | Solid (0, 0, 0, 0.8), padding 6, corners 4 |
+  | Callout | white | kept | System, bold | Solid (1, 0.27, 0.23, 1), padding 8, corners 6 |
+  | Note | black (0, 0, 0) | kept | System, regular | Solid (1, 0.84, 0.04, 1), padding 8, corners 2 |
+  | Code | (0.90, 0.92, 0.95) | kept | Mono (`System Mono`), regular | Solid (0.12, 0.13, 0.15, 1), padding 6, corners 4 |
+  | Title | **kept** | **48** | System, bold | None |
+  | Subtle | (0.56, 0.56, 0.58) | **18** | System, regular | None |
+
+  Setting a text colour also sets `fillColor` = that colour at alpha 0.25 (same as a colour swatch). Note: the editor
+  has **one** sticky style shared by all tools (Part 1), so a preset's text colour also becomes the next arrow's
+  colour — same as picking a colour while the Text tool is active.
+- **Colour wells:** the box well and the outline well behave like the Colour well (§1.4): each picked colour goes into
+  Recent (one entry per colour-panel session), and a session is one undo step. **Picking an outline colour turns the
+  outline on.** Clicking a box swatch or Recent swatch in the Background section sets only the box colour.
+- **Hidden-row rules:** Background colour rows only in Solid; the Auto note only in Auto; Padding/Corners in Solid
+  and Auto; Outline Width only while Outline is on.
+
+### 2.3 Data
+
+All inside the sticky `AnnotationStyle` JSON (`editorDefaultStyle`); every key is optional when decoding and missing
+keys give today's look.
+
+| JSON key | Type & default | Legacy / decode rule |
+|---|---|---|
+| `textBackgroundMode` | `"none"` \| `"solid"` \| `"auto"`, default `"none"` | Missing or unknown → read the old macOS Bool `textBackground`: `true` → `"auto"`, else `"none"`. The Bool is no longer written. |
+| `textBackgroundColor` | `{"r","g","b","a"}`, default (0, 0, 0, **0.8**) | — |
+| `textBackgroundPadding` | number (image px), default **6** | clamped to 0…40 |
+| `textBackgroundCornerRadius` | number, default **4** | clamped to 0…40 |
+| `textUnderline`, `textStrikethrough` | bool, default false | — |
+| `textOutline` | bool, default false | — |
+| `textOutlineColor` | colour, default white (1, 1, 1, 1) | — |
+| `textOutlineWidth` | number (image px), default **3** | clamped to 1…20 |
+| `textShadow` | bool, default false | — |
+
+**Port mapping for its existing `TextBackground: RGBAColor?`** (`windows/src/BetterScreenshot.Editor/EditorStyle.cs`):
+the port's UI only ever stores its auto chip there (`EditorWindow.xaml.cs` `ToggleTextBackground` / `SetColor` →
+`AutoChip(strokeColor)`), so it means **Auto**. Add the new properties (`TextBackgroundMode`, enum
+`None/Solid/Auto` serialised as the lower-case strings above, `TextBackgroundColor`, `TextBackgroundPadding`,
+`TextBackgroundCornerRadius`, `TextUnderline`, `TextStrikethrough`, `TextOutline`, `TextOutlineColor`,
+`TextOutlineWidth`, `TextShadow`) with the defaults above, and keep `TextBackground` as a **read-only legacy**
+property (`[JsonPropertyName("textBackground")]`, `JsonIgnoreCondition.WhenWritingNull`, never set by new code).
+After deserialising: if `textBackgroundMode` was absent → `TextBackground != null ? Auto : None`; leave
+`TextBackgroundColor` at its default (don't copy the old chip colour — it was an auto colour, not a user choice). Then
+delete `AutoChip` and the chip recompute in `SetColor`: Auto is computed at draw time with the macOS colours and
+luminance formula (§2.2), replacing the port's `(1,1,1,0.92)` / `(0,0,0,0.6)` chips.
+
+### 2.4 Pure logic to port 1:1 (with the macOS tests)
+
+- **`TextScale`** (`TextScale.swift`): `point(of:in:)`, `anchor(of:in:)`, `factor(box:corner:by:)`,
+  `scaled(style, wrapWidth:, by:)`, `placed(size:anchor:corner:)`, and `TextAnnotation.scaled(dragging:by:)`.
+  Tests (`Tests/EditorKitTests/TextScaleTests.swift`): draggingACornerAlongTheDiagonalScalesProportionally (box
+  (100,100,200,50): BR by (200,50) → 2; TR by (200,−50) → 2; BL by (−200,50) → 2; TL by (−200,−50) → 2; TL by
+  (100,25) → 0.5) · dragAcrossTheDiagonalDoesNotScale ((0,0,200,50), BR by (−50,200) → 1; zero box → 1) ·
+  scaledRoundsTheFontAndScalesTheRestByTheSameFactor (24 pt × 1.55 → 37; box 240, padding 6, radius 4, outline 3 all
+  × 37/24; nil width stays nil) · scaledClampsTheFontTo8Through400 (× 100 → 400; × 0.01 → 8 with box 120 → 40;
+  × −3 → 8) · scaledKeepsPaddingRadiusAndOutlineInTheirRanges (10 pt, padding 30, radius 30, outline 2, × 10 → 40, 40,
+  20; outline 1 × 0.8 → 1) · placedKeepsTheOppositeCornerFixed (80×30 at anchor (100,100): BR → (100,100); TL →
+  (20,70); TR → (100,70); BL → (20,100); anchor of TL in (10,20,30,40) = (40,60), of BL = (40,20)) ·
+  cornerDragScalesATextAndKeepsTheOppositeCorner ("Hello world" box width 200 at (100,100): BR by (w,h) → 48 pt, width
+  400, top-left unchanged, same id; TL by (w/2,h/2) → 12 pt, bottom-right unchanged) · cornerDragKeepsLineBreaks
+  (3-line box at width 150, × 2 → height ratio 1.9…2.1) · cornerDragAnchorsTheBoxBehindTheText (Solid box, TL by
+  (−w,−h) → bottom-right of the box unchanged, padding 12).
+- **`TextStylePreset`** (`TextStylePreset.swift`): `displayName`, `tooltip`, `apply(to:)`, `isApplied(to:)` (= applying
+  it changes nothing). **`TextChip`**: `autoColor(forText:)`, `insets(padding:)` = (p, p/2).
+  Tests (`TextStyleTests.swift`): textV2FieldsDefaultToTodaysLook · legacyStyleWithoutTextV2KeysDecodesToTheDefaults ·
+  legacyTextBackgroundBoolMapsToAutoOrNone · backgroundModeWinsOverTheLegacyBool (unknown mode string → falls back to
+  the Bool) · textV2FieldsRoundTrip · decodeClampsPaddingRadiusAndOutlineWidth (−5 → 0, 999 → 40, 0 → 1) ·
+  autoBoxContrastsWithTheTextColour (white text → dark box, black → light; insets(6) = 6×3) · presetsSetTheirLook ·
+  presetsOnlyTouchTheTextLook (alignment, opacity, line width and — for Label — size kept; effects reset; Title keeps
+  the colour) · presetsRoundTripAndAreRecognised (each preset: not active on the default style, active after applying,
+  survives JSON, no other preset active).
+- **Rendering** — tests (`TextRenderTests.swift`, white 300×120 base): solidBackgroundFillsTheBoxWithItsColour (pixel
+  3 px inside the box's left edge is the chosen blue; 3 px outside is white) · autoBackgroundKeepsTheContrastingChip
+  (white text → #18181A ± 3) · noBackgroundDrawsNoBox · boundingBoxIncludesTheBoxPadding (padding 10 → rect inset by
+  (−10, −5), Solid and Auto) · paddingAndCornerRadiusShapeTheBox (padding 20 filled; radius 0 fills the corner pixel,
+  radius 20 leaves it white) · outlineWidensTheInkInItsColour (4 px outline → ink ≥ 3 px wider each side and lower;
+  red pixels at the new edge) · underlineAddsInkBelowTheBaseline ("ace") · strikethroughCrossesTheGapsBetweenLetters
+  ("i  i  i": one ink row spans the whole text) · shadowFallsBelowTheText (48 pt "HH": ink extends further down than
+  up) · canvasShadowFallsDownwardToo (same through the canvas at half size).
+- **`InspectorModel`** updates (§1.6 tests renamed/extended): textShowsStylesColourFontBackgroundEffectsOpacity →
+  `[styles, colour, font, background, effects, opacity]`; Select with one text → those + arrange; the one-text hint
+  contains "corner".
+
+### 2.5 Where it goes in the port
+
+- `windows/src/BetterScreenshot.Editor/EditorStyle.cs` — the new properties + legacy rule (§2.3).
+- `windows/src/BetterScreenshot.Editor/` — new `TextScale.cs`, `TextStylePreset.cs`, `TextChip.cs` (`AutoColor`,
+  `Insets`); `Annotations.cs` `TextAnnotation`: bounding box includes the padded box, `Scaled(corner, drag)`.
+- `windows/src/BetterScreenshot.App/Editor/DocumentRenderer.cs` — the `TextAnnotation` case: box (radius + padding
+  from the style, Auto colour at draw time), outline pass, letters with decorations, shadow group (§2.6). Replace the
+  fixed `TextChipPadX = 6` / `TextChipPadY = 2` with `Insets(padding)`.
+- `windows/src/BetterScreenshot.App/Editor/EditorWindow.xaml.cs` — six handles for a text (hit-test corners first),
+  the scale drag (snapshot the text at mouse-down; one `UndoHistory` entry on mouse-up; refresh the panel's size
+  control during the drag), side handles minus padding; `PlaceTextBox`: wrap the `TextBox` in a `Border` with
+  `CornerRadius` = radius and `Padding` = (p, p/2) filled with the Solid/Auto colour; delete `ToggleTextBackground`,
+  `AutoChip` and the chip recompute in `SetColor`.
+- The Part 1 panel `UserControl` (e.g. `Editor/EditorInspectorPanel.xaml`) — Styles, Background and Effects sections,
+  B I U S toggles; `InspectorModel.cs` — the two new sections.
+- `windows/src/BetterScreenshot.App/Resources/Icons.xaml` — **new icons:** underline, strikethrough (bold / italic
+  were already listed in §1.7).
+- Tests: `windows/tests/BetterScreenshot.Tests/` — recreate §2.4 next to `EditorStyleTests.cs`.
+
+### 2.6 Platform notes (Windows / WPF)
+
+- **Outline:** `FormattedText.BuildGeometry(origin)` gives the letters' geometry; draw it with
+  `dc.DrawGeometry(null, new Pen(outlineBrush, 2 * width) { LineJoin = PenLineJoin.Round }, geometry)`, then draw the
+  text normally on top (`dc.DrawText` or `DrawGeometry(fill, null, geometry)`). Check that the geometry includes the
+  underline/strikethrough decorations; either way draw the normal decorations with the fill pass.
+- **Underline / strikethrough:** `FormattedText.SetTextDecorations(TextDecorations.Underline)` /
+  `TextDecorations.Strikethrough` (in the live `TextBox`: `TextBox.TextDecorations`).
+- **Shadow:** `DrawingContext` has no shadow. Draw box + outline + letters into a `DrawingGroup`/`DrawingVisual`,
+  give that visual a `DropShadowEffect { Color = Black, Opacity = 0.45, Direction = 270 (down), ShadowDepth =
+  max(1, 0.05·size), BlurRadius ≈ 2 × max(2, 0.15·size) }` (WPF's BlurRadius is roughly twice CoreGraphics' blur —
+  compare against `part2-rendered-results.png` and tune), and composite it into the export with
+  `RenderTargetBitmap` (effects render there). The canvas preview can put the same effect on the element. Scale the
+  depth and radius by the canvas magnification so the preview matches the export.
+- **Opacity** stays `PushOpacity` around the whole group (§1.8), so box, outline and letters fade as one.
+- **Size control while scaling:** the port's size control must accept non-preset whole sizes (show "37 pt").
+- **Chips:** a `ToggleButton`/`Button` template with a `Border` (CornerRadius 6, background = the preset's box colour
+  or `#0FFFFFFF`) and a `TextBlock` in the preset's font; active = accent `BorderBrush`, thickness 2.
 
 ---
 
@@ -744,16 +1023,891 @@ a fallback for unknown strings (catch + default); clamp after `FromJson`.
 
 ## Part 4 — Recording setup strip v2 (device menus, level meter, hint line)
 
-_(pending — filled when Part 4 lands)_
+**What changed.** The pre-record strip (shown by the Start/Stop Recording shortcut before a target is
+picked) used to be one row of buttons with three unlabelled icon toggles (mic / speaker / camera).
+It is now a labelled panel: the target buttons plus Format / FPS on top, one **column per source** (icon +
+caption + dropdown), a **live microphone level meter**, and a **hint line** at the bottom that explains
+whatever the pointer is over. The Settings window's Recording card got the same dropdowns. A **Show
+mouse cursor** option was added. On macOS, window recordings also got a system-audio fix (see Platform
+notes). Snapshots from the headless probe: `docs/parity-v3/part4-record-strip.png` (strip, 2× pixels)
+and `docs/parity-v3/part4-settings-recording.png` (Settings card).
+
+Terms: *dBFS* = decibels relative to digital full scale (0 = loudest possible sample, silence → −∞);
+*dshow* = DirectShow, the Windows capture API ffmpeg uses for the port's microphone/loopback inputs;
+*WASAPI* = Windows Audio Session API (Core Audio); *Continuity Camera* = an iPhone used wirelessly as a
+Mac camera/microphone.
+
+macOS files: `App/Recording/RecordStripController.swift` (strip), `App/Settings/SettingsView.swift`
+(`sourceMenus`), `App/Settings/SettingsHelp.swift`, and in `Packages/RecordingKit/Sources/RecordingKit/`:
+`RecordingConfig.swift`, `DeviceChoice.swift` (pure), `DeviceCatalog.swift`, `MicLevel.swift` (pure),
+`MicCapturer.swift`, `CameraBubbleController.swift`, `ScreenRecorder.swift`.
+
+### Layout (exact, as built — 892 × 182 pt)
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────────┐
+│ [🖥 Full Screen] [⬚ Area…] [▭ Window…]                 Format [MP4|GIF]   FPS [30|60]    ⊗ │
+│ ────────────────────────────────────────────────────────────────────────────────────────── │
+│ 🎙 Microphone           🔊 System audio                   📹 Camera               ↖ Cursor     │
+│ [MacBook Air Mic   ⌃⌄]  [All apps except BetterScreenshot⌃⌄] [FaceTime HD Camera ⌃⌄] [Visible ⌃⌄] │
+│ ▮▮▮▮▮▯▯▯▯▯▯▯▯▯▯▯                                                                           │
+│ ────────────────────────────────────────────────────────────────────────────────────────── │
+│ ⓘ Pick what to record, then choose Full Screen, Area or Window.                            │
+└────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Window:** floating, non-activating (never steals focus), on all desktops, draggable by its
+  background, no title / close buttons. Background = the dark HUD material (dark translucent blur;
+  WPF: the existing `Theme.CardBrush` card with a 12 px corner radius and the 1 px 10 % white border).
+  Placement: horizontally centred on the work area of the monitor under the pointer, bottom edge
+  **60 pt** above the work area's bottom.
+- **Content:** one vertical stack, padding **top 14 · left 16 · bottom 12 · right 16**, **12 pt**
+  between rows: top row · separator · sources row · separator · hint row. Every row is exactly
+  **860 pt** wide (= the four columns + three 16 pt gaps). Separators are the standard 1 px hairline.
+- **Top row** (horizontal, 8 pt spacing), left → right:
+  1. Button **"Full Screen"**, icon `display` (SF Symbol) on the left of the label.
+  2. Button **"Area…"**, icon `rectangle.dashed`.
+  3. Button **"Window…"**, icon `macwindow`.
+     Buttons are standard rounded push buttons at the *large* size (≈ 28 pt tall).
+  4. Flexible space.
+  5. Label **"Format"** (12 pt, secondary text colour) + 6 pt + segmented **[MP4 | GIF]**.
+  6. 20 pt gap. Label **"FPS"** + 6 pt + segmented **[30 | 60]**.
+  7. 16 pt gap. Close button: borderless icon `xmark.circle.fill` at 16 pt, secondary colour,
+     tooltip **"Close without recording"**, accessible name "Cancel".
+- **Sources row** (horizontal, **16 pt** gaps, top-aligned) — four columns, each a vertical stack
+  (6 pt spacing) of: header (icon 12 pt medium weight, secondary colour · 5 pt · caption 12 pt medium,
+  secondary colour) → dropdown (regular size, **fixed width**) → a **12 pt-tall footer line**
+  (empty except under Microphone). Column widths (measured so their usual content never truncates —
+  "All apps except BetterScreenshot" needs 251 pt, "David’s iPhone Microphone" 213 pt):
+
+  | Column | Icon | Caption | Width | Menu items (top → bottom) |
+  |---|---|---|---|---|
+  | 1 | `mic` | Microphone | 216 | `Off` · every connected microphone by name |
+  | 2 | `speaker.wave.2` | System audio | 252 | `Off` · `All apps` · `All apps except BetterScreenshot` |
+  | 3 | `video` | Camera | 216 | `Off` · every connected camera by name · separator · `Bubble Size ▸` submenu `Small` / `Medium` (✓ on the current one) |
+  | 4 | `cursorarrow` | Cursor | 128 | `Visible` · `Hidden` |
+
+  Menu-item tooltips (verbatim): Off → "No system sound in the recording."; All apps → "Every sound
+  your Mac plays, including BetterScreenshot's own."; All apps except BetterScreenshot → "Every sound
+  except BetterScreenshot's own, like its capture sound."; Visible → "The pointer is recorded as it
+  moves."; Hidden → "The video shows no mouse pointer."
+- **Microphone footer:** either the **level meter** — 16 segments, 2 pt gaps, 6 pt tall, 1.5 pt
+  corner radius, inset 2 pt left/right, vertically centred; lit segments are green for the first 70 %
+  of the bar, yellow up to 90 %, red above; unlit = white at 14 % — or the link
+  **"Allow microphone access…"** (11 pt, link colour, borderless), or nothing (see Behaviour).
+- **Hint row:** icon `info.circle` (12 pt, secondary) · 6 pt · one line of 12 pt secondary text that
+  fills the rest of the row (tail-truncates, but every string below fits: the longest measured
+  532 pt of ~842 pt available).
+- **Icons in the port** (`windows/src/BetterScreenshot.App/Resources/Icons.xaml`): reuse `icon-mic`,
+  `icon-speaker`, `icon-video`, `icon-cursor`, `icon-close-circle`; **add** a monitor (`display`), a
+  dashed rectangle (`rectangle.dashed`), a window (`macwindow`) and an info-circle icon.
+
+### Hint line — texts (verbatim) and rules
+
+| Pointer over / focus on | Hint |
+|---|---|
+| nothing (idle) | Pick what to record, then choose Full Screen, Area or Window. |
+| Full Screen | Full Screen: records everything on this screen. |
+| Area… | Area: drag over the part of the screen you want, then recording starts. |
+| Window… | Window: click a window to record just that window, even as it moves. |
+| "Format" label or its control | Format: MP4 is a video with sound. GIF is a silent, looping animation. |
+| "FPS" label or its control | Frame rate: 60 looks smoother, 30 makes smaller files. |
+| ✕ | Close this strip without recording. |
+| Microphone column (MP4) | Microphone: records your voice from the selected input. Choose "Off" to skip it. |
+| System audio column (MP4) | System audio: records the sound your Mac plays, like videos and calls. Choose "Off" to skip it. |
+| Microphone or System audio column while Format = GIF | GIFs have no sound. Switch Format to MP4 to record audio. |
+| Camera column | Camera: shows your webcam in a round bubble on the recording. Set its size in the menu. |
+| Cursor column | Cursor: choose whether the mouse pointer appears in the video. |
+| "Allow microphone access…" link, access never asked | Click to let BetterScreenshot use the microphone. macOS asks once. |
+| same link, access denied | Microphone access is off. Click to open System Settings and turn it on for BetterScreenshot. |
+
+(Windows: say "Windows" / "Settings" instead of "macOS" / "System Settings", and "your PC" for
+"your Mac".) A **column's hover area is the whole column** (caption + dropdown + footer), so hovering
+the caption explains it too. Areas can nest (the link sits inside the Microphone column): the most
+recently entered area wins, and leaving it falls back to whichever area the pointer is still in, else
+idle. With no hover, a **keyboard-focused** control (Tab) shows its hint. Hover never changes anything.
+
+### Behaviour
+
+- **Every choice saves immediately** into the recording settings (same values the Settings window
+  edits); no Apply button. Target buttons start the recording flow exactly as before.
+- **Device lists** are read fresh each time the strip opens and **rebuilt live** when a device is
+  plugged in or removed while it is open (macOS: `AVCaptureDevice.wasConnected/wasDisconnected`
+  notifications). Microphones = built-in, USB, AirPods, iPhone (Continuity) and virtual inputs;
+  cameras = built-in, external, iPhone (Continuity Camera). Two devices with the same name are shown as
+  "Name", "Name (2)", "Name (3)".
+- **What the dropdown shows** (pure `DeviceList.choice`, see Pure logic): `Off` when the source is off;
+  otherwise the device that will actually record — the saved one while connected, else the system
+  default, else the first listed; `Off` if no device exists at all. An unplugged saved device is *not*
+  overwritten: when it comes back it is used again.
+- Choosing `Off` keeps the last device id; choosing a device turns the source on and saves its id.
+- **Bubble Size** submenu sets Small/Medium without changing the selected camera row.
+- **Format = GIF** disables (dims) the Microphone and System audio dropdowns (their values are kept),
+  hides the meter, and the recording ignores both (GIFs have no sound — no mic prompt, no mic in use).
+- **Mic level meter** runs only while all of these hold: strip visible, Format = MP4, a microphone is
+  selected, and microphone permission is **already granted**. Opening the strip must never trigger the
+  OS permission prompt. When a mic is selected but access isn't granted, the footer shows
+  **"Allow microphone access…"**: if access was never asked, clicking it asks (the OS prompt), then the
+  meter starts; if it was denied, clicking opens the OS privacy settings for the microphone
+  (macOS `x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone`; Windows
+  `ms-settings:privacy-microphone`). The meter stops when the strip hides or the choice changes.
+  It reads the device's average power per audio buffer (~47 updates/s) through `MicLevel`.
+- **Long device names** truncate with "…" at the end; hovering the dropdown then shows the full name
+  as a tooltip (only when truncated).
+- **Show mouse cursor / Cursor = Hidden** records without the pointer.
+
+### Settings window — Recording card (same choices, same stored values)
+
+Rows in order: Format · Frame rate · divider · **Microphone** (dropdown: Off + mics) · **System audio**
+(dropdown: the three modes; when Format = GIF both audio dropdowns are dimmed/disabled and a sub-label
+reads "GIFs have no sound. Switch Format to MP4 to record audio.") · **Camera** (dropdown: Off +
+cameras) · Camera size [Small | Medium] (disabled while Camera = Off) · **Show mouse cursor** (switch,
+new) · Highlight mouse clicks · Show keystrokes · Countdown before recording · Show stop button in
+recording. The three old switches ("Record system audio", "Record microphone", "Show camera bubble")
+are gone. Dropdowns are full-width, label above (the existing "field label + ⓘ" idiom). ⓘ texts
+(title — explanation — example, verbatim):
+- **Microphone** — "Which microphone records your voice, or Off for none. If the chosen mic is
+  unplugged, your Mac's default mic is used instead. The record strip shows a live level meter for
+  it." — "Pick your AirPods or a USB mic to narrate a tutorial."
+- **System audio** — "The sound your Mac plays — videos, calls, music, alerts — recorded along with the
+  screen. "All apps except BetterScreenshot" leaves out this app's own sounds, like its capture sound.
+  GIF recordings never have sound." — "All apps to capture a video call's audio along with the screen."
+- **Camera** — "Shows your webcam in a round bubble on screen while you record, so it ends up in the
+  video. Pick which camera (including an iPhone via Continuity Camera), or Off." — "Turn on for a
+  face-cam picture-in-picture during a walkthrough video."
+- **Show mouse cursor** — "Draws the mouse pointer into the recording. Turn off for a clean video
+  without the pointer." — "Turn off when recording a slideshow or video you won't be clicking through."
+
+(macOS also fixed the shared `MonoComboField` so dropdowns draw as the styled full-width field — the
+port's ComboBox style already does.)
+
+### Data (persisted recording keys — flat string dictionary, same as the port's `RecordingConfig.ToDictionary`)
+
+| Key | Values | Default | Legacy / notes |
+|---|---|---|---|
+| `systemAudioMode` | `off` · `all` · `excludeSelf` | `all` | **New.** If missing or unknown, derive from the old `systemAudio` Bool: `"true"` → `all`, `"false"` → `off`, missing → `all`. |
+| `systemAudio` | `true`/`false` | `true` | **Still written** (= mode ≠ off) so an older build reads a sensible value. In code it is now a view of the mode: setting true when Off picks `all`; setting true when already on keeps the mode. |
+| `microphone` | `true`/`false` | `false` | Unchanged meaning: mic on/off. |
+| `microphoneDeviceID` | device id string | absent | **New.** Absent or `""` = "system default". Old `microphone = true` with no id → the default device. |
+| `camera` | `true`/`false` | `false` | Unchanged. |
+| `cameraDeviceID` | device id string | absent | **New**, same rules as the mic id. |
+| `cameraSize` | `small`/`medium` | `small` | Unchanged; now set from the Bubble Size submenu too. |
+| `showsCursor` | `true`/`false` | `true` | **New** ("Show mouse cursor"). |
+
+Device ids are platform-specific (macOS: `AVCaptureDevice.uniqueID`; Windows: see Platform notes) —
+never compare them across platforms.
+
+### Pure logic to port 1:1 (with the macOS test cases)
+
+`DeviceList { devices: [(id, name)], defaultID }` (`DeviceChoice.swift`):
+- `resolvedID(saved)` = saved if it's in `devices`; else `defaultID` if it's in `devices`; else the
+  first device's id; else null.
+- `choice(enabled, saved)` = `Off` if not enabled or `resolvedID` is null; else `Device(resolvedID)`.
+- `options` = `[(Off, "Off")]` + one row per device in list order; the n-th repeat of a name is titled
+  `"Name (n)"`.
+- `RecordingConfig.setMicrophone(choice)` / `setCamera(choice)`: `Off` → source off, **id kept**;
+  `Device(id)` → source on + id saved.
+
+`SystemAudioMode`: titles `Off` / `All apps` / `All apps except BetterScreenshot`; `excludesOwnAudio`
+is true only for `excludeSelf`.
+
+`MicLevel` (`MicLevel.swift`): `floor = −60 dB`; `fraction(dB) = clamp((dB + 60) / 60, 0, 1)`, and
+non-finite (−∞ silence, NaN) → 0; `smoothed(prev, target) = target ≥ prev ? target : max(target,
+prev − 0.06)` (fast attack, slow release per ~20 ms update); `litSegments(fraction, n) =
+clamp(round(fraction · n), 0, n)`. (The floor was measured: a quiet room reads −88…−64 dBFS on a
+MacBook Air mic, so it stays dark; speech ≈ −35…−20 lights about half.)
+
+Tests (`Packages/RecordingKit/Tests/RecordingKitTests/DeviceChoiceTests.swift`,
+`RecordingConfigTests.swift`) — recreate these:
+- resolvedID: devices [BuiltInMic, AirPods-1, USB-7], default BuiltInMic → saved AirPods-1 → AirPods-1;
+  saved "Gone-9" → BuiltInMic; saved nil → BuiltInMic; devices [AirPods-1, USB-7] with default
+  "Aggregate-3" (unlisted) → AirPods-1; no devices → null.
+- choice: disabled → Off; enabled+AirPods-1 → AirPods-1; enabled+nil → BuiltInMic; enabled+"Gone-9" →
+  BuiltInMic; enabled with no devices → Off.
+- options: [MacBook Pro Microphone, USB Audio CODEC, USB Audio CODEC] → titles "Off", "MacBook Pro
+  Microphone", "USB Audio CODEC", "USB Audio CODEC (2)"; no devices → ["Off"].
+- apply: mic Device(AirPods-1) → on + id; then Off → off, id still AirPods-1; same for camera.
+- config defaults: mode `all`, ids null, showsCursor true; round-trip with `excludeSelf` / `off`,
+  mic + camera ids, showsCursor false; `{showsCursor:"false"}` → false; `{microphoneDeviceID:""}` → null.
+- legacy: `{systemAudio:"true"}` → all; `{systemAudio:"false"}` → off; `{microphone:"true",
+  camera:"true"}` → both on, ids null; `{systemAudio:"true", systemAudioMode:"excludeSelf"}` →
+  excludeSelf; `{systemAudio:"false", systemAudioMode:"bogus"}` → off; written dictionary has
+  `systemAudio` "true" for excludeSelf and "false" for off.
+- Bool view: mode excludeSelf → systemAudio true; set true → still excludeSelf; set false → off; set
+  true → all.
+- MicLevel: fraction(0)=1, (6)=1, (−30)=0.5, (−60)=0, (−72)=0, (−∞)=0, (NaN)=0; smoothed(0.2→0.9)=0.9,
+  (0.9→0.1)=0.84, (0.03→0)=0; litSegments(0,12)=0, (0.5,12)=6, (0.04,12)=0, (1,12)=12, (1.7,12)=12.
+
+### Where it goes in the port
+
+- Strip: rebuild `windows/src/BetterScreenshot.App/Recording/RecordStripWindow.xaml(.cs)` (today one
+  horizontal `ControlRow` with "Record Full Screen / Record Window… / Record Area…" text buttons, an
+  MP4/GIF toggle and three `IconToggle`s) into the layout above: a `Grid`/`StackPanel` stack, WPF
+  `ComboBox`es for the dropdowns, a small meter control, and a `TextBlock` hint line driven by
+  `MouseEnter`/`MouseLeave` + `GotKeyboardFocus` on each area.
+- Config: `windows/src/BetterScreenshot.Recording/RecordingConfig.cs` — add `SystemAudioMode`,
+  `MicrophoneDeviceId`, `CameraDeviceId`, `ShowsCursor` with the keys/legacy rules above (keep writing
+  `systemAudio`).
+- Pure logic: new `DeviceList.cs` and `MicLevel.cs` next to `DshowDeviceList.cs` in
+  `windows/src/BetterScreenshot.Recording/`, tests in `windows/tests/BetterScreenshot.Tests/`.
+- Devices: `windows/src/BetterScreenshot.Platform/DshowAudioDevices.cs` — expose the enumerated list
+  for the menu (it is cached today; invalidate it when the strip opens or on device-change), and make
+  `ResolveAsync` use the saved mic (via `DeviceList.resolvedID`) instead of always
+  `DshowDeviceList.PickMicrophone` (that heuristic stays as the "default device" fallback when the OS
+  default can't be read).
+- Engine: `windows/src/BetterScreenshot.Recording/FfmpegArgs.cs` — `-draw_mouse` becomes
+  `ShowsCursor ? "1" : "0"` (it is hard-coded `"1"`);
+  `windows/src/BetterScreenshot.App/Recording/RecordingCoordinator.cs` skips audio for GIF.
+- Camera: `windows/src/BetterScreenshot.App/Recording/CameraBubbleWindow.xaml.cs` — pass the chosen
+  camera as `MediaCaptureInitializationSettings.VideoDeviceId` (today it takes the first colour source).
+- Settings: `windows/src/BetterScreenshot.App/Settings/SettingsWindow.xaml(.cs)` — replace the
+  `SysAudioCheck` / mic / camera switches with ComboBoxes + the "Show mouse cursor" switch.
+
+### Platform notes
+
+- **Device ids on Windows.** Mics: the dshow device name the port already uses (or better, the dshow
+  "Alternative name" device path, which survives renames — `DshowDeviceList.Parse` currently drops
+  those lines). System default mic: Core Audio `IMMDeviceEnumerator::GetDefaultAudioEndpoint(eCapture,
+  eConsole)` friendly name, matched to the dshow name. Cameras: `DeviceInformation.FindAllAsync(
+  DeviceClass.VideoCapture)` → `Id` (what `MediaCapture` takes) + `Name`; default = first. Device
+  changes: `DeviceWatcher` (or `WM_DEVICECHANGE`).
+- **Mic level meter on Windows.** Needs a live capture while the strip is open — ffmpeg isn't running
+  yet. Open a shared-mode WASAPI capture on the chosen endpoint (or `Windows.Media.Audio.AudioGraph`
+  with a device input node) and compute peak/RMS in dBFS per buffer, feeding `MicLevel`. (Core Audio's
+  `IAudioMeterInformation` on a capture endpoint only reports while some stream is capturing, so it
+  still needs that capture open.) Check access first with
+  `DeviceAccessInformation.CreateFromDeviceClass(DeviceClass.AudioCapture).CurrentStatus` so opening the
+  strip never prompts.
+- **System audio modes on Windows.** The port records system audio from a dshow loopback device
+  ("Stereo Mix" / virtual cable, `DshowDeviceList.PickSystemLoopback`), which is always *all* audio —
+  `All apps` maps directly. **`All apps except BetterScreenshot` can't be done with a dshow loopback
+  device**; it needs WASAPI *process loopback* (`ActivateAudioInterfaceAsync` with
+  `AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK`, `PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE`
+  on the app's own PID; Windows 10 build 20348+ / Windows 11), piped into ffmpeg as raw PCM. If that's
+  out of reach, show the item disabled with the tooltip "Needs Windows 11" or omit it on Windows — and
+  keep `excludeSelf` readable (treat it as `all`) so a synced/ported settings file still loads.
+- **"Only this app" was probed and dropped on macOS** (spec §7 / risk 3). ScreenCaptureKit's per-app
+  audio (a single-window filter, or a display filter including one app) hears only that app's *own
+  process*: a WebKit web view in the probe app played audio that an all-apps stream heard at peak 0.36
+  but the app-only and window filters recorded as 0.00 — browsers, Electron apps and anything else that
+  plays sound from a helper process would record silence. Don't add it to the port either (parity),
+  even though Windows process loopback *could* include a process tree.
+- **macOS window-recording audio fix (no Windows equivalent needed).** Before this part, macOS window
+  recordings took system audio from the window's own filter and so captured only that app's main
+  process (usually silence for a browser). They now use a second, audio-only display-wide stream,
+  verified on real MP4s: another app's sound peak 0.20 (was 0.00), BetterScreenshot's own sound
+  excluded in `All apps except BetterScreenshot`, audio and video tracks both start at 0. The port's
+  gdigrab + loopback design always hears all apps, so it doesn't have this bug.
+- **Cursor:** gdigrab/ddagrab `-draw_mouse 0/1` (macOS: `SCStreamConfiguration.showsCursor`).
 
 ---
 
 ## Part 5 — Live recording pill v2 (mute, switch window, restart, discard)
 
-_(pending — filled when Part 5 lands)_
+**What it is.** While a recording runs, the floating recording pill (the "timer · Pause · Stop" pill from
+§A) is now **expanded by default** with live controls: mute the microphone, mute system audio, show/hide
+the camera bubble, switch the recorded window/area, restart, discard, pause, stop. A chevron collapses it
+back to the compact pill. macOS files: `App/Recording/RecordingControlsController.swift` (the pill),
+`App/Recording/RecordingCoordinator.swift` (what each control does), and in `Packages/RecordingKit/`:
+`ScreenRecorder.swift` (mute, retarget, pause fixes), `SilenceFill.swift`, `LetterboxFit.swift`,
+`CameraBubbleController.swift` (`setHidden`). Snapshots (2× PNGs from the headless probe) are in
+`docs/parity-v3/part5-pill-*.png`.
+
+### Layout (exact)
+
+**Window.** Borderless, non-activating floating panel (never takes focus — clicks must land without
+activating the app: WPF `WS_EX_NOACTIVATE` + first-click-through), topmost (`.statusBar` level), on all
+desktops, shadow on, draggable by its background, **tooltips shown even though the app is inactive**.
+Height **40**, corner radius **20** (capsule). Background: the app's dark HUD material (the dark
+translucent panel look used across the app; macOS vibrant dark `.hudWindow`) + a **black 25 %** wash over it (keeps white text readable on bright backdrops) + a **1 px
+border, white 10 %**. The panel is sized to its content (width changes with state, see below).
+
+**Expanded — order, left → right (all sizes in pt):**
+
+| # | Item | Size | Spacing after |
+|---|---|---|---|
+| — | left inset | 14 | — |
+| 1 | status dot (circle) | 10 × 10 | 8 |
+| 2 | timer label, monospaced digits 14 pt semibold, left-aligned, fixed width 46 | 46 | 10 |
+| 3 | separator (vertical line, white 16 %) | 1 × 18 | 10 |
+| 4 | **Mic** toggle (icon + label) | 58 × 28 | 2 |
+| 5 | **Sound** toggle (icon + label) | 79 × 28 | 2 |
+| 6 | **Camera** toggle (icon + label) | 87 × 28 | 10 |
+| 7 | separator | 1 × 18 | 10 |
+| 8 | **Switch window…** / **Switch area…** (icon + label) | 137 × 28 | 10 |
+| 9 | separator | 1 × 18 | 10 |
+| 10 | Restart (icon) | 28 × 28 | 2 |
+| 11 | Discard (icon) | 28 × 28 | 2 |
+| 12 | Pause / Resume (icon) | 28 × 28 | 2 |
+| 13 | Stop (icon, red) | 28 × 28 | 6 |
+| 14 | chevron (icon, white 55 %) | 20 × 28 | — |
+| — | right inset | 6 | — |
+
+Total **656** wide on macOS. Items 8 + its separator (7) are **hidden for full-screen recordings** (498
+wide). All vertically centred.
+
+**Buttons.** Borderless, height **28**, corner radius **7**. Icon buttons: SF Symbol 14 pt semibold,
+centred (chevron: 11 pt). Labelled toggles (items 4–6, 8): SF Symbol 13 pt semibold, then the label in
+system font **12 pt medium**, icon leading and hugging the text, **8 pt padding each side**; each
+labelled button's width is **locked to its widest state** (widest icon × widest label + 16) so toggling
+never shifts the pill (macOS widths: 58 / 79 / 87 / 137 — recompute with Segoe UI). Glyph + text colour
+white; **disabled → white 30 %**. **Hover** (tracked even while the app is inactive): fill white 12 %;
+on a button that already has a fill, the fill blended 15 % toward white.
+
+**Collapsed** (chevron clicked): only dot · timer · Pause · Stop · chevron remain, same metrics and
+spacings (timer → Pause 10, Pause → Stop 2, Stop → chevron 6) = **178** wide.
+
+**ASCII mockups (as built).** `[ ]` = a 28 pt control, `▓…▓` = red chip, `░…░` = greyed/disabled.
+```
+Recording a window (expanded, default):
+╭──────────────────────────────────────────────────────────────────────────────────────────────╮
+│ ●  1:23   │ [🎙 Mic] [🔊 Sound] [📷̸ Camera] │ [▭ Switch window…] │ [↺] [🗑] [⏸] [■]  › │
+╰──────────────────────────────────────────────────────────────────────────────────────────────╯
+Mic + Sound muted, camera bubble showing:
+│ ●  1:23   │ ▓🎙̸ Mic▓ ▓🔊̸ Sound▓ [📷 Camera] │ [▭ Switch window…] │ [↺] [🗑] [⏸] [■]  › │
+Area recording, no mic track, paused (grey dot + grey timer, ▶ instead of ⏸):
+│ ○  1:24   │ ░🎙̸ Mic░ [🔊 Sound] [📷̸ Camera] │ [⬚ Switch area…]   │ [↺] [🗑] [▶] [■]  › │
+Countdown (engine not started yet): grey dot, "0:00", Switch/Restart/Discard/Pause greyed, Stop live:
+│ ○  0:00   │ [🎙 Mic] [🔊 Sound] [📷̸ Camera] │ ░▭ Switch window…░ │ ░↺░ ░🗑░ ░⏸░ [■]  › │
+First click on Restart (Discard is the same with "Discard?"):
+│ ●  12:07  │ … │ [▭ Switch window…] │ ▓ Restart? ▓ [🗑] [⏸] [■]  › │
+Full screen (no Switch group):
+│ ●  12:07  │ [🎙 Mic] [🔊 Sound] [📷̸ Camera] │ [↺] [🗑] [⏸] [■]  › │
+Collapsed:
+╭──────────────────────────╮
+│ ●  12:07   [⏸] [■]  ‹ │
+╰──────────────────────────╯
+```
+Snapshots: `part5-pill-expanded.png`, `-muted.png`, `-area-no-mic.png`, `-countdown.png`,
+`-confirm-restart.png`, `-collapsed.png`, `-hover.png` (Sound and Discard hovered).
+
+**States of each item (icons are SF Symbol names → port icon keys below):**
+
+| Item | State | Icon | Look | Tooltip (verbatim) |
+|---|---|---|---|---|
+| Dot | recording | — | systemRed | — |
+| Dot | paused / countdown | — | systemGray | — |
+| Timer | recording | — | white, "m:ss" (minutes unbounded, e.g. "12:07") | — |
+| Timer | paused / countdown | — | secondary grey; countdown shows "0:00" | — |
+| Mic | on | `mic.fill` | white | "Mute microphone — the video keeps a silent gap, stays in sync" |
+| Mic | muted | `mic.slash.fill` | **red chip**: fill systemRed 85 %, white icon + text | "Unmute microphone" |
+| Mic | not recorded | `mic.slash.fill` | disabled (30 %) | "Mic wasn't on when this recording started — there's no mic track to mute" |
+| Sound | on | `speaker.wave.2.fill` | white | "Mute system audio — the video keeps a silent gap, stays in sync" |
+| Sound | muted | `speaker.slash.fill` | red chip | "Unmute system audio" |
+| Sound | not recorded | `speaker.slash.fill` | disabled | "System audio wasn't on when this recording started — there's no sound track to mute" |
+| Camera | bubble showing | `video.fill` | white | "Hide camera bubble" |
+| Camera | bubble hidden / never shown | `video.slash.fill` | white, **no chip** (camera-off is the normal state, not a warning) | "Show camera bubble" |
+| Camera | no camera | `video.slash.fill` | disabled | "No camera found" |
+| Camera | permission denied | `video.slash.fill` | disabled | "Camera access is off — allow BetterScreenshot in System Settings › Privacy & Security › Camera" (Windows: "…in Settings › Privacy & security › Camera") |
+| Switch | window recording | `macwindow`, "Switch window…" | white | "Record a different window — it's scaled to fit this video's frame" |
+| Switch | area recording | `rectangle.dashed`, "Switch area…" | white | "Record a different area — it's scaled to fit this video's frame" |
+| Switch | countdown | as above | disabled | "Available once recording starts" |
+| Restart | normal | `arrow.counterclockwise` | white | "Restart — delete what's recorded so far and start over" |
+| Restart | confirming | no icon, text "Restart?" | **red capsule**: fill systemRed, white 12 pt semibold text, width = text + 16 (≈ 70) | "Click again to restart — what's recorded so far is deleted" |
+| Discard | normal | `trash` | white | "Discard — stop and delete this recording" |
+| Discard | confirming | text "Discard?" | red capsule (≈ 72 wide) | "Click again to delete this recording" |
+| Restart/Discard | countdown | icon | disabled | "Available once recording starts" |
+| Pause | recording / paused | `pause.fill` / `play.fill` | white; disabled during countdown | "Pause recording" / "Resume recording" |
+| Stop | recording / countdown | `stop.fill` | systemRed glyph | "Stop recording" / "Cancel recording" |
+| Chevron | expanded / collapsed | `chevron.right` / `chevron.left` | white 55 % | "Collapse to timer, Pause and Stop" / "Show all controls" |
+
+**Resizing & position.** Whenever the width changes (expand/collapse, confirm chip, Switch shown/hidden)
+the pill keeps its **bottom-right corner fixed** (the chevron stays under the pointer), then is clamped
+8 pt inside the screen's work area. First show with no saved position: bottom-centre of the recording's
+screen, bottom edge 20 pt above the work area's bottom. Dragging saves the position.
+
+### Items & behaviour
+
+- **Mic / Sound (mute).** Toggle. Muting does **not** drop the audio track: the recorder keeps writing
+  it but with every sample set to silence, so the track stays continuous and in sync (dropping audio
+  leaves gaps some players mishandle). Only works for tracks that exist — they're fixed when the
+  recording starts; a source that was off (or whose permission was denied) is greyed with the tooltip
+  above. During the countdown the buttons already work (the flag is applied from the first sample).
+  **Mute states reset at the start of every new recording session and carry over a Restart.**
+  Security rule: if a silent buffer can't be made, the buffer is dropped — a muted source must never
+  leak sound.
+- **Camera.** If the bubble exists, hides/re-shows it **where the user dragged it** (the camera itself
+  stops while hidden so its light goes off). If the camera was off when recording started, the first
+  click asks for camera permission if needed and shows the bubble (same size setting, same corner rule
+  as at start) — it's recorded simply by being on screen.
+- **Switch window… / Switch area…** (window / area recordings; full screen has none).
+  1. If recording (not already paused), **pause** — the picker overlay must not be recorded and the
+     picking time is cut from the video. 2. Show the same picker used to start: the hover-to-highlight
+     **window picker** (all on-screen windows except our own) or the drag-to-select **area selection**
+     (any display). 3. On pick, re-point the running capture at the new window/area **without stopping**.
+     The video's pixel size stays what it was at the start; the new content is **scaled to fit and
+     centred with black bars** (`LetterboxFit`, small windows scale up). The pill stays excluded from the
+     video after the switch (area: rebuild the exclusion). 4. Resume (only if step 1 paused), and hand
+     focus back: to the picked window's app (window switch) or to the app that was frontmost before
+     (area switch / Esc). Esc / clicking nothing = cancel → just resume. On failure show the HUD
+     "Couldn't switch — still recording the previous window" / "…previous area" and keep recording the
+     old target. A later **Restart** uses the switched-to target.
+- **Restart** (two clicks, see Confirm). Stops the engine, **deletes the file recorded so far**, and runs
+  the normal start path again on the current target with the same settings — **including the countdown**
+  if one is configured. The pill, camera bubble, click/keystroke overlays stay up; the timer shows 0:00
+  (greyed controls) until the new take starts.
+- **Discard** (two clicks). Stops, **deletes the file**, tears everything down, **no Quick Access card**
+  (the post-capture thumbnail card) **and no History entry**, then shows the toast "Recording discarded".
+- **Confirm (Restart/Discard).** First click turns the button into the red "Restart?"/"Discard?" capsule
+  for **3 s**; a second click within that time performs it. It reverts after 3 s, or immediately when
+  Switch, Pause, Stop or the chevron is used or the recording stops (the Mic/Sound/Camera toggles don't
+  cancel it; clicking the other of Restart/Discard moves the confirm to that one). Deliberately
+  **not a dialog** — a modal would steal focus from the app being recorded.
+- **Pause / Stop** as before (Stop during the countdown cancels the recording).
+- **Chevron** toggles expanded/collapsed; the state persists.
+- Tooltips: every control has one (table above).
+
+### Data (persisted)
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `recordingPillCollapsed` | Bool | `false` (expanded) | chevron state, survives restarts of the app |
+| `recordingPillAnchor` | String `"{x, y}"` | absent → bottom-centre | the pill's **bottom-right corner** in global screen coords (macOS: bottom-left origin, points). Used only if that spot is still on a connected screen. Windows: store right/bottom edges in DIPs (top-left origin). |
+
+Nothing added to `RecordingConfig`. Mute / camera / target state is per session, not persisted.
+
+### Pure logic to port 1:1 (with the macOS test cases)
+
+**`SilenceFill`** (`Packages/RecordingKit/Sources/RecordingKit/SilenceFill.swift`, tests
+`Tests/RecordingKitTests/SilenceFillTests.swift`). `silentSample(format)` → the bytes of one silent
+sample, or null if the format isn't linear PCM (or has < 8 bits): float and signed-integer silence = all
+zero bytes; **unsigned** = the midpoint (0x80 for 8-bit, 0x8000 for 16-bit …) placed in the format's
+byte order. `fill(bytes, sample)` repeats the sample over the buffer from offset 0. `silentCopy(buffer)`
+= a new buffer with the same format, sample count and timestamp whose data is all silence (the source is
+never modified). Because every sample in a buffer has the same width, filling the whole data block works
+for interleaved *and* per-channel (planar) layouts. Test cases:
+- float32 → `[0,0,0,0]`; float64 → 8 zeros; int16 → `[0,0]`; int24 → `[0,0,0]`.
+- uint8 → `[0x80]`; uint16 little-endian → `[0x00,0x80]`; uint16 big-endian → `[0x80,0x00]`.
+- AAC (not LPCM) → null; 0-bit PCM → null.
+- fill `[0x55 ×6]` with `[0x00,0x80]` → `[0x00,0x80,0x00,0x80,0x00,0x80]`.
+- interleaved int16 stereo, 480 frames of 0x7F → one buffer of 1920 bytes, all 0.
+- planar float32 stereo, 960 frames of 0x3F (the macOS system-audio shape) → two buffers of 3840 bytes, all 0.
+- mono float32, 320 frames timestamped 2.0 s → same timestamp, same duration, 320 samples, same format; the source
+  buffer still reads 0x3F.
+
+Formats actually seen on macOS (probed 2026-09-24): system audio **48 kHz stereo float32 non-interleaved,
+960 frames/buffer**; microphone (AVCaptureAudioDataOutput, Bluetooth headset) **16 kHz mono float32
+non-interleaved, 320 frames/buffer**. On Windows, WASAPI shared-mode loopback/mic is normally 32-bit float
+interleaved (`WAVE_FORMAT_IEEE_FLOAT`/extensible) — silence is zero bytes.
+
+**`LetterboxFit`** (`LetterboxFit.swift`, tests `LetterboxFitTests.swift`). `rect(content, output)` → the
+rectangle (output pixels, top-left origin) where content of size `content` lands when scaled to fit
+`output` keeping its aspect ratio, centred: `scale = min(outW/cW, outH/cH)`, `w = min(outW,
+round(cW·scale))`, `h = min(outH, round(cH·scale))`, `x = floor((outW−w)/2)`, `y = floor((outH−h)/2)`;
+zero/negative content → the whole output. Test cases:
+- 640×400 into 1280×800 → (0, 0, 1280, 800).
+- 300×520 into 1280×800 → (409, 0, 462, 800).
+- 1600×400 into 800×600 → (0, 200, 800, 200).
+- 100×50 into 1000×500 → (0, 0, 1000, 500) (scales **up**).
+- 0×0 or 10×0 into 1280×800 → (0, 0, 1280, 800).
+
+### Engine behaviour (macOS `ScreenRecorder`) — what the port must reproduce
+
+- `setMicMuted(bool)`, `setSystemAudioMuted(bool)`: flags read on the sample thread; while set, each
+  buffer of that track is replaced by `SilenceFill.silentCopy` before it's written. Flags survive
+  stop/start (the coordinator resets them per session).
+- `retarget(filter, sourceRect)`: `SCStream.updateContentFilter` + `updateConfiguration` with
+  `destinationRect = LetterboxFit.rect(new content size, output size)`, `scalesToFit = true`,
+  `preservesAspectRatio = true`. Probed: window 640×400 → 300×520 → 200×120 → back, and area → area
+  (different shapes): ~0.1 s per retarget, content centred with black bars, pill still excluded.
+- `currentOutputURL` lets Restart/Discard delete the file even if finalizing fails.
+- **Pause fixes found while building this** (both matter to Switch, which pauses):
+  1. The newest frame that arrives while paused is kept and, restamped to the resume moment, becomes
+     the first frame after resume — a static window switched to during the pause otherwise never sends
+     a frame, and the video stayed on the old window.
+  2. The resume gap is anchored on the **end of the last audio written** (or the pause moment when
+     there's no audio), never earlier than the last video frame. The old anchor (last video frame only)
+     put post-resume video **~0.9 s ahead of its audio** after pausing over static content (measured
+     with a screen flash + a click sound: video ran 0.85–0.89 s ahead before the fix; after it the
+     offset is 7–20 ms, the same as a recording without a pause, 2–19 ms).
+  The port's segment-per-span pause doesn't have these PTS (presentation timestamp) problems — each
+  segment is its own contiguous recording — but see the platform notes.
+
+### Where it goes in the port
+
+- Pill: the recording-controls window from §A (if §A named it differently, extend that one), e.g.
+  `windows/src/BetterScreenshot.App/Recording/RecordingControlsWindow.xaml(.cs)` — a horizontal
+  `StackPanel` with the metrics above; persist the two keys in
+  `windows/src/BetterScreenshot.Platform/SettingsStore.cs`.
+- Actions: `windows/src/BetterScreenshot.App/Recording/RecordingCoordinator.cs` — add `ToggleMicMute`,
+  `ToggleSoundMute`, `ToggleCamera` (keep the `CameraBubbleWindow` instance, `Hide()`/`Show()` it in place),
+  `SwitchTargetAsync` (reuse `_picker` / `_selection` exactly as `BeginWindow` / `BeginArea` do),
+  `RestartAsync`, `DiscardAsync`; keep the current target (region + kind) for Restart.
+- Engine: `windows/src/BetterScreenshot.App/Recording/RecordingEngine.cs` — `SetMuted(track, bool)`,
+  `Retarget(PxRect)`, `Discard()`; `windows/src/BetterScreenshot.Recording/FfmpegArgs.cs` —
+  `BuildRecording` gains an output size (scale + pad) and per-track mute (below).
+- Pure logic: `windows/src/BetterScreenshot.Recording/LetterboxFit.cs` (+ `SilenceFill.cs` only if audio
+  is captured in-process, option C below); tests in `windows/tests/BetterScreenshot.Tests/RecordingTests.cs`
+  (or new `LetterboxFitTests.cs` / `SilenceFillTests.cs`).
+- Icons (`windows/src/BetterScreenshot.App/Resources/Icons.xaml`): reuse `icon-mic`, `icon-speaker`,
+  `icon-video`, `icon-trash`, `icon-play`, `icon-undo` (restart ↺); **add** mic-slash, speaker-slash,
+  video-slash, pause, stop (filled square), window (`macwindow`), dashed rectangle (`rectangle.dashed`),
+  chevron-left, chevron-right.
+
+### Platform notes (where Windows must differ)
+
+The port records with **one ffmpeg process per active span** (`gdigrab` region + `dshow` audio inputs →
+H.264/AAC MP4 segment), pausing = end the segment, resuming = start a new one, and **concatenating the
+segments with `-c copy` at stop**. A running ffmpeg can't change its inputs or region, so:
+
+- **Switch window / area → new segment.** The macOS flow already pauses around the picker, so it maps
+  directly: *pause* (end segment) → pick → *resume* with the new region. Concat with `-c copy` requires
+  every segment to have the **same resolution and codec parameters**, so every segment must be encoded
+  at the **first segment's even output size**: add
+  `-vf scale=W:H:force_original_aspect_ratio=decrease:flags=lanczos,pad=W:H:(ow-iw)/2:(oh-ih)/2:black,setsar=1`
+  (W×H = first segment's size; this is exactly `LetterboxFit`, centred black bars, scales small windows
+  up). Keep identical `-r`, `-pix_fmt yuv420p`, encoder settings and the **same audio track layout** in
+  every segment. The window picker's result on Windows is a rect (`WindowEnum.FrameBounds`), so a
+  switched window is recorded as that rect (as today at start).
+- **Mute → options, pick one:**
+  - **A. New segment per toggle (simplest, fits the engine).** On toggle, end the segment and start a
+    new one where the muted track's `dshow` input is replaced by a silent source with the same shape,
+    e.g. `-f lavfi -i anullsrc=r=48000:cl=stereo`, still mapped to the same output track index and
+    encoded with the same `-c:a aac -b:a 128k -ar 48000 -ac 2` (the track count must not change or
+    `-c copy` concat breaks). Cost: each toggle loses the ~0.3–1 s it takes ffmpeg to restart (screen
+    content in that moment isn't captured), unlike pause where that time is meant to be skipped.
+  - **B. Runtime volume (no gap).** Build each audio input through a named filter
+    (`[1:a]volume@sys=1[a1]`) and change it live with ffmpeg's `azmq` filter (needs an ffmpeg build with
+    libzmq; check `ffmpeg -filters | findstr zmq`) → `volume@sys volume 0`. Exact parity, no restart.
+  - **C. In-process audio (exact parity, most work).** Capture system audio (WASAPI loopback) and mic
+    (WASAPI capture) in C# (e.g. NAudio), zero muted buffers with a C# `SilenceFill`, write one WAV per
+    track, and mux them with the video at stop (`ffmpeg -i video.mp4 -i sys.wav -i mic.wav -map 0:v -map
+    1:a -map 2:a -c:v copy -c:a aac …`). Pause then drops audio buffers the same way it drops segments.
+  Recommendation: **A** first (small change, matches how pause works), B if the owner notices the gaps.
+- **Restart** = stop the current ffmpeg, delete all segments of this session (don't concat), start a new
+  session on the same region/config (countdown again). **Discard** = stop, delete segments, no concat,
+  no history, no card, HUD "Recording discarded".
+- **Excluding the pill from the video.** `gdigrab` captures the desktop DC, so the pill needs
+  `SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)` (Windows 10 2004+) unless "Show stop button in
+  recording" is on — verify with a probe recording that it hides the window from `gdigrab`; if not, fall
+  back to `ddagrab` (Desktop Duplication honours it). It's per-window, so it survives a switch.
+- **Focus.** The pill must never activate (`WS_EX_NOACTIVATE`, `ShowActivated=false`, handle
+  `WM_MOUSEACTIVATE` → `MA_NOACTIVATE`). Test that its tooltips and hover highlights still appear while
+  another app is focused (macOS needed an explicit opt-in, `allowsToolTipsWhenApplicationIsInactive`,
+  and hover tracking that is active even when the app isn't).
+- **Camera bubble show/hide:** keep the `CameraBubbleWindow` instance and `Hide()`/`Show()` it so a
+  dragged position survives; stop the camera while hidden.
 
 ---
 
 ## Part 6 — Video editor v2 (cut, per-segment speed/mute, GIF export)
 
-_(pending — filled when Part 6 lands)_
+**What it is.** The recording trim window (opened by a recording's Quick Access card ✂ **Trim** button,
+or History's **Edit Video…**; MP4 only) is now a small video editor. It replaces AVKit's single-range "yellow
+handles" trim mode with our own filmstrip timeline: split the clip at the playhead, delete segments,
+drag segment edges, give each segment a speed (1× / 1.5× / 2× / 4×) or mute it, undo / redo, and export
+as a copy, as a GIF, or over the original. Nothing touches the original file until an export. The Part 0
+card-restore rule applies to every way the window closes.
+
+**Terms.** *Source time* = seconds in the original recording. *Output time* = seconds in the exported
+video (kept segments back to back; a 2× segment lasts half as long). *Timeline time* = what the timeline
+draws: kept segments at their output length, cuts at their source length. *Cut list* = the ordered kept
+segments (the model, `CutList`). *Passthrough* = copying the compressed video without re-encoding
+(lossless, instant, but can only start on a *keyframe*); *re-encode* = decode + encode every frame
+(exact on any frame, takes seconds).
+
+### Layout (exact)
+
+Snapshots from the headless probe (1× PNGs): `docs/parity-v3/part6-editor.png` (two segments, a cut, the
+second segment at 2× and auto-muted), `part6-edge-drag.png` (dragging segment 1's end edge — the preview
+shows the frame under the handle), `part6-exporting.png` (progress bar), `part6-min-size.png` (minimum
+window size, one segment).
+
+```
+┌─ Edit Video — Recording 2026-09-24 at 12.00.00.mp4 ──────────────────────────────────────────┐
+│                                                                                              │
+│                 video preview — black letterbox, aspect-fit; click = play / pause            │
+│                                                                                              │
+│ ╭──────────────────────────────────────────────────────────────────────────────────────────╮ │
+│ │ ▶  0:05.0 / 0:10.5   [✂ Split] [🗑 Delete] │ [↶] [↷]                  🔍−  ──●──────  🔍+ │ │
+│ │                                          ●  (playhead knob)                              │ │
+│ │ ╭────────────────────────╮░░░░░░░✂░░░░░░░▐▌[2×][🔇] filmstrip — selected (yellow)   ▐▌ │ │
+│ │ │ filmstrip (segment 1)  │░ cut, dimmed ░│▐▌                                        ▐▌ │ │
+│ │ ╰────────────────────────╯░░░░░░░░░░░░░░░▐▌━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━▐▌ │ │
+│ │ Segment 2 of 2  0:09.0 – 0:20.0    Speed [ 1× | 1.5× | 2× | 4× ]   ☑ Mute segment       │ │
+│ │ ⓘ Sped-up segments are muted so the audio doesn't sound rushed — untick Mute segment …   │ │
+│ ╰──────────────────────────────────────────────────────────────────────────────────────────╯ │
+├──────────────────────────────────────────────────────────────────────────────────────────────┤
+│ 0:10.5 kept of 0:20.0   ☐ Mute audio                 [Cancel] [Save as Copy │▾] [Replace Original] │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Window.** Title `Edit Video — <file name>`. Content 960 × 720 pt at open (centred), resizable, minimum
+frame 780 × 560 pt. Always dark (dark appearance); window background `#171717` (white 0.09).
+Only one editor window exists at a time (opening another file closes the current one — Part 0).
+
+**Preview** (top, full width, down to 12 pt above the card; min height 200): plays the edit exactly as it
+will export (removed parts skipped, speeds applied, muted segments silent). No player controls on it; a
+click toggles play / pause.
+
+**Card** (dark HUD panel: translucent dark material, corner radius 12, 1 px border white 10%), inset 12 pt
+from the window's left/right edges and 12 pt above the action bar. Padding 12 top/bottom, 14 left/right;
+rows 10 pt apart (8 pt between the segment row and the hint line). Four rows:
+
+1. **Transport / edit row** (≈ 28 pt tall, items 8 pt apart, left to right):
+   | Item | Look | Tooltip (verbatim) | Shortcut | Enabled when |
+   |---|---|---|---|---|
+   | Play / Pause | borderless icon, `play.fill` ↔ `pause.fill`, 15 pt semibold, white 85%, 29 pt wide | `Play (Space)` / `Pause (Space)` | Space | loaded, not exporting |
+   | Time | `0:05.0 / 0:10.5` = playhead / edit length (output time), 12 pt monospaced-digit medium, white 85%, min width 116 | `Playhead / length of the edit` | — | — |
+   | (10 pt gap) | | | | |
+   | **Split** | rounded push button, `scissors` 12 pt + "Split" | `Split the segment at the playhead (S or ⌘B)` | S, ⌘B | the playhead is ≥ 0.1 s inside a segment |
+   | **Delete** | rounded push button, `trash` + "Delete" | `Delete the selected (yellow) segment (⌫)` | ⌫ / Delete | more than one segment |
+   | divider | 1 × 18 pt, white 15% | | | |
+   | Undo | rounded push button, icon only `arrow.uturn.backward` | `Undo (⌘Z)` | ⌘Z | something to undo |
+   | Redo | rounded push button, icon only `arrow.uturn.forward` | `Redo (⇧⌘Z)` | ⇧⌘Z | something to redo |
+   | (flexible space) | | | | |
+   | Zoom out | borderless `minus.magnifyingglass` 12 pt, 26 pt wide | `Zoom out the timeline` | — | zoom > 1 (÷ 1.5 per click) |
+   | Zoom slider | small slider, 110 pt wide, 1…12 (1 = fit to width), continuous | `Timeline zoom` | — | loaded |
+   | Zoom in | borderless `plus.magnifyingglass` 12 pt | `Zoom in the timeline` | — | zoom < 12 (× 1.5 per click) |
+2. **Timeline** — 66 pt tall, full card width, scrolls horizontally when zoomed (overlay scroller, no
+   bounce). Tooltip: `Click to move the playhead and pick a segment · drag a yellow edge to trim · right-click for speed and mute`.
+   Drawing spec below.
+3. **Selected-segment row** (items 8 pt apart): `Segment 2 of 3` (11 pt semibold, white 90%) ·
+   `0:09.0 – 0:20.0` (the segment's **source** range; 11 pt monospaced-digit, white 50%; tooltip
+   `Where this segment comes from in the original recording`) · 14 pt gap · `Speed` (11 pt, white 60%) ·
+   small segmented control `1×` `1.5×` `2×` `4×` (each 40 pt wide; tooltip
+   `Play this segment faster (sped-up segments start muted)`) · 10 pt gap · small checkbox
+   `Mute segment` (11 pt; tooltip `Silence this segment's audio (the rest keeps its sound)`; shown ticked
+   and disabled while whole-file **Mute audio** is on).
+4. **Hint line**: `info.circle` 11 pt (white 45%) + one sentence, 11 pt white 55%, truncated at the end if
+   too long. Text (first match wins, verbatim):
+   1. exporting → `Exporting — the original stays untouched until it's done.`
+   2. Mute audio ticked → `Mute audio is on: the saved video will have no sound at all.`
+   3. selected segment sped up and muted → `Sped-up segments are muted so the audio doesn't sound rushed — untick Mute segment to keep it.`
+   4. selected segment sped up, not muted → `Sped-up audio keeps its pitch but plays faster.`
+   5. only one segment → `Move the playhead, then press S (or ⌘B) to split · drag the yellow edges to trim · I / O set in / out`
+   6. otherwise → `Click a segment to select it · ⌫ deletes it · right-click for speed and mute · Space plays the edit`
+
+**Action bar** (bottom, 52 pt tall, standard header material, 1 px separator on top; row inset 16 pt,
+items 10 pt apart): kept label (12 pt monospaced-digit, secondary colour; tooltip
+`Length of the saved video / length of the recording`) · 4 pt gap · checkbox `Mute audio` (tooltip
+`Save without any sound`) · 8 pt gap · progress bar (140 pt, hidden except while exporting; the kept
+label hides while it shows) + progress text · flexible space · **Cancel** (tooltip `Close without saving`;
+reads **Done** with tooltip `Close the editor` after Replace Original) · **Save as Copy ▾** — a split
+button: the main part saves a copy, the ▾ opens a menu with one item `Export as GIF` (tooltip on the
+button `Save the edit as a new file next to the original — the ▾ menu exports a GIF`; on the item
+`Save the edit as an animated GIF next to the original (10 fps, up to 960 px wide)`) · **Replace
+Original** (accent-tinted, deliberately **no** Return shortcut; tooltip
+`Overwrite the original recording with the edit`).
+
+Kept label texts (verbatim; times are `m:ss.t`, rounded to tenths — `TrimRange.timestamp`):
+`Loading…` · `This recording can't be opened for editing.` · `Whole recording · 0:45.0` (nothing edited)
+· `0:31.2 kept of 0:45.0` · and one-off notes that stay until the next edit: `Edited ✓ original replaced · 0:31.2`,
+`GIF saved ✓ <gif file name>`, `Couldn't export the edit — original untouched`,
+`Couldn't export the GIF — nothing was changed`. Progress text: `Exporting… 42%` (re-encode or GIF,
+determinate bar) or `Saving…` (passthrough, indeterminate bar).
+
+**Icons** (SF Symbol → port icon key in `windows/src/BetterScreenshot.App/Resources/Icons.xaml`):
+`play.fill` → `icon-play`; `trash` → `icon-trash`; `arrow.uturn.backward` / `.forward` → `icon-undo` /
+`icon-redo`. **New glyphs to author:** `pause.fill` → `icon-pause`, `scissors` → `icon-scissors`,
+`minus.magnifyingglass` / `plus.magnifyingglass` → `icon-zoom-out` / `icon-zoom-in`, `info.circle` →
+`icon-info`, `speaker.slash.fill` → `icon-speaker-off`.
+
+### Timeline — drawing spec
+
+- 12 pt inset at both ends. Scale (pt per timeline second) = (view width − 24) ÷ timeline length; view
+  width = visible width × zoom. Track: y 10 … height − 6 (50 pt of a 66 pt view); behind it a rounded
+  rect (radius 8, black 35%) 2 pt in from the sides and 3 pt beyond the track top/bottom.
+- **Kept segment**: its rect inset 1 pt left/right (so adjacent segments show a 2 pt gap), radius 6,
+  filled with the filmstrip, 1 px border white 22%.
+- **Filmstrip**: tiles `track height × video aspect` wide (clamped 24…160 pt), starting at each block's
+  left edge; each tile aspect-fills the thumbnail nearest to the **source** time at the tile's centre
+  (so a 2× segment shows twice the footage per tile). Thumbnails: `clamp(2 × duration, 12, 240)` frames at
+  `(k + 0.5) × duration / count`, max 320 × 200 px, loaded in the background; until then tiles are grey 22%.
+- **Cut** (removed range): its rect inset 1 pt left/right and 4 pt top/bottom, radius 4; filmstrip, then
+  black 66%, then 45° hatch lines (white 9%, 1.5 pt, every 7 pt), and a centred `scissors` glyph (11 pt,
+  white 45%) if the block is ≥ 22 pt wide. Cuts before the first and after the last segment are drawn too.
+- **Badges** (top-left of a kept segment, 5 pt from its left, 4 pt from the top): 16 pt-tall fully rounded
+  pills, black 70%, 5 pt side padding, 4 pt apart: the speed (`1.5×`, `2×`, `4×`; 10 pt bold white) when
+  not 1×, then `speaker.slash.fill` (9 pt bold white) when muted. A badge that doesn't fit is skipped.
+- **Selection** (exactly one segment is always selected): system-yellow 2.5 pt border (radius 6) plus two
+  solid yellow handles, 10 pt wide (or a third of the segment if narrower), radius 4, each with a centred
+  2 × 14 pt grip (black 55%).
+- **Playhead**: 2 pt white line from y 3 to the bottom with a 10 pt white circle knob at the top, soft
+  shadow (black 60%, blur 2). While playing, the view scrolls so the playhead stays visible (re-anchored
+  at 15% from the left when it leaves).
+- **Cursor**: left-right resize cursor within ±7 pt of any kept segment's edge.
+
+### Behaviour
+
+**Mouse on the timeline.**
+- Click a kept segment → select it and move the playhead to that point; keep dragging to scrub.
+- Click a cut → the playhead jumps to the start of the next kept segment (or the end if none); drag scrubs.
+- **Edge drag** (press within ±7 pt of a kept segment's edge; if two edges are in reach, the selected
+  segment's wins, otherwise the one on the pointer's side of the shared boundary). The segment becomes
+  selected, playback pauses, and the preview switches to the plain source showing the frame at the edge
+  (start edge: the new first frame; end edge: the frame 1/60 s before the new end). The scale is frozen
+  during the drag so the edge stays under the pointer: start edge → `newStart = previousKeptEnd (or 0) +
+  (pointerTimeline − displayStartOfTheCutBefore)`; end edge → `newEnd = start + (pointerTimeline −
+  segmentDisplayStart) × speed`; then clamped by `CutList.setStart/setEnd` (can't cross a neighbour, ≥ 0.1 s
+  long). Dragging an edge into a cut brings that footage back. Release = **one** undo step; the preview is
+  rebuilt with the playhead at the segment's new start (start edge) or 1/60 s before its end (end edge).
+- Right-click a kept segment → selects it and shows: `Speed ▸` (`1× (normal)`, `1.5×`, `2×`, `4×`, current
+  one checked) · `Mute Segment` (checked when muted; disabled while Mute audio is on) · separator ·
+  `Split at Playhead ⌘B` (enabled like the Split button) · `Delete Segment ⌫` (disabled with one segment).
+
+**Edits** (each is one undo step; a refused edit beeps and changes nothing):
+| Edit | Trigger | Rule | Selection after | Playhead after |
+|---|---|---|---|---|
+| Split | S, ⌘B, Split, menu | splits the segment under the playhead into two with the same speed + mute; refused within 0.1 s of a segment edge | the **left** half (so "split, move, split, ⌫" removes the middle) | unchanged |
+| Delete | ⌫ / Delete key, button, menu | removes the selected segment; the last one can't be removed | the segment now at that position (or the new last) | where the deleted segment began |
+| In point | I | drops everything before the playhead | first segment | 0 |
+| Out point | O | drops everything after the playhead | last segment | 1/60 s before the end |
+| Speed | segmented control, menu | 1× → faster also **mutes** the segment; back to 1× **unmutes**; changing between faster speeds keeps the current mute | same | same source frame |
+| Mute segment | checkbox, menu | toggles the selected segment's audio | same | unchanged |
+| Undo / Redo | ⌘Z / ⇧⌘Z, buttons | whole cut-list states | clamped to the segment count | same source frame if still kept, else 0 |
+
+Other keys: **Space** play / pause (restarts from 0 when at the end); **← / →** pause and step one frame.
+Plain-key shortcuts are ignored while a ⌘/⌥/⌃ modifier is held and while exporting. The whole-file
+**Mute audio** box mutes the preview immediately and makes the export drop all audio.
+
+**Exports** (all controls, Cancel and the close box are disabled while one runs; failures leave the
+original untouched and show the note above):
+- **Save as Copy** → `<stem> (trimmed).mp4` next to the original (`TrimmedFileName`, " 2", " 3"… on
+  collision). The window closes; the copy gets its own Quick Access card + History entry; the original's
+  card comes back (Part 0).
+- **Export as GIF** → renders the edit (always without sound) to a temporary MP4, converts it with the
+  existing GIF exporter (10 fps, ≤ 960 px wide, loops) to `<stem> (edited).gif` next to the original
+  (uniquified). The window **stays open**; the kept label shows `GIF saved ✓ <name>`; the GIF gets a card +
+  History entry. Progress: first half = render, second half = GIF frames.
+- **Replace Original** → export to a temp file on the same volume, then an atomic swap. The window stays
+  open and reloads the new file: a fresh single-segment cut list (undo history cleared), Mute audio
+  unticked, Cancel reads **Done**, note `Edited ✓ original replaced · <new length>`; a HUD says
+  `Recording edited`.
+- **Passthrough or re-encode:** passthrough (lossless, instant) when the cut list is one contiguous
+  stretch at 1× with a single mute state — a plain start/end trim (adjacent split pieces count as
+  contiguous; all-muted = whole-file mute). Everything else — a middle cut, any speed change, mixed
+  per-segment mute — is **re-encoded**: H.264 highest quality at the source's frame rate (clamped 30…60
+  fps), AAC audio, sped audio time-stretched with its pitch kept. A recording with two audio tracks
+  (system audio + microphone) keeps both as separate tracks in either path (probed), exactly like the
+  original recording.
+- **Recording change:** new recordings get a keyframe at least every 0.5 s (was the encoder default),
+  so passthrough trims start close to the chosen frame.
+
+**Timing (probe, M3 MacBook, macOS 26.6, other builds running):** 60 s 1080p60 source, keep
+[0,20] [25,45] [50,60] (50 s): passthrough trim 0.06 s; re-encode **14.3 s** (PSNR 56–60 dB vs the source
+— visually lossless); same with the middle segment at 2× (40 s out) 14.2 s.
+
+**macOS-specific findings** (why the mac code looks the way it does — not needed on Windows, but explains
+the rules): `AVAssetExportPresetHighestQuality` does **not** re-encode a plain cut composition — it copies
+the samples and hides the extra frames behind an MP4 edit list (3 edit-list entries, 0.07 s), which only
+edit-list-aware players honour, so the mac export always renders through a video composition to force a
+real re-encode; and a sped-up segment followed by the next stretch of the same source fails to export
+(AVFoundation error -16364) without one.
+
+### Data
+
+No new persisted settings. `RecordingConfig.keyFrameInterval = 0.5` (seconds) is a constant, not a user
+setting.
+
+### Pure logic to port 1:1 (with the macOS tests)
+
+`CutList` (`Packages/RecordingKit/Sources/RecordingKit/CutList.swift`), a value type:
+- `duration` (source seconds); `segments: [CutSegment]` — never empty, ordered, non-overlapping; a
+  segment = `start`, `end` (source seconds), `speed` (one of `speeds = [1, 1.5, 2, 4]`), `muted`.
+  `length = end − start`; `outputLength = length / speed`. `minimumSegment = 0.1`; comparisons use ε = 1e-6.
+- `init(duration:)` → one segment `[0, duration]`; `init(range:duration:)` → the single-segment case of a
+  plain trim (`TrimRange`).
+- `keptDuration` = Σ outputLength. `outputStart(of: i)` = Σ outputLength before i.
+  `segmentIndex(atOutput: t)` — a boundary belongs to the later segment, the very end to the last.
+  `sourceTime(forOutput:)`, `segmentIndex(containingSource:)` (shared boundary → later segment; the
+  last segment's end is inclusive), `outputTime(forSource:)` (nil inside a cut).
+- `passthrough` → `(range, muted)` when all segments are adjacent (|a.end − b.start| ≤ ε), all at 1×, all
+  with the same mute; else nil.
+- Edits return false and change nothing when they can't apply: `split(atSource:)` (needs t within
+  [start + 0.1, end − 0.1] of a segment; both halves keep speed + mute) · `remove(at:)` (not the last
+  segment) · `setStart(_:of:)` clamped to [previous end or 0, own end − 0.1] · `setEnd(_:of:)` clamped
+  to [own start + 0.1, next start or duration] · `setSpeed(_:of:)` (only listed speeds; 1× → faster sets
+  muted; → 1× clears it) · `setMuted(_:of:)` · `trimBefore(source:)` (in point: drop segments ending ≤ t,
+  clip the first to start at t but keep ≥ 0.1 s) · `trimAfter(source:)` (out point, mirrored).
+- Timeline: `timeline` = items in order — a `removed` item for every gap > ε (including before the first
+  and after the last segment) with display length = its source length, and a `kept(i)` item with display
+  length = the segment's output length. `timelineLength`, `timelinePosition(forOutput:)`,
+  `outputTime(forTimelinePosition:)` (inside a cut → the next kept segment's output start, or
+  `keptDuration` if none), `sourceTime(forTimelinePosition:)` (cuts 1:1, kept at × speed — for the filmstrip).
+- `CutHistory`: `current`, undo and redo stacks of whole `CutList` values. `commit(list)` pushes the
+  current value only if `list` differs and clears redo; `apply(edit)` = edit a copy, commit on success;
+  `undo()` / `redo()` return false when empty. An edge drag edits a working copy and commits once on release.
+
+Test cases (`Tests/RecordingKitTests/CutListTests.swift`; re-create them): whole recording is one segment
+(kept 45, passthrough [0,45] unmuted) · `TrimRange` is the single-segment case · split at 3 then 7 of 10 →
+[0,3][3,7][7,10] · split keeps speed / mute · split refuses 0.05, 9.95, 0 and an existing split point ·
+split inside a cut fails · remove the middle → kept 7, can't remove index 5 or the last segment · kept
+duration with speeds ([0,2] + [4,8] at 2× = 4; 8 s at 4× = 2; at 1.5× = 5.333…) · speed mutes by default
+and an explicit unmute survives 2×→4×, back to 1× unmutes, 3× is refused, no-op returns false · edge drags
+clamp to neighbours and the minimum ([0,3][6,10]: start 4 ok, start 1 → 3, end 9.99 refused, end 0 → 0.1,
+start 99 → 9.9) · in/out ([0,3][3,6][6,10]: in 4 → [4,6][6,10]; out 8 → [4,6][6,8]; out 6 → [4,6]; in at
+9.99 of a fresh list → start 9.9) · output/source mapping on [0,2] + [4,8]@2× (output 1 → 1, 3 → 6, 4 → 8;
+source 6 → output 3, source 3 → nil; output 2 → segment 1) · passthrough: a split alone → [0,10]; both
+muted → muted; mixed mute, a middle cut, 1.5× → nil; start 1 / end 9 → [1,9] · timeline of [0,2] + [4,8]@2×
+of 10 s = kept(0) 0–2, removed 2–4, kept(1) display 4–6, removed display 6–8 (length 8); output 3 ↔
+timeline 5; a click at 3 → output 2, at 7.5 → output 4; source at timeline 3 → 3, at 5 → 6 · history:
+split, remove, refused remove adds no step, undo ×2, redo, a committed drag is one step and clears redo.
+
+`TrimmedFileName` gained a suffix and an extension: `name(forOriginal:suffix:ext:)` /
+`unique(forOriginal:suffix:ext:exists:)`, suffix `trimmed` (default) or `edited`; an existing
+` (trimmed)` or ` (edited)` suffix, with or without ` N`, is stripped first. Tests:
+`Recording 2026-09-24 at 10.00.00.mp4` → `… (edited).gif`; `Rec (trimmed).mp4` and `Rec (trimmed) 2.mp4` →
+`Rec (edited).gif`; `Rec (edited).mp4` → `Rec (trimmed).mp4`; with `Rec (edited).gif` taken →
+`Rec (edited) 2.gif` (plus the existing `(trimmed)` cases).
+
+AV tests on a generated MP4 (10 fps, grey level 8·i in frame i, optional 440 Hz tone): a 3-segment cut
+([0,1] [1.5,2] [2.5,3]) is 2 s with video + audio and each sampled output frame matches the source frame
+it maps to (grey level within 3) even off-keyframe; [0,2] at 2× + [2,3] is 2 s with audio and frame-exact;
+a muted first segment is silent (RMS < 0.01) while the rest keeps its tone (> 0.1); a start/end trim plus
+a split stays passthrough (1.5 s, audio kept); GIF of the 3-segment cut ≈ 20 frames, named
+`Recording (edited).gif` then `Recording (edited) 2.gif`, no temp file left; Replace Original with cuts
+leaves only the original, now 2 s; a failed export leaves the original's bytes unchanged.
+
+### Where it goes in the port
+
+- Pure: `windows/src/BetterScreenshot.Recording/CutList.cs` (+ `CutHistory`), `TrimRange.cs`,
+  `TrimmedFileName.cs`, and `FfmpegArgs.BuildCutExport(...)` / `BuildPassthroughTrim(...)` next to
+  `BuildGifConversion` in `windows/src/BetterScreenshot.Recording/FfmpegArgs.cs` (unit-test the strings).
+- UI: new `windows/src/BetterScreenshot.App/Recording/VideoEditorWindow.xaml(.cs)` + a custom-drawn
+  `CutTimeline` `FrameworkElement` (OnRender) in the same folder; dark theme from `Resources/Theme.xaml`,
+  the card from `Controls/DarkSection.cs`-style chrome.
+- Entry points: `QuickAccessActions.OnTrim` (`Overlays/QuickAccessTypes.cs`) + a Trim button on MP4
+  recording cards (`Overlays/QuickAccessWindow.xaml`), wired in `Capture/CaptureCoordinator.ShowRecordingCard`
+  with the Part 0 `restoreCard`; an `Edit Video…` command in `History/HistoryWindow.xaml(.cs)`. Copy / GIF
+  results go through `CaptureCoordinator.OnRecordingFinished(path, thumbnail)`.
+- Running ffmpeg: `windows/src/BetterScreenshot.Platform/FfmpegRunner.RunAsync` (add a progress callback
+  that parses `-progress pipe:1` output); GIF via `Recording/GifExporter.ConvertAsync` (it deletes its
+  source MP4 on success — fine for the temp render).
+
+### Platform notes (ffmpeg instead of AVFoundation)
+
+- **Passthrough trim** (plain start/end, 1×): `ffmpeg -y -ss <start> -to <end> -i in.mp4 -c copy
+  -avoid_negative_ts make_zero -movflags +faststart out.mp4` (add `-an` for Mute audio). `-ss` before `-i`
+  with `-c copy` starts on the keyframe at or before `start` — hence the 0.5 s keyframes below.
+- **Re-encode** (cuts / speed / per-segment mute) — one `filter_complex`, one segment per `trim`/`atrim`
+  pair, speed via `setpts` + `atempo` (pitch-preserving; chain `atempo=2,atempo=2` for 4× on ffmpeg builds
+  that cap one `atempo` at 2.0), mute via `volume=0` (keeps the audio stream continuous), then `concat`.
+  Example — keep [0,20], [25,45] at 2× (auto-muted), [50,60]:
+  ```
+  ffmpeg -y -i in.mp4 -filter_complex "
+   [0:v]trim=start=0:end=20,setpts=PTS-STARTPTS[v0];
+   [0:a]atrim=start=0:end=20,asetpts=PTS-STARTPTS[a0];
+   [0:v]trim=start=25:end=45,setpts=(PTS-STARTPTS)/2[v1];
+   [0:a]atrim=start=25:end=45,asetpts=PTS-STARTPTS,atempo=2,volume=0[a1];
+   [0:v]trim=start=50:end=60,setpts=PTS-STARTPTS[v2];
+   [0:a]atrim=start=50:end=60,asetpts=PTS-STARTPTS[a2];
+   [v0][a0][v1][a1][v2][a2]concat=n=3:v=1:a=1[v][a]"
+   -map "[v]" -map "[a]" -r <source fps, 30…60> -c:v h264_nvenc -preset p5 -cq 19 -pix_fmt yuv420p
+   -c:a aac -b:a 128k -movflags +faststart -progress pipe:1 -nostats out.mp4
+  ```
+  Use `h264_nvenc` when available (the owner's PC has an RTX 3060 Ti), else `libx264 -preset veryfast
+  -crf 18`. Whole-file Mute audio: no `atrim` chains, `concat=n=N:v=1:a=0`, `-an`. Two audio tracks
+  (system + mic — the port records them as separate dshow tracks too): run the `atrim…` chain on
+  `[0:a:0]` and `[0:a:1]` for every segment, use `concat=n=N:v=1:a=2`, and `-map` both audio outputs so
+  the result keeps two tracks like the mac export. The progress fraction =
+  `out_time_ms / (keptDuration × 1e6)`.
+- **Export as GIF**: render the edit as above (with `-an`) to a temp MP4, then
+  `FfmpegArgs.BuildGifConversion(temp, "<stem> (edited).gif")`.
+- **Keyframes while recording**: add `-g <fps / 2>` (or `-force_key_frames "expr:gte(t,n_forced*0.5)"`)
+  to the H.264 output in `FfmpegArgs.BuildRecording`.
+- **Preview**: WPF's `MediaElement` can't play a cut list; play the source and skip through the list
+  (at a segment's end jump to the next segment's start; set `SpeedRatio` per segment; set `IsMuted` for
+  muted segments), and step frames with pause + position ± 1/fps. For the edge-drag preview just seek to
+  the edge time. Thumbnails: one ffmpeg pass `-vf "fps=<count/duration>,scale=-2:100"` to numbered PNGs
+  in a temp folder, or `-ss t -frames:v 1` per tile.

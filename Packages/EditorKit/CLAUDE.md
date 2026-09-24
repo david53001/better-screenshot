@@ -13,6 +13,14 @@ renderer. Imported by the `App/` target (capture flow opens the editor).
   `TextFont.swift` (font family/bold/italic → `NSFont`; unknown family falls back to system).
 - Text: `TextAnnotation.wrapWidth` = text-box width (nil = free label). The canvas's inline editor is
   an `NSTextView` laid out with the same attributes as the committed annotation.
+- Text v2 (v3 Part 2): `AnnotationStyle.textBackgroundMode` (none/solid/auto — the old Bool
+  `textBackground` only decodes), box colour/padding/corners, underline/strike, outline, shadow.
+  `TextChip` = box geometry (`insets`: padding × padding/2) + Auto colour; `TextStylePreset` = the
+  Styles chips; `TextScale` = pure corner-drag scaling (the canvas maps handles 0/2/5/7 onto its
+  corners and always scales the mouse-down snapshot). A text's `boundingBox()` **includes the box
+  padding**, so side-handle maths subtracts it. While typing, the canvas draws the box + outline
+  behind the `NSTextView` (`drawDecorations()`). The shadow maps its offset through the CTM with a
+  deliberate sign flip — `canvasShadowFallsDownwardToo` guards it.
 - Window: `EditorWindowController.swift` — window, tool pill, bottom bar (hint line, dims, zoom, actions),
   title-bar buttons, key handling (tool shortcuts, Esc, zoom keys, ⌥⌘I) and wiring. Keep it thin.
 - Side panel (v3 Part 1): `InspectorModel.swift` (pure: which `InspectorSection`s show for tool +

@@ -4,4 +4,5 @@ import TestKit
 // `[TestCase]` array to this concatenation.
 runTests("EditorKitTests",
     rgbaColorTests + editorDocumentTests + shapeAnnotationTests + arrowGeometryTests + textAnnotationTests + counterAnnotationTests + redactorTests + documentRendererTests + cropTests + annotationStyleCodableTests + editorBoundsClampTests + textChipTests + textFontTests + opacityTests + inspectorModelTests + zoomMathTests + canvasStyleEditTests + redactionTests + highlighterTests + spotlightTests
+    + textScaleTests + textStyleTests + textRenderTests
 )

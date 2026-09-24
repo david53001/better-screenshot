@@ -28,6 +28,11 @@ public final class EditorCanvasView: NSView {
     private var activeHandleIndex: Int? = nil
     private var handleOriginalFrame: CGRect = .zero
     private let handleSize: CGFloat = 8
+    /// A text's corner handles scale the whole text (`TextScale`); its side handles set the box width.
+    private static let textCornerHandles: [Int: TextScale.Corner] = [0: .topLeft, 2: .topRight,
+                                                                     5: .bottomLeft, 7: .bottomRight]
+    /// The text as it was when a corner drag began — every drag tick scales from it.
+    private var scaleOriginal: TextAnnotation?
 
     // MARK: - Undo / redo history (document snapshots)
     // EditorDocument is a value type, so a snapshot is just a copy of the struct.
@@ -120,10 +125,10 @@ public final class EditorCanvasView: NSView {
         ]
     }
 
-    /// Handle indices the sole selection offers: text only resizes its box width (ML/MR).
+    /// Handle indices the sole selection offers: text has corners (scale) + ML/MR (box width).
     private var activeHandleIndices: [Int] {
         guard let id = soleSelectedID, let i = document.index(of: id) else { return [] }
-        return document.annotations[i] is TextAnnotation ? [3, 4] : Array(0..<8)
+        return document.annotations[i] is TextAnnotation ? [0, 2, 3, 4, 5, 7] : Array(0..<8)
     }
 
     /// Returns the index (0-7) of the handle hit at viewPoint, or nil.
@@ -195,10 +200,13 @@ public final class EditorCanvasView: NSView {
             var c = s; c.frame = newImageFrame; updated = c
         case let t as TextAnnotation:
             // Side handles set the box width (text reflows); height follows the text.
+            // The frame includes the padding of the box behind the text, if any.
             var c = t
-            c.wrapWidth = max(newImageFrame.width, t.style.fontSize)
-            c.origin.x = newImageFrame.width >= t.style.fontSize
-                ? newImageFrame.minX : newImageFrame.maxX - t.style.fontSize
+            let pad = t.backgroundInsets.width
+            let width = newImageFrame.width - 2 * pad
+            c.wrapWidth = max(width, t.style.fontSize)
+            c.origin.x = width >= t.style.fontSize
+                ? newImageFrame.minX + pad : newImageFrame.maxX - pad - t.style.fontSize
             updated = c
         default:
             updated = nil
@@ -227,6 +235,12 @@ public final class EditorCanvasView: NSView {
         toView.concat()
         AnnotationPainter.draw(document.annotations.filter { $0.id != editingID } + [inProgress].compactMap { $0 },
                                imageSize: document.size)
+        // The live text's box / outline, behind the editor's NSTextView (which draws the letters),
+        // laid out at the editor's width so it matches what the text view shows.
+        if let field = activeField {
+            TextAnnotation(text: field.string, origin: textImageOrigin, style: style,
+                           wrapWidth: field.frame.width * scale).drawDecorations()
+        }
         NSGraphicsContext.restoreGraphicsState()
 
         // Live marquee for region tools (blur/pixelate/crop) that have no shape preview.
@@ -293,9 +307,7 @@ public final class EditorCanvasView: NSView {
             // Resize handle (single selection) first, then an object hit, then
             // an empty-space drag starts a rubber-band marquee.
             if let vr = selectedViewRect(), let hi = hitHandle(at: viewPt, viewRect: vr) {
-                activeHandleIndex = hi
-                handleOriginalFrame = document.annotations[document.index(of: soleSelectedID!)!].boundingBox()
-                pendingDragSnapshot = document; didDragMutate = false
+                beginHandleDrag(hi)
             } else if let hit = document.topmostHit(at: p) {
                 // Clicking an object outside the current selection selects just
                 // it; clicking one already selected keeps the group (drag = move).
@@ -309,9 +321,7 @@ public final class EditorCanvasView: NSView {
         case .text:
             // Resize handles of a selected text box still work under the Text tool.
             if let vr = selectedViewRect(), let hi = hitHandle(at: viewPt, viewRect: vr) {
-                activeHandleIndex = hi
-                handleOriginalFrame = document.annotations[document.index(of: soleSelectedID!)!].boundingBox()
-                pendingDragSnapshot = document; didDragMutate = false
+                beginHandleDrag(hi)
             } else if let hit = document.topmostHit(at: p),
                       document.annotations[document.index(of: hit)!] is TextAnnotation {
                 dragStartImagePoint = nil
@@ -336,10 +346,7 @@ public final class EditorCanvasView: NSView {
         switch tool {
         case .select:
             if let hi = activeHandleIndex {
-                // Resize via handle.
-                let delta = CGVector(dx: p.x - start.x, dy: p.y - start.y)
-                let newFrame = resizedFrame(original: handleOriginalFrame, handleIdx: hi, delta: delta)
-                replaceFrame(newFrame); didDragMutate = true
+                dragHandle(hi, by: CGVector(dx: p.x - start.x, dy: p.y - start.y))
             } else if marqueeRect != nil {
                 marqueeRect = rect(start, p)
             } else if !selectedIDs.isEmpty {
@@ -379,9 +386,7 @@ public final class EditorCanvasView: NSView {
             regionMarquee = rect(start, p)
         case .text:
             if let hi = activeHandleIndex {
-                let delta = CGVector(dx: p.x - start.x, dy: p.y - start.y)
-                replaceFrame(resizedFrame(original: handleOriginalFrame, handleIdx: hi, delta: delta))
-                didDragMutate = true
+                dragHandle(hi, by: CGVector(dx: p.x - start.x, dy: p.y - start.y))
             } else if textPressPending {
                 regionMarquee = rect(start, p)
             }
@@ -400,6 +405,7 @@ public final class EditorCanvasView: NSView {
                 handleOriginalFrame = document.annotations[i].boundingBox()
             }
             activeHandleIndex = nil
+            scaleOriginal = nil
         } else {
             switch tool {
             case .select:
@@ -448,6 +454,27 @@ public final class EditorCanvasView: NSView {
 
     private func rect(_ a: CGPoint, _ b: CGPoint) -> CGRect {
         CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(a.x - b.x), height: abs(a.y - b.y))
+    }
+
+    /// Starts dragging resize handle `hi` of the sole selection (one undo step, on mouseUp).
+    private func beginHandleDrag(_ hi: Int) {
+        guard let id = soleSelectedID, let i = document.index(of: id) else { return }
+        activeHandleIndex = hi
+        handleOriginalFrame = document.annotations[i].boundingBox()
+        scaleOriginal = Self.textCornerHandles[hi] == nil ? nil : document.annotations[i] as? TextAnnotation
+        pendingDragSnapshot = document; didDragMutate = false
+    }
+
+    /// A handle drag of `drag` image px since mouseDown: a text's corner scales the whole text
+    /// (the panel's size control follows live); any other handle resizes the frame.
+    private func dragHandle(_ hi: Int, by drag: CGVector) {
+        if let original = scaleOriginal, let corner = Self.textCornerHandles[hi] {
+            document.replace(id: original.id, with: original.scaled(dragging: corner, by: drag))
+            onStateChange?()
+        } else {
+            replaceFrame(resizedFrame(original: handleOriginalFrame, handleIdx: hi, delta: drag))
+        }
+        didDragMutate = true
     }
 
     // MARK: - Keyboard (undo/redo, delete, z-order)
@@ -618,6 +645,7 @@ public final class EditorCanvasView: NSView {
         let used = lm.usedRect(for: tc)
         let font = editorAttributes[.font] as? NSFont ?? .systemFont(ofSize: 12)
         field.setFrameSize(NSSize(width: width, height: max(ceil(used.height), ceil(lm.defaultLineHeight(for: font)))))
+        needsDisplay = true   // the box / outline behind the editor follows it
     }
 
     /// Commits any in-progress text — call before exporting so typed text isn't lost.

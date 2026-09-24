@@ -18,10 +18,12 @@ public final class CameraBubbleController {
         }
     }
 
-    /// Shows the bubble near the bottom-right of `rect` (screen coords, points).
-    public func show(near rect: CGRect, on screen: NSScreen, diameter: CGFloat) {
+    /// Shows the bubble near the bottom-right of `rect` (screen coords, points), fed by
+    /// `deviceID` (`uniqueID`), or the default camera when that one isn't connected.
+    public func show(near rect: CGRect, on screen: NSScreen, diameter: CGFloat,
+                     deviceID: String? = nil) {
         guard panel == nil else { return }
-        guard let device = AVCaptureDevice.default(for: .video),
+        guard let device = AVCaptureDevice.connected(deviceID, else: .video),
               let input = try? AVCaptureDeviceInput(device: device) else { return }
         let session = AVCaptureSession()
         session.sessionPreset = .medium
@@ -66,4 +68,24 @@ public final class CameraBubbleController {
         panel?.orderOut(nil)
         panel = nil
     }
+
+    /// Whether the bubble exists (shown or hidden in place) / is on screen now.
+    public var exists: Bool { panel != nil }
+    public var isVisible: Bool { panel?.isVisible ?? false }
+
+    /// Live-pill show/hide: hides or re-shows the bubble where the user dragged
+    /// it. The camera stops while hidden so its light goes off. No-op until `show`.
+    public func setHidden(_ hidden: Bool) {
+        guard let panel, let session else { return }
+        if hidden {
+            panel.orderOut(nil)
+            Self.sessionQueue.async { session.stopRunning() }
+        } else {
+            Self.sessionQueue.async { session.startRunning() }
+            panel.orderFrontRegardless()
+        }
+    }
+
+    /// Serial, so a quick hide → show can't run startRunning before stopRunning.
+    private static let sessionQueue = DispatchQueue(label: "betterscreenshot.camera.session")
 }

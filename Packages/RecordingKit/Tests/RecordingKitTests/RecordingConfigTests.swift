@@ -26,6 +26,59 @@ let recordingConfigTests: [TestCase] = [
         t.equal(RecordingConfig(dictionary: ["countdownSeconds": "7"]).countdownSeconds, 0)
         t.equal(RecordingConfig(dictionary: ["countdownSeconds": "10"]).countdownSeconds, 10)
     },
+    TestCase("sourceMenusDefaultsAndRoundTrip") { t in
+        let d = RecordingConfig.default
+        t.equal(d.systemAudioMode, .all)   // today's "system audio on"
+        t.isNil(d.microphoneDeviceID)      // nil = system default device
+        t.isNil(d.cameraDeviceID)
+        t.isTrue(d.showsCursor)
+        var c = d
+        c.systemAudioMode = .allExceptSelf
+        c.setMicrophone(.device("AirPods-1"))
+        c.setCamera(.device("Cam-2"))
+        c.showsCursor = false
+        t.equal(RecordingConfig(dictionary: c.dictionary), c)
+        c.systemAudioMode = .off
+        t.equal(RecordingConfig(dictionary: c.dictionary), c)
+        t.equal(RecordingConfig(dictionary: ["showsCursor": "false"]).showsCursor, false)
+        t.equal(RecordingConfig(dictionary: ["microphoneDeviceID": ""]).microphoneDeviceID, nil)
+    },
+    TestCase("legacySettingsMapOntoTheMenus") { t in
+        // Pre-v3 settings only have the Bool toggles.
+        t.equal(RecordingConfig(dictionary: ["systemAudio": "true"]).systemAudioMode, .all)
+        t.equal(RecordingConfig(dictionary: ["systemAudio": "false"]).systemAudioMode, .off)
+        let legacyMic = RecordingConfig(dictionary: ["microphone": "true", "camera": "true"])
+        t.isTrue(legacyMic.microphone)
+        t.isNil(legacyMic.microphoneDeviceID)   // → the default device (DeviceList.resolvedID)
+        t.isTrue(legacyMic.camera)
+        t.isNil(legacyMic.cameraDeviceID)
+        // The new key wins over the old one; unknown values fall back to the Bool.
+        t.equal(RecordingConfig(dictionary: ["systemAudio": "true", "systemAudioMode": "excludeSelf"])
+                    .systemAudioMode, .allExceptSelf)
+        t.equal(RecordingConfig(dictionary: ["systemAudio": "false", "systemAudioMode": "bogus"])
+                    .systemAudioMode, .off)
+        // The old Bool keys are still written, so an older build reads sensible values.
+        var c = RecordingConfig.default
+        c.systemAudioMode = .allExceptSelf
+        t.equal(c.dictionary["systemAudio"], "true")
+        c.systemAudioMode = .off
+        t.equal(c.dictionary["systemAudio"], "false")
+    },
+    TestCase("systemAudioBoolIsAViewOfTheMode") { t in
+        var c = RecordingConfig.default
+        c.systemAudioMode = .allExceptSelf
+        t.isTrue(c.systemAudio)
+        c.systemAudio = true                    // already on: keeps the chosen mode
+        t.equal(c.systemAudioMode, .allExceptSelf)
+        c.systemAudio = false
+        t.equal(c.systemAudioMode, .off)
+        c.systemAudio = true                    // off → on picks All apps
+        t.equal(c.systemAudioMode, .all)
+        t.isFalse(SystemAudioMode.all.excludesOwnAudio)
+        t.isTrue(SystemAudioMode.allExceptSelf.excludesOwnAudio)
+        t.equal(SystemAudioMode.allCases.map(\.title),
+                ["Off", "All apps", "All apps except BetterScreenshot"])
+    },
     TestCase("videoSettingsDerivation") { t in
         let s = RecordingConfig.default.videoSettings(width: 1920, height: 1080)
         t.equal(s[AVKey.codec] as? String, "avc1")
@@ -35,6 +88,8 @@ let recordingConfigTests: [TestCase] = [
         let bitrate = props?[AVKey.bitRate] as? Int
         // 1920*1080*30*0.12 ≈ 7.46 Mbps — inside the 2–40 Mbps clamp.
         t.equal(bitrate, Int(1920.0 * 1080.0 * 30.0 * 0.12))
+        // A keyframe every 0.5 s so lossless trims land close to the chosen frame.
+        t.equal(props?[AVKey.maxKeyFrameIntervalDuration] as? Double, 0.5)
         // Tiny recordings clamp up to 2 Mbps.
         let tiny = RecordingConfig.default.videoSettings(width: 100, height: 100)
         let tinyRate = (tiny[AVKey.compression] as? [String: Any])?[AVKey.bitRate] as? Int

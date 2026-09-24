@@ -14,9 +14,9 @@ let inspectorModelTests: [TestCase] = [
         t.equal(InspectorModel.content(tool: .filledRectangle, selection: []).sections, [.colour, .opacity])
         t.equal(InspectorModel.content(tool: .counter, selection: []).sections, [.colour, .opacity])
     },
-    TestCase("textShowsColourFontBackgroundOpacity") { t in
+    TestCase("textShowsStylesColourFontBackgroundEffectsOpacity") { t in
         t.equal(InspectorModel.content(tool: .text, selection: []).sections,
-                [.colour, .font, .background, .opacity])
+                [.styles, .colour, .font, .background, .effects, .opacity])
     },
     TestCase("redactionAndCropTools") { t in
         t.equal(InspectorModel.content(tool: .blur, selection: []).sections, [.redaction, .strength])
@@ -38,7 +38,7 @@ let inspectorModelTests: [TestCase] = [
     TestCase("selectWithOneObjectShowsItsSectionsPlusArrange") { t in
         let c = InspectorModel.content(tool: .select, selection: [.text])
         t.equal(c.title, "Text")
-        t.equal(c.sections, [.colour, .font, .background, .opacity, .arrange])
+        t.equal(c.sections, [.styles, .colour, .font, .background, .effects, .opacity, .arrange])
         t.equal(InspectorModel.content(tool: .select, selection: [.blur]).sections, [.redaction, .strength, .arrange])
         t.equal(InspectorModel.content(tool: .select, selection: [.blackout]).title, "Black-out")
     },
@@ -98,6 +98,8 @@ let inspectorModelTests: [TestCase] = [
         t.isTrue(editing.contains("⇧↩"), "editing hint names the newline key")
         t.isTrue(InspectorModel.hint(tool: .select, selection: [.text], editingText: false)
                     .contains("double-click"))
+        t.isTrue(InspectorModel.hint(tool: .select, selection: [.text], editingText: false)
+                    .contains("corner"), "one text: says the corners resize it")
         t.isTrue(InspectorModel.hint(tool: .select, selection: [.arrow, .text], editingText: false)
                     .contains("together"))
     },

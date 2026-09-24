@@ -167,7 +167,8 @@ final class LabeledSliderRow: NSStackView {
     private let format: (Double) -> String
     var onChange: ((Double, Bool) -> Void)?
 
-    init(label: String?, range: ClosedRange<Double>, tooltip: String, format: @escaping (Double) -> String) {
+    init(label: String?, labelWidth: CGFloat = 44, range: ClosedRange<Double>, tooltip: String,
+         format: @escaping (Double) -> String) {
         slider = NSSlider(value: range.lowerBound, minValue: range.lowerBound,
                           maxValue: range.upperBound, target: nil, action: nil)
         self.format = format
@@ -188,7 +189,7 @@ final class LabeledSliderRow: NSStackView {
         if let label {
             let l = InspectorStyle.rowLabel(label)
             l.translatesAutoresizingMaskIntoConstraints = false
-            l.widthAnchor.constraint(equalToConstant: 44).isActive = true
+            l.widthAnchor.constraint(equalToConstant: labelWidth).isActive = true
             addArrangedSubview(l)
         }
         addArrangedSubview(slider)
@@ -207,6 +208,60 @@ final class LabeledSliderRow: NSStackView {
         let type = NSApp.currentEvent?.type
         let tracking = type == .leftMouseDown || type == .leftMouseDragged
         onChange?(sender.doubleValue, !tracking)
+    }
+}
+
+/// A one-click text style in the side panel's Styles section, drawn as a small preview of the
+/// look it applies (its box colour, font and text colour). The active look gets an accent ring.
+final class TextPresetChip: NSButton {
+    let preset: TextStylePreset
+    var isActivePreset = false { didSet { needsDisplay = true } }
+    private var hovering = false { didSet { needsDisplay = true } }
+    private var trackingArea: NSTrackingArea?
+
+    init(preset: TextStylePreset, target: AnyObject?, action: Selector) {
+        self.preset = preset
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+        isBordered = false
+        bezelStyle = .shadowlessSquare
+        focusRingType = .none
+        title = ""
+        toolTip = preset.tooltip
+        setAccessibilityLabel(preset.displayName)
+        self.target = target
+        self.action = action
+        heightAnchor.constraint(equalToConstant: 28).isActive = true
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let t = trackingArea { removeTrackingArea(t) }
+        let t = NSTrackingArea(rect: bounds,
+                               options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
+                               owner: self, userInfo: nil)
+        addTrackingArea(t); trackingArea = t
+    }
+    override func mouseEntered(with event: NSEvent) { hovering = true }
+    override func mouseExited(with event: NSEvent) { hovering = false }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let look = preset.look
+        let chip = NSBezierPath(roundedRect: bounds.insetBy(dx: 1.5, dy: 1.5), xRadius: 6, yRadius: 6)
+        (look.box?.color.nsColor ?? NSColor(white: 1, alpha: 0.06)).setFill()
+        chip.fill()
+        if hovering { NSColor(white: 1, alpha: 0.10).setFill(); chip.fill() }
+        (isActivePreset ? NSColor.controlAccentColor : NSColor(white: 1, alpha: 0.16)).setStroke()
+        chip.lineWidth = isActivePreset ? 2 : 1
+        chip.stroke()
+        // Title keeps the user's colour, so its preview uses the panel's text colour.
+        let text = NSAttributedString(string: preset.displayName, attributes: [
+            .font: TextFont.font(family: look.family, size: preset == .title ? 15 : 12,
+                                 bold: look.bold, italic: false),
+            .foregroundColor: look.color?.nsColor ?? NSColor(white: 1, alpha: 0.92)])
+        let size = text.size()
+        text.draw(at: NSPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2))
     }
 }
 
