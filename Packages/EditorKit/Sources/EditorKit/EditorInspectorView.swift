@@ -43,8 +43,11 @@ final class EditorInspectorView: NSVisualEffectView {
 
     // Kept across rebuilds: the colour panel stays attached to one well.
     private let colorWell = NSColorWell()
-    /// The front Recent entry came from the colour well's current drag session.
-    private var wellSessionInRecents = false
+    /// Text: the colour of the box behind the text, and of the outline.
+    private let backgroundWell = NSColorWell()
+    private let outlineWell = NSColorWell()
+    /// The well whose current colour-panel drag session put the front Recent entry there.
+    private var wellSession: NSColorWell?
 
     static let presetColors: [NSColor] = [
         NSColor(srgbRed: 1.00, green: 0.27, blue: 0.23, alpha: 1), // red
@@ -57,6 +60,9 @@ final class EditorInspectorView: NSVisualEffectView {
         NSColor.black,
     ]
     static let presetColorNames = ["Red", "Orange", "Yellow", "Green", "Blue", "Purple", "White", "Black"]
+    /// The box-behind-text palette: the same colours, with black at 80% (the default box).
+    static let backgroundPresetColors = Array(presetColors.dropLast()) + [NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.8)]
+    static let backgroundPresetColorNames = Array(presetColorNames.dropLast()) + ["Black (80%)"]
     /// Stroke presets (px) behind Thin / Medium / Thick.
     static let strokePresets: [CGFloat] = [2, 4, 7]
     static let strokeRange: ClosedRange<Double> = 1...24
@@ -97,14 +103,18 @@ final class EditorInspectorView: NSVisualEffectView {
         scroll.documentView = doc
         addSubview(scroll)
 
-        colorWell.target = self
-        colorWell.action = #selector(wellChanged(_:))
-        colorWell.toolTip = "Custom colour — opens the colour picker"
-        colorWell.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            colorWell.widthAnchor.constraint(equalToConstant: 44),
-            colorWell.heightAnchor.constraint(equalToConstant: 24),
-        ])
+        for (well, tip) in [(colorWell, "Custom colour — opens the colour picker"),
+                            (backgroundWell, "Custom box colour — opens the colour picker"),
+                            (outlineWell, "Outline colour — picking one turns the outline on")] {
+            well.target = self
+            well.action = #selector(wellChanged(_:))
+            well.toolTip = tip
+            well.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                well.widthAnchor.constraint(equalToConstant: 44),
+                well.heightAnchor.constraint(equalToConstant: 24),
+            ])
+        }
 
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: Self.width),
@@ -150,7 +160,7 @@ final class EditorInspectorView: NSVisualEffectView {
             }
         }
         refreshers.removeAll()
-        wellSessionInRecents = false
+        wellSession = nil
 
         for (i, section) in sections.enumerated() {
             if i > 0 { addFullWidth(InspectorStyle.hairline(), inset: 16) }
@@ -176,10 +186,12 @@ final class EditorInspectorView: NSVisualEffectView {
     /// The rows of one section (each spans the content width).
     private func makeSection(_ section: InspectorSection) -> [NSView] {
         switch section {
+        case .styles: return makeStyleRows()
         case .colour: return makeColourRows()
         case .stroke: return makeStrokeRows()
         case .font: return makeFontRows()
         case .background: return makeBackgroundRows()
+        case .effects: return makeEffectsRows()
         case .redaction: return makeRedactionRows()
         case .opacity: return makeOpacityRows()
         case .arrange: return makeArrangeRows()
@@ -189,33 +201,43 @@ final class EditorInspectorView: NSVisualEffectView {
 
     // MARK: Colour — presets, recents, custom well + eyedropper
 
-    private func makeColourRows() -> [NSView] {
-        let presets = zip(Self.presetColors, Self.presetColorNames).map { color, name -> SwatchButton in
+    /// What a set of colour rows edits; stored in the swatches' and eyedropper's `tag`.
+    private enum ColourTarget: Int { case stroke, textBackground }
+
+    private func makeColourRows(_ target: ColourTarget = .stroke) -> [NSView] {
+        let (palette, names) = target == .stroke ? (Self.presetColors, Self.presetColorNames)
+                                                 : (Self.backgroundPresetColors, Self.backgroundPresetColorNames)
+        let presets = zip(palette, names).map { color, name -> SwatchButton in
             let b = SwatchButton(color: color, target: self, action: #selector(swatchClicked(_:)))
             b.toolTip = name
+            b.tag = target.rawValue
             return b
         }
         let presetRow = InspectorStyle.row(presets)
         presetRow.distribution = .equalSpacing
 
-        let recentButtons = (0..<RecentColors.capacity).map { _ in
-            SwatchButton(color: .clear, target: self, action: #selector(swatchClicked(_:)))
+        let recentButtons = (0..<RecentColors.capacity).map { _ -> SwatchButton in
+            let b = SwatchButton(color: .clear, target: self, action: #selector(swatchClicked(_:)))
+            b.tag = target.rawValue
+            return b
         }
         let recentLabel = InspectorStyle.caption("Recent")
         recentLabel.translatesAutoresizingMaskIntoConstraints = false
         recentLabel.widthAnchor.constraint(equalToConstant: 48).isActive = true
         let recentRow = InspectorStyle.row([recentLabel] + recentButtons, spacing: 6, fill: true)
 
-        let pick = NSButton(title: "Pick from Screen", target: self, action: #selector(eyedropper))
+        let pick = NSButton(title: "Pick from Screen", target: self, action: #selector(eyedropper(_:)))
         pick.image = NSImage(systemSymbolName: "eyedropper", accessibilityDescription: "Eyedropper")
         pick.imagePosition = .imageLeading
         pick.bezelStyle = .rounded
         pick.controlSize = .small
+        pick.tag = target.rawValue
         pick.toolTip = "Eyedropper — click anywhere on screen to use that colour"
-        let customRow = InspectorStyle.row([colorWell, pick], fill: true)
+        let well = target == .stroke ? colorWell : backgroundWell
+        let customRow = InspectorStyle.row([well, pick], fill: true)
 
         refreshers.append { [unowned self] in
-            let current = style.strokeColor
+            let current = target == .stroke ? style.strokeColor : style.textBackgroundColor
             for b in presets { b.isSelectedSwatch = RecentColors.same(RGBAColor(b.swatchColor), current) }
             let colors = recents.colors
             recentRow.isHidden = colors.isEmpty
@@ -226,42 +248,56 @@ final class EditorInspectorView: NSVisualEffectView {
                 b.toolTip = "Recent colour"
                 b.isSelectedSwatch = RecentColors.same(colors[i], current)
             }
-            if !RecentColors.same(RGBAColor(colorWell.color), current) { colorWell.color = current.nsColor }
+            if !RecentColors.same(RGBAColor(well.color), current) { well.color = current.nsColor }
         }
         return [presetRow, recentRow, customRow]
     }
 
-    private func colourEdit(_ c: RGBAColor) -> StyleEdit {
-        { s in
-            s.strokeColor = c
-            s.fillColor = RGBAColor(r: c.r, g: c.g, b: c.b, a: 0.25)
+    private func colourEdit(_ c: RGBAColor, _ target: ColourTarget = .stroke) -> StyleEdit {
+        switch target {
+        case .stroke:
+            return { s in
+                s.strokeColor = c
+                s.fillColor = RGBAColor(r: c.r, g: c.g, b: c.b, a: 0.25)
+            }
+        case .textBackground:
+            return { $0.textBackgroundColor = c }
         }
     }
 
     @objc private func swatchClicked(_ sender: SwatchButton) {
         let c = RGBAColor(sender.swatchColor)
-        wellSessionInRecents = false
+        wellSession = nil
         // A recent colour moves to the front; presets are always on show, so they aren't recorded.
         if recents.colors.contains(where: { RecentColors.same($0, c) }) { remember(c, replacingFront: false) }
-        onStyleEdit?(colourEdit(c), nil)
+        onStyleEdit?(colourEdit(c, ColourTarget(rawValue: sender.tag) ?? .stroke), nil)
     }
 
+    /// Any of the three wells: every colour it picks is a custom colour, so it goes into Recent
+    /// (one entry per colour-panel session), and one session is one undo step.
     @objc private func wellChanged(_ sender: NSColorWell) {
         let c = RGBAColor(sender.color)
-        remember(c, replacingFront: wellSessionInRecents)
-        wellSessionInRecents = true
-        onStyleEdit?(colourEdit(c), "colourWell")
+        remember(c, replacingFront: wellSession === sender)
+        wellSession = sender
+        if sender === backgroundWell {
+            onStyleEdit?(colourEdit(c, .textBackground), "backgroundWell")
+        } else if sender === outlineWell {
+            onStyleEdit?({ $0.textOutlineColor = c; $0.textOutline = true }, "outlineWell")
+        } else {
+            onStyleEdit?(colourEdit(c), "colourWell")
+        }
     }
 
-    @objc private func eyedropper() {
+    @objc private func eyedropper(_ sender: NSButton) {
+        let target = ColourTarget(rawValue: sender.tag) ?? .stroke
         NSColorSampler().show { [weak self] picked in
             guard let picked else { return }   // nil = the user pressed Esc
             DispatchQueue.main.async {
                 guard let self else { return }
                 let c = RGBAColor(picked)
-                self.wellSessionInRecents = false
+                self.wellSession = nil
                 self.remember(c, replacingFront: false)
-                self.onStyleEdit?(self.colourEdit(c), nil)
+                self.onStyleEdit?(self.colourEdit(c, target), nil)
             }
         }
     }
@@ -331,15 +367,19 @@ final class EditorInspectorView: NSVisualEffectView {
         size.translatesAutoresizingMaskIntoConstraints = false
         size.widthAnchor.constraint(equalToConstant: 84).isActive = true
 
-        let boldItalic = NSSegmentedControl(images: [
+        // B I U S — independent toggles.
+        let emphasis = NSSegmentedControl(images: [
             NSImage(systemSymbolName: "bold", accessibilityDescription: "Bold")!,
             NSImage(systemSymbolName: "italic", accessibilityDescription: "Italic")!,
-        ], trackingMode: .selectAny, target: self, action: #selector(boldItalicChanged(_:)))
-        boldItalic.segmentStyle = .rounded
-        boldItalic.controlSize = .small
-        boldItalic.setToolTip("Bold", forSegment: 0)
-        boldItalic.setToolTip("Italic", forSegment: 1)
-        for i in 0..<2 { boldItalic.setWidth(30, forSegment: i) }
+            NSImage(systemSymbolName: "underline", accessibilityDescription: "Underline")!,
+            NSImage(systemSymbolName: "strikethrough", accessibilityDescription: "Strikethrough")!,
+        ], trackingMode: .selectAny, target: self, action: #selector(emphasisChanged(_:)))
+        emphasis.segmentStyle = .rounded
+        emphasis.controlSize = .small
+        for (i, tip) in ["Bold", "Italic", "Underline", "Strikethrough"].enumerated() {
+            emphasis.setToolTip(tip, forSegment: i)
+            emphasis.setWidth(30, forSegment: i)
+        }
 
         let align = NSSegmentedControl(images: [
             NSImage(systemSymbolName: "text.alignleft", accessibilityDescription: "Align left")!,
@@ -369,11 +409,13 @@ final class EditorInspectorView: NSVisualEffectView {
                 }
             }
             size.selectItem(at: sizes.firstIndex(of: style.fontSize) ?? 0)
-            boldItalic.setSelected(style.fontBold, forSegment: 0)
-            boldItalic.setSelected(style.fontItalic, forSegment: 1)
+            emphasis.setSelected(style.fontBold, forSegment: 0)
+            emphasis.setSelected(style.fontItalic, forSegment: 1)
+            emphasis.setSelected(style.textUnderline, forSegment: 2)
+            emphasis.setSelected(style.textStrikethrough, forSegment: 3)
             align.selectedSegment = TextAlign.allCases.firstIndex(of: style.textAlignment) ?? 0
         }
-        return [family, InspectorStyle.row([size, boldItalic], fill: true), align]
+        return [family, InspectorStyle.row([size, emphasis], fill: true), align]
     }
 
     @objc private func fontFamilyChanged(_ sender: NSPopUpButton) {
@@ -386,9 +428,11 @@ final class EditorInspectorView: NSVisualEffectView {
         onStyleEdit?({ $0.fontSize = size }, nil)
     }
 
-    @objc private func boldItalicChanged(_ sender: NSSegmentedControl) {
+    @objc private func emphasisChanged(_ sender: NSSegmentedControl) {
         let bold = sender.isSelected(forSegment: 0), italic = sender.isSelected(forSegment: 1)
-        onStyleEdit?({ $0.fontBold = bold; $0.fontItalic = italic }, nil)
+        let underline = sender.isSelected(forSegment: 2), strike = sender.isSelected(forSegment: 3)
+        onStyleEdit?({ $0.fontBold = bold; $0.fontItalic = italic
+                       $0.textUnderline = underline; $0.textStrikethrough = strike }, nil)
     }
 
     @objc private func alignmentChanged(_ sender: NSSegmentedControl) {
@@ -396,20 +440,136 @@ final class EditorInspectorView: NSVisualEffectView {
         onStyleEdit?({ $0.textAlignment = a }, nil)
     }
 
-    // MARK: Background (text) — Part 2 replaces this with None / Solid / Auto + colour, padding, radius
+    // MARK: Styles (text) — one-click presets, 3 per row
 
-    private func makeBackgroundRows() -> [NSView] {
-        let box = NSButton(checkboxWithTitle: "", target: self, action: #selector(textBackgroundChanged(_:)))
-        box.attributedTitle = NSAttributedString(string: "Contrasting box behind the text", attributes: [
-            .foregroundColor: InspectorStyle.primaryText, .font: NSFont.systemFont(ofSize: 12)])
-        box.toolTip = "A dark or light box, whichever stands out against the text colour"
-        refreshers.append { [unowned self] in box.state = style.textBackgroundMode != .none ? .on : .off }
-        return [box]
+    private func makeStyleRows() -> [NSView] {
+        let chips = TextStylePreset.allCases.map {
+            TextPresetChip(preset: $0, target: self, action: #selector(presetChosen(_:)))
+        }
+        let rows = stride(from: 0, to: chips.count, by: 3).map { i -> NSStackView in
+            let row = InspectorStyle.row(Array(chips[i..<min(i + 3, chips.count)]))
+            row.distribution = .fillEqually
+            return row
+        }
+        refreshers.append { [unowned self] in
+            for chip in chips { chip.isActivePreset = chip.preset.isApplied(to: style) }
+        }
+        return rows
     }
 
-    @objc private func textBackgroundChanged(_ sender: NSButton) {
+    @objc private func presetChosen(_ sender: TextPresetChip) {
+        let preset = sender.preset
+        onStyleEdit?({ preset.apply(to: &$0) }, nil)
+    }
+
+    // MARK: Background (text) — None / Solid / Auto; Solid shows the colour rows, both boxes padding + corners
+
+    private func makeBackgroundRows() -> [NSView] {
+        let mode = NSSegmentedControl(labels: ["None", "Solid", "Auto"], trackingMode: .selectOne,
+                                      target: self, action: #selector(backgroundModeChanged(_:)))
+        mode.segmentStyle = .rounded
+        mode.controlSize = .small
+        mode.segmentDistribution = .fillEqually
+        mode.setToolTip("No box behind the text", forSegment: 0)
+        mode.setToolTip("A box in the colour you pick below", forSegment: 1)
+        mode.setToolTip("A dark or light box, whichever stands out against the text colour", forSegment: 2)
+
+        let colours = Self.column(makeColourRows(.textBackground))
+        let autoNote = InspectorStyle.note("Dark or light — whichever stands out against the text colour.")
+        let range = AnnotationStyle.textBackgroundPaddingRange
+        let padding = LabeledSliderRow(label: "Padding", labelWidth: 56,
+                                       range: Double(range.lowerBound)...Double(range.upperBound),
+                                       tooltip: "Space between the text and the edge of the box") { "\(Int($0.rounded())) px" }
+        padding.onChange = { [unowned self] v, finished in
+            let p = CGFloat(v.rounded())
+            onStyleEdit?({ $0.textBackgroundPadding = p }, "textBackgroundPadding")
+            if finished { onStyleEditEnded?() }
+        }
+        let radii = AnnotationStyle.textBackgroundCornerRadiusRange
+        let corners = LabeledSliderRow(label: "Corners", labelWidth: 56,
+                                       range: Double(radii.lowerBound)...Double(radii.upperBound),
+                                       tooltip: "How rounded the box's corners are") { "\(Int($0.rounded())) px" }
+        corners.onChange = { [unowned self] v, finished in
+            let r = CGFloat(v.rounded())
+            onStyleEdit?({ $0.textBackgroundCornerRadius = r }, "textBackgroundCornerRadius")
+            if finished { onStyleEditEnded?() }
+        }
+        refreshers.append { [unowned self] in
+            let m = style.textBackgroundMode
+            mode.selectedSegment = TextBackgroundMode.allCases.firstIndex(of: m) ?? 0
+            colours.isHidden = m != .solid
+            autoNote.isHidden = m != .auto
+            padding.isHidden = m == .none
+            corners.isHidden = m == .none
+            padding.value = Double(style.textBackgroundPadding)
+            corners.value = Double(style.textBackgroundCornerRadius)
+        }
+        return [mode, colours, autoNote, padding, corners]
+    }
+
+    @objc private func backgroundModeChanged(_ sender: NSSegmentedControl) {
+        let m = TextBackgroundMode.allCases[max(0, sender.selectedSegment)]
+        onStyleEdit?({ $0.textBackgroundMode = m }, nil)
+    }
+
+    /// Rows stacked as one panel row (so a group of rows can be shown / hidden together).
+    private static func column(_ rows: [NSView]) -> NSStackView {
+        let c = NSStackView(views: rows)
+        c.orientation = .vertical
+        c.alignment = .leading
+        c.spacing = 8
+        for r in rows { r.widthAnchor.constraint(equalTo: c.widthAnchor).isActive = true }
+        return c
+    }
+
+    // MARK: Effects (text) — Outline (colour + width), Shadow
+
+    private func makeEffectsRows() -> [NSView] {
+        let outline = checkbox("Outline", #selector(outlineToggled(_:)),
+                               tooltip: "An edge around every letter — keeps text readable on busy screenshots")
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.init(1), for: .horizontal)
+        let outlineRow = InspectorStyle.row([outline, spacer, outlineWell])
+
+        let range = AnnotationStyle.textOutlineWidthRange
+        let width = LabeledSliderRow(label: "Width", range: Double(range.lowerBound)...Double(range.upperBound),
+                                     tooltip: "Outline thickness in image pixels") { "\(Int($0.rounded())) px" }
+        width.edgeInsets = NSEdgeInsets(top: 0, left: 20, bottom: 0, right: 0)   // belongs to Outline
+        width.onChange = { [unowned self] v, finished in
+            let w = CGFloat(v.rounded())
+            onStyleEdit?({ $0.textOutlineWidth = w }, "textOutlineWidth")
+            if finished { onStyleEditEnded?() }
+        }
+        let shadow = checkbox("Shadow", #selector(shadowToggled(_:)),
+                              tooltip: "A soft drop shadow under the text (and its box)")
+        refreshers.append { [unowned self] in
+            outline.state = style.textOutline ? .on : .off
+            width.isHidden = !style.textOutline
+            width.value = Double(style.textOutlineWidth)
+            if !RecentColors.same(RGBAColor(outlineWell.color), style.textOutlineColor) {
+                outlineWell.color = style.textOutlineColor.nsColor
+            }
+            shadow.state = style.textShadow ? .on : .off
+        }
+        return [outlineRow, width, shadow]
+    }
+
+    private func checkbox(_ title: String, _ action: Selector, tooltip: String) -> NSButton {
+        let b = NSButton(checkboxWithTitle: "", target: self, action: action)
+        b.attributedTitle = NSAttributedString(string: title, attributes: [
+            .foregroundColor: InspectorStyle.primaryText, .font: NSFont.systemFont(ofSize: 12)])
+        b.toolTip = tooltip
+        return b
+    }
+
+    @objc private func outlineToggled(_ sender: NSButton) {
         let on = sender.state == .on
-        onStyleEdit?({ $0.textBackgroundMode = on ? .auto : .none }, nil)
+        onStyleEdit?({ $0.textOutline = on }, nil)
+    }
+
+    @objc private func shadowToggled(_ sender: NSButton) {
+        let on = sender.state == .on
+        onStyleEdit?({ $0.textShadow = on }, nil)
     }
 
     // MARK: Redaction — Blur / Pixelate (Part 3 adds Strength)

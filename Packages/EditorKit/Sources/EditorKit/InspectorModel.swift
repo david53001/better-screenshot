@@ -4,17 +4,21 @@
 /// `InspectorModel.objectSections(for:)` / `toolSections(for:)` for the tools that show it, and
 /// build its controls in `EditorInspectorView.makeSection(_:)`.
 public enum InspectorSection: String, CaseIterable {
-    case colour, stroke, font, background, redaction, opacity, arrange
+    /// Text style presets (Label, Callout, …) — first, so a look is one click away.
+    case styles
+    case colour, stroke, font, background, effects, redaction, opacity, arrange
     /// Explanatory text only — the Crop tool and Select with nothing selected.
     case cropHelp, selectHelp
 
     /// Caption above the section; nil = no caption (a plain note).
     public var title: String? {
         switch self {
+        case .styles: return "Styles"
         case .colour: return "Colour"
         case .stroke: return "Stroke"
         case .font: return "Font"
         case .background: return "Background"
+        case .effects: return "Effects"
         case .redaction: return "Redaction"
         case .opacity: return "Opacity"
         case .arrange: return "Arrange"
@@ -51,7 +55,7 @@ public enum InspectorModel {
         switch tool {
         case .arrow, .line, .rectangle, .ellipse: return [.colour, .stroke, .opacity]
         case .filledRectangle, .counter: return [.colour, .opacity]
-        case .text: return [.colour, .font, .background, .opacity]
+        case .text: return [.styles, .colour, .font, .background, .effects, .opacity]
         case .blur, .pixelate, .select, .crop: return []
         }
     }
@@ -91,7 +95,8 @@ public enum InspectorModel {
             if selection.count > 1 { return "Drag to move them together, or press Delete to remove them." }
             switch selection.first {
             case nil: return "Click an object to select it, or drag across empty space to select several."
-            case .text?: return "Drag to move it, drag a side handle to set the box width, or double-click to edit the text."
+            case .text?:
+                return "Drag to move it, drag a corner to resize the text, drag a side to change the box width, or double-click to edit."
             case .rectangle?, .filledRectangle?, .ellipse?, .blur?, .pixelate?:
                 return "Drag to move it, drag a handle to resize it, or press Delete to remove it."
             default: return "Drag to move it, or press Delete to remove it."
