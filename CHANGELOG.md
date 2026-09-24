@@ -2,7 +2,52 @@
 
 All notable changes to BetterScreenshot. Versions are git tags; releases are published on [GitHub](../../releases).
 
-## Unreleased — 2026-09-24 · Text boxes & fonts, stop button, recording trim
+## Unreleased — v3 editor & recording overhaul
+
+Design: `docs/superpowers/specs/2026-09-24-betterscreenshot-editor-recording-v3-design.md`; Windows
+port notes: `docs/MAC-TO-WINDOWS-PARITY-v3.md`.
+
+### Editor
+- **Options live in a right-side panel** with labelled sections (Styles, Colour, Stroke, Font,
+  Background, Effects, Opacity, Arrange) that follow the tool or selection; hide/show with ⌥⌘I. A hint
+  line under the canvas explains the current tool in one sentence.
+- **Style changes apply to the selected objects** (any kind), one undo step each, and still become the
+  default for new objects. Every object has an **Opacity** slider; the Colour section keeps your last
+  6 custom colours and has a **Pick from Screen** eyedropper.
+- **Zoom:** pinch, ⌘-scroll, ⌘+ / ⌘−, ⌘0 (fit), ⌘1 (100%), up to 800%, with a "Fit · 57%" menu in
+  the bottom bar. **Single-key tools:** V A L R F O T N B P C, Esc = Select.
+- **Text:** drag a corner of a selected text to scale the whole thing (font, box and outline
+  together); side handles still set the box width. **Background** is None / Solid / Auto with any
+  colour, Padding and Corners — and you see it while typing. **B I U S**, an **outline** with colour
+  and width, a soft **shadow**, and one-click **styles**: Label, Callout, Note, Code, Title, Subtle.
+  Older saved styles keep their look (the old "contrasting box" becomes Auto).
+
+### Recording
+- **Record strip redesigned:** labelled Full Screen / Area / Window buttons and **Microphone, System
+  audio, Camera and Cursor** menus replace the unlabelled icons, with a hint line explaining whatever
+  you hover. Pick which **microphone** and **camera** to use (built-in, AirPods, USB, iPhone); a live
+  **level meter** shows the mic working before you start. System audio can be All apps or All apps
+  except BetterScreenshot; the mouse pointer can be hidden. Settings → Recording uses the same menus.
+- **Expanded recording pill:** mute the **microphone** or **system sound** mid-recording (the video keeps
+  a silent, in-sync track), show/hide the camera bubble, **Switch window… / Switch area…** without
+  stopping (other shapes are letterboxed), **Restart** and **Discard** (confirm with a second click —
+  no dialog steals focus), Pause, Stop. A chevron collapses it; position and state are remembered.
+- **Video editor** (the card's **Edit video** button, or History → **Edit Video…**): split at the
+  playhead (S / ⌘B), delete segments (⌫), drag segment edges, undo/redo, zoomable filmstrip timeline,
+  Space / ← → / I / O; per-segment **speed** (1×, 1.5×, 2×, 4×) and **mute**; **Export as GIF**.
+  Cuts are frame-exact: a plain start/end trim stays instant and lossless, anything else is re-encoded
+  with a progress bar (~14 s per minute of 1080p60 on an M3). Recordings now carry a keyframe every
+  0.5 s so lossless trims land closer to the chosen frame.
+
+### Fixed
+- Closing the trim/edit window with Cancel no longer loses the recording's Quick Access card — it comes
+  back (showing the edited video after Replace Original; after Save as Copy both cards show).
+- After pausing while the screen wasn't changing, the video could run ~1 s ahead of the audio.
+- Window recordings had no system audio from apps that play sound in helper processes (browsers,
+  Electron apps) — window recordings now take system audio from the whole display's audio.
+- Dropdown fields in Settings (e.g. the Pin corner-radius menu) drew as bare text with two chevrons.
+
+## Unreleased (earlier) — 2026-09-24 · Text boxes & fonts, stop button, recording trim
 
 ### Added
 - **Trim recordings.** A ✂ button on a finished MP4 recording's Quick Access card (and **Trim…** in
