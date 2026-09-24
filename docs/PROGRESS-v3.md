@@ -13,16 +13,17 @@ keep the Mac responsive.
 | Wave | Lane | Parts | Status | Branch / commits |
 |---|---|---|---|---|
 | 1 | Editor foundation | Part 1 | **merged** into `main` (`5ec3353`) | `c4970e4`, `7ae880f`, `98c394c` |
-| 1 | Video | Part 0 → Part 6 | launched 2026-09-24 | — |
+| 1 | Video | Part 0 → Part 6 | **merged** into `main` (`1c35231`); card/History labels renamed "Edit video" / "Edit Video…" (`fc4eb2d`) | `a109557`…`cc021cd` |
 | 1 | Recording setup | Part 4 | **merged** into `main` (`9308009`) — "Only this app" audio dropped (SCK single-app capture misses helper processes, e.g. browsers); fixed window recordings having no system audio | `cfdd8c8`…`82d1b08` |
 | 1 | Live pill | Part 5 | **merged** into `main` (`85b214b`) — also fixed a pre-existing A/V drift after pausing on a static screen | `f88cf6c`…`82fc870` |
 | 2 | Text | Part 2 | launched 2026-09-24 (based on `5ec3353`) | — |
 | 2 | Redaction + tools | Part 3 | launched 2026-09-24 (based on `5ec3353`) | — |
 | — | Coordinator | Windows doc §A (2026-09-24 features) done (`6a1304e`); merges, docs | in progress | `main` |
 
-**Known cross-lane follow-ups** (do after both lanes merge):
+**Known follow-ups** (after all lanes merge):
 - Mid-recording microphone device switch from the live pill (needs Part 4's device catalog + Part 5's
   pill) — spec §8.
+- History thumbnail isn't regenerated after the video editor's Replace Original (pre-existing).
 
 **Gotcha (stale root build):** after merging a branch that adds files to a `Packages/*` library, the
 root `swift build` may fail with "cannot find X in scope" — delete `.build/debug.yaml` (the cached
