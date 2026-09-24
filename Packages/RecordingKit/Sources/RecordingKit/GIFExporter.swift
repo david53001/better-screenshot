@@ -9,9 +9,11 @@ public enum GIFExportError: Error {
 
 /// Post-conversion of a recorded MP4 into a looping GIF (10 fps, ≤960 px wide).
 public enum GIFExporter {
+    /// `progress` gets 0…1 as frames are written.
     public static func export(mp4 url: URL, to gifURL: URL,
                               fps: Int = RecordingConfig.gifFPS,
-                              maxWidth: CGFloat = RecordingConfig.gifMaxWidth) async throws {
+                              maxWidth: CGFloat = RecordingConfig.gifMaxWidth,
+                              progress: ((Double) -> Void)? = nil) async throws {
         let asset = AVURLAsset(url: url)
         guard let track = try await asset.loadTracks(withMediaType: .video).first else {
             throw GIFExportError.noVideoTrack
@@ -37,10 +39,11 @@ public enum GIFExporter {
         let frameProps = [kCGImagePropertyGIFDictionary:
                             [kCGImagePropertyGIFDelayTime: 1.0 / Double(fps)]]
         do {
-            for t in times {
+            for (i, t) in times.enumerated() {
                 let cm = CMTime(seconds: t, preferredTimescale: 600)
                 let image = try await generator.image(at: cm).image
                 CGImageDestinationAddImage(dest, image, frameProps as CFDictionary)
+                progress?(Double(i + 1) / Double(times.count))
             }
         } catch {
             // Don't leave a half-written GIF behind; the caller keeps the MP4.

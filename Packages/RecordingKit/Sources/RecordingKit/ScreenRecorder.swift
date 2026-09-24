@@ -82,6 +82,7 @@ public final class ScreenRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
             AVVideoCompressionPropertiesKey: [
                 AVVideoAverageBitRateKey:
                     (pure[AVKey.compression] as? [String: Any])?[AVKey.bitRate] as? Int ?? 8_000_000,
+                AVVideoMaxKeyFrameIntervalDurationKey: RecordingConfig.keyFrameInterval,
             ],
         ]
         let vInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)

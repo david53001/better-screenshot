@@ -8,6 +8,7 @@ public enum AVKey {
     public static let height = "AVVideoHeightKey"
     public static let compression = "AVVideoCompressionPropertiesKey"
     public static let bitRate = "AverageBitRate"
+    public static let maxKeyFrameIntervalDuration = "MaxKeyFrameIntervalDuration"
 }
 
 public enum RecordingFormat: String, CaseIterable { case mp4, gif }
@@ -108,8 +109,12 @@ public struct RecordingConfig: Equatable {
         }
     }
 
+    /// Seconds between keyframes. Lossless (passthrough) trims can only start on a
+    /// keyframe, so a short interval lands them close to the chosen frame.
+    public static let keyFrameInterval = 0.5
+
     /// H.264 AVAssetWriter video settings. Bitrate heuristic w·h·fps·0.12,
-    /// clamped to 2–40 Mbps.
+    /// clamped to 2–40 Mbps; a keyframe at least every `keyFrameInterval` seconds.
     public func videoSettings(width: Int, height: Int) -> [String: Any] {
         let rate = min(max(Int(Double(width) * Double(height) * Double(fps) * 0.12),
                            2_000_000), 40_000_000)
@@ -117,7 +122,8 @@ public struct RecordingConfig: Equatable {
             AVKey.codec: "avc1",
             AVKey.width: width,
             AVKey.height: height,
-            AVKey.compression: [AVKey.bitRate: rate] as [String: Any],
+            AVKey.compression: [AVKey.bitRate: rate,
+                                AVKey.maxKeyFrameIntervalDuration: Self.keyFrameInterval] as [String: Any],
         ]
     }
 

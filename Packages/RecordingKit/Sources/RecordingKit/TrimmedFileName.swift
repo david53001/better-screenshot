@@ -1,29 +1,39 @@
 import Foundation
 
-/// File names for "Save as Copy": "Recording X.mp4" → "Recording X (trimmed).mp4",
-/// then " 2", " 3", … on collision. Trimming a trimmed copy reuses the same stem
-/// instead of stacking "(trimmed) (trimmed)".
+/// File names for the video editor's exports, next to the original:
+/// Save as Copy "Recording X.mp4" → "Recording X (trimmed).mp4"; Export as GIF →
+/// "Recording X (edited).gif"; then " 2", " 3", … on collision. Editing an export
+/// reuses the same stem instead of stacking "(trimmed) (trimmed)" / "(trimmed) (edited)".
 public enum TrimmedFileName {
-    public static func name(forOriginal original: String) -> String {
-        candidate(forOriginal: original, attempt: 1)
+    public static let trimmed = "trimmed"
+    public static let edited = "edited"
+
+    /// `ext` nil keeps the original's extension.
+    public static func name(forOriginal original: String, suffix: String = trimmed,
+                            ext: String? = nil) -> String {
+        candidate(forOriginal: original, suffix: suffix, ext: ext, attempt: 1)
     }
 
     /// First candidate for which `exists` is false.
-    public static func unique(forOriginal original: String, exists: (String) -> Bool) -> String {
+    public static func unique(forOriginal original: String, suffix: String = trimmed,
+                              ext: String? = nil, exists: (String) -> Bool) -> String {
         var attempt = 1
-        while exists(candidate(forOriginal: original, attempt: attempt)) { attempt += 1 }
-        return candidate(forOriginal: original, attempt: attempt)
+        while exists(candidate(forOriginal: original, suffix: suffix, ext: ext, attempt: attempt)) {
+            attempt += 1
+        }
+        return candidate(forOriginal: original, suffix: suffix, ext: ext, attempt: attempt)
     }
 
-    private static func candidate(forOriginal original: String, attempt: Int) -> String {
+    private static func candidate(forOriginal original: String, suffix: String, ext: String?,
+                                  attempt: Int) -> String {
         let ns = original as NSString
-        let ext = ns.pathExtension
+        let ext = ext ?? ns.pathExtension
         var stem = ns.deletingPathExtension
-        // Strip an existing " (trimmed)" / " (trimmed) N" suffix.
-        if let r = stem.range(of: #" \(trimmed\)( \d+)?$"#, options: .regularExpression) {
+        // Strip an existing " (trimmed)" / " (edited)" suffix, with or without " N".
+        if let r = stem.range(of: #" \((trimmed|edited)\)( \d+)?$"#, options: .regularExpression) {
             stem.removeSubrange(r)
         }
-        let base = "\(stem) (trimmed)" + (attempt > 1 ? " \(attempt)" : "")
+        let base = "\(stem) (\(suffix))" + (attempt > 1 ? " \(attempt)" : "")
         return ext.isEmpty ? base : "\(base).\(ext)"
     }
 }

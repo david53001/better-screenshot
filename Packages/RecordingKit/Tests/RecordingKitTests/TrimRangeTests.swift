@@ -37,4 +37,15 @@ let trimRangeTests: [TestCase] = [
         t.equal(TrimmedFileName.unique(forOriginal: "Rec (trimmed).mp4", exists: taken.contains),
                 "Rec (trimmed) 3.mp4")
     },
+    TestCase("editedGIFFileNames") { t in
+        let gif = { (o: String) in TrimmedFileName.name(forOriginal: o, suffix: TrimmedFileName.edited, ext: "gif") }
+        t.equal(gif("Recording 2026-09-24 at 10.00.00.mp4"), "Recording 2026-09-24 at 10.00.00 (edited).gif")
+        // Exports of exports keep one suffix.
+        t.equal(gif("Rec (trimmed).mp4"), "Rec (edited).gif")
+        t.equal(gif("Rec (trimmed) 2.mp4"), "Rec (edited).gif")
+        t.equal(TrimmedFileName.name(forOriginal: "Rec (edited).mp4"), "Rec (trimmed).mp4")
+        let taken: Set = ["Rec (edited).gif"]
+        t.equal(TrimmedFileName.unique(forOriginal: "Rec.mp4", suffix: TrimmedFileName.edited, ext: "gif",
+                                       exists: taken.contains), "Rec (edited) 2.gif")
+    },
 ]
