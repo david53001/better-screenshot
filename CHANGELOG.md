@@ -2,6 +2,33 @@
 
 All notable changes to BetterScreenshot. Versions are git tags; releases are published on [GitHub](../../releases).
 
+## Unreleased — 2026-09-24 · Text boxes & fonts, stop button, recording trim
+
+### Added
+- **Trim recordings.** A ✂ button on a finished MP4 recording's Quick Access card (and **Trim…** in
+  the History window) opens a trim window with QuickTime-style yellow handles (AVKit's native trim
+  mode). **Save as Copy** writes `<name> (trimmed).mp4` next to the original and shows it as a new
+  card; **Replace Original** swaps the file in place atomically and returns to the player showing
+  the trimmed result (**Adjust Trim** trims again). **Mute audio** drops the audio tracks. Exports
+  are passthrough (no re-encode), so they're fast and lossless. GIF recordings can't be trimmed.
+- **Floating recording controls.** While recording (from the countdown on), a draggable pill shows
+  the timer, **Pause/Resume**, and **Stop**. Settings → Recording → **Show stop button in recording**
+  (off by default) decides whether the pill appears in the video; off, it is excluded from the
+  capture. Window recordings never include it.
+- **Text tool: fonts and text boxes.** A second inspector row for the Text tool: font menu (System,
+  Rounded, Serif, Mono, then every installed font), size (12–96), bold, italic, and alignment.
+  Drag with the Text tool to make a fixed-width text box; drag its side handles to change the width.
+  Click existing text with the Text tool (or double-click it with Select) to edit it in place.
+  Changing the style while text is selected (Text tool) restyles it. The font settings persist as
+  the editor's sticky default, like colour and size.
+
+### Fixed
+- **Typing past one line in the Text tool hid the line above.** The inline editor was a fixed
+  200×28 field that scrolled earlier lines out of view once text wrapped. It now grows with the
+  text (right to the canvas edge, then down), and the committed text wraps exactly as shown.
+  Return commits, ⇧Return / ⌥Return insert a newline, Esc or clicking away commits.
+- Text still being typed was left out when you pressed Copy / Save / Stack; it is now committed first.
+
 ## v2.11.0 — 2026-09-10 · Capture Text keeps paragraphs together
 
 ### Improved

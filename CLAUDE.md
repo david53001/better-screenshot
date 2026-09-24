@@ -53,7 +53,8 @@ Local Swift packages + a menu-bar app target:
 - P3 (shipped v1.3): `docs/superpowers/specs/2026-06-04-betterscreenshot-p3-ocr-pin-design.md` + `docs/superpowers/plans/2026-06-04-betterscreenshot-p3-ocr-pin.md` — Capture Text (OCR/QR, ⌘⇧7), Pin to Screen, Quick Access stack.
 - Editor sticky defaults + Stack button (shipped 2026-06-25, on `main`, not tagged): `docs/superpowers/specs/2026-06-25-betterscreenshot-editor-defaults-and-stack-button-design.md` + `docs/superpowers/plans/2026-06-25-betterscreenshot-editor-defaults-and-stack-button.md` — the annotation editor remembers the last-used stroke/text color + size across sessions (persisted in `UserDefaults` key `editorDefaultStyle` via `SettingsStore.editorStyle`, injected into `EditorWindowController` as `defaultStyle`, saved on the `onStyleChanged` callback); and the editor's bottom-bar **Pin** button was replaced by a **Stack** button (`EditorWindowController.onAddToStack` → `CaptureCoordinator.keepInStack`) that adds the flattened edit to the bottom-right Quick Access stack + History. Pin-to-Screen was retained via the Quick Access overlay's own Pin action at the time; that button was removed in v2.9.0, so Pin now lives only on the menu bar (**Pin from Clipboard**) and in the History window. This change is a good worked example of the brainstorm → spec → plan → subagent-driven-development → merge flow for a small two-feature change.
 - Windows→macOS parity backport (shipped 2026-07-04, on `main`, not tagged): design in `docs/WINDOWS-TO-MAC-PARITY.md` (grabbed from the `windows-port` branch, which holds a full C#/.NET WPF port of the app under `windows/`); plans in `docs/superpowers/plans/2026-07-04-parity-part{1,2,3}-*.md`. Brings the mac app to parity with the Windows port in three areas: **Part 1** — Settings rebuilt as a pure-black 960px three-column "JVoice" card masonry replacing the SwiftUI `TabView` (new custom controls under `App/Settings/Components/` + `SettingsTheme.swift`/`SettingsHelp.swift`; forced-dark window; instant-apply preserved); **Part 2** — the Quick Access post-capture card is now full-bleed with auto-contrasting overlaid buttons (`QuickAccessContrast`), a tone-matched scrim, variable-height stacking (`OverlayPositioner.stackedOrigins`), and a wired auto-dismiss timer + hover-pause (`OverlayDismissScale`; `overlayAutoDismissSeconds` default **0 = Never**); **Part 3** — optional auto-contrast editor text-background chip (`AnnotationStyle.textBackground`), clamp annotation drags to image bounds (`EditorBoundsClamp`), clamp area-selection to screen (`SelectionClamp`), history cap 200→100, plus a new `playSound` capture setting. **Not yet done: the stretched-resolution capture "black bar" item** (Part 3 §3.B #10) — needs the owner's stretched display to reproduce; no speculative capture-geometry change was made. A second good worked example of the brainstorm → spec → plan → subagent-driven-development → merge flow.
-- Next features (designed 2026-06-05, awaiting plans — see Roadmap below for order):
+- Features designed 2026-06-05 (all since built — capture history v2.3, recording controls v2.4.0,
+  trim 2026-09-24):
   - `docs/superpowers/specs/2026-06-05-betterscreenshot-capture-history-design.md`
   - `docs/superpowers/specs/2026-06-05-betterscreenshot-recording-controls-design.md`
   - `docs/superpowers/specs/2026-06-05-betterscreenshot-trim-editor-design.md`
@@ -124,8 +125,17 @@ were measured on the owner's slide screenshot (intra-paragraph pitch jitter ≤ 
 Vision's confidence is useless for filtering photo junk (it scores "CREAM STEA" at 1.00) — don't try. Same
 release added the README **Update** section (re-run the install one-liner).
 
-**Next up — spec ready** (`superpowers:writing-plans` from the spec, then execute with `superpowers:subagent-driven-development`; the spec lists its own probes/risks — run probe tasks first, and verify named symbols against live code before planning):
-1. **Trim Editor** — `docs/superpowers/specs/2026-06-05-betterscreenshot-trim-editor-design.md`
+**Text fonts/boxes + floating recording controls + Trim** (built 2026-09-24 on `main`, untagged,
+directly without a new spec at the owner's request — Trim follows its 2026-06-05 spec with one owner
+change). Status, file map and the headless probes used to verify them:
+`docs/PROGRESS-2026-09-24-text-controls-trim.md`. Summary: the Text tool's inline editor is an
+auto-growing `NSTextView` (fixes "typing past one line hides the line above"); `AnnotationStyle` gains
+font family / bold / italic / alignment; drag = text box (`TextAnnotation.wrapWidth`); a
+`RecordingControlsController` pill (timer · Pause · Stop) is shown all session and excluded from the
+capture unless `RecordingConfig.controlsInRecording`; `TrimWindowController` + `TrimExporter` in
+RecordingKit trim MP4s losslessly (Save as Copy / Replace Original, which reloads the player).
+
+**Next up:** nothing spec-ready. See "Later" below.
 
 (Recording Controls — countdown · window target · pause/resume — shipped as `v2.4.0` on 2026-06-25.)
 

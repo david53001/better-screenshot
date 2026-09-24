@@ -1,6 +1,9 @@
 # BetterScreenshot v2.5 — Recording Trim Editor
 
-Date: 2026-06-05 · Status: **designed — awaiting plan**
+Date: 2026-06-05 · Status: **implemented 2026-09-24** (on `main`, untagged — see
+`docs/PROGRESS-2026-09-24-text-controls-trim.md`). Owner change from this spec: after **Replace
+Original** the window stays open on plain playback of the trimmed file (Adjust Trim trims again)
+instead of closing; Save as Copy still closes and presents a new Quick Access card.
 Builds on: v2.2 (`main`, commit 28403d2+; v2.3/v2.4 recommended first but not required)
 Ends at tag: `v2.5-trim`
 
