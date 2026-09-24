@@ -26,6 +26,8 @@ final class RecordingCoordinator {
     private var timer: Timer?
     private var isTerminating = false
     private var tempOutputURL: URL?
+    /// The open trim window, if any (one at a time).
+    private var trimController: TrimWindowController?
 
     /// Set by the app delegate; presents the one-button permission setup window.
     var presentSetup: (() -> Void)?
@@ -403,6 +405,26 @@ final class RecordingCoordinator {
         if showCard { presentCard(for: url, image: image, historyID: historyID) }
     }
 
+    /// Opens the trim window for an MP4 recording (Quick Access card or History).
+    func presentTrim(url: URL) {
+        if let open = trimController {
+            if open.url == url { open.showWindow(nil); NSApp.activate(ignoringOtherApps: true); return }
+            open.close()
+        }
+        let c = TrimWindowController(url: url)
+        c.onSavedCopy = { [weak self] copy in
+            Task { await self?.finishRecording(at: copy) }
+        }
+        c.onReplaced = { [weak self] _ in self?.hud.show("Recording trimmed") }
+        c.onFailed = { [weak self] message in self?.hud.show(message) }
+        c.onClosed = { [weak self, weak c] in
+            if self?.trimController === c { self?.trimController = nil }
+        }
+        trimController = c
+        c.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
     /// Re-presents a card for a history entry (Restore Recently Closed).
     func presentCardFromHistory(url: URL, image: NSImage, historyID: UUID) {
         presentCard(for: url, image: image, historyID: historyID)
@@ -418,7 +440,9 @@ final class RecordingCoordinator {
             },
             onOpen: { NSWorkspace.shared.open(url) },
             onReveal: { NSWorkspace.shared.activateFileViewerSelecting([url]) },
-            fileURLForDrag: { url })
+            fileURLForDrag: { url },
+            onTrim: url.pathExtension.lowercased() == "mp4"
+                ? { [weak self] in self?.presentTrim(url: url) } : nil)
         let corner = settings.settings.overlayCorner
         // visibleFrame excludes the Dock and menu bar, so the overlay sits above
         // the Dock instead of being tucked into the very bottom corner behind it.

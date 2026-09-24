@@ -7,6 +7,7 @@ import HistoryKit
 struct HistoryWindowActions {
     var annotate: (CGImage) -> Void
     var pin: (CGImage) -> Void
+    var trim: (URL) -> Void
 }
 
 /// Owns the single History window — a normal titled window like Settings,
@@ -128,6 +129,8 @@ struct HistoryView: View {
                 .disabled(soleSelection?.kind != .screenshot)
             Button("Pin") { if let e = soleSelection { pin(e) } }
                 .disabled(soleSelection?.kind != .screenshot)
+            Button("Trim…") { if let url = soleSelection.flatMap(trimmableURL) { actions.trim(url) } }
+                .disabled(soleSelection.flatMap(trimmableURL) == nil)
             Button("Show in Finder") { history.revealInFinder(selectedEntries) }
                 .disabled(!selectedEntries.contains { history.canReveal($0) })
             Button("Delete") { delete(selectedEntries) }
@@ -176,6 +179,9 @@ struct HistoryView: View {
             Button("Annotate") { annotate(entry) }
             Button("Pin") { pin(entry) }
         }
+        if group.count == 1, let url = trimmableURL(entry) {
+            Button("Trim…") { actions.trim(url) }
+        }
         if group.contains(where: { history.canReveal($0) }) {
             Button("Show in Finder") { history.revealInFinder(targets(for: entry)) }
         }
@@ -192,6 +198,14 @@ struct HistoryView: View {
         case .recording:
             if let url = history.savedFileURL(for: entry) { NSWorkspace.shared.open(url) }
         }
+    }
+
+    /// The saved MP4 behind a recording entry, if it still exists (GIFs can't be trimmed).
+    private func trimmableURL(_ entry: HistoryEntry) -> URL? {
+        guard entry.kind == .recording, history.savedFileExists(entry),
+              let url = history.savedFileURL(for: entry),
+              url.pathExtension.lowercased() == "mp4" else { return nil }
+        return url
     }
 
     private func annotate(_ entry: HistoryEntry) {

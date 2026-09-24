@@ -8,14 +8,18 @@ public struct QuickAccessActions {
     public let onOpen: () -> Void
     public let onReveal: () -> Void
     public let fileURLForDrag: () -> URL?
+    /// Recordings only: opens the trim window. nil = no Trim button (e.g. GIFs).
+    public let onTrim: (() -> Void)?
     public init(onCopy: @escaping () -> Void = {}, onSave: @escaping () -> Void = {},
                 onAnnotate: @escaping () -> Void = {},
                 onOpen: @escaping () -> Void = {}, onReveal: @escaping () -> Void = {},
-                fileURLForDrag: @escaping () -> URL? = { nil }) {
+                fileURLForDrag: @escaping () -> URL? = { nil },
+                onTrim: (() -> Void)? = nil) {
         self.onCopy = onCopy; self.onSave = onSave
         self.onAnnotate = onAnnotate
         self.onOpen = onOpen; self.onReveal = onReveal
         self.fileURLForDrag = fileURLForDrag
+        self.onTrim = onTrim
     }
 }
 
@@ -142,6 +146,9 @@ public final class QuickAccessOverlayController: NSObject {
             stack.addArrangedSubview(button("square.and.arrow.down", "Save to screenshots") { [weak self] in self?.saveAction() })
         case .recording:
             stack.addArrangedSubview(button("doc.on.doc", "Copy file") { [weak self] in self?.copyAction() })
+            if actions.onTrim != nil {
+                stack.addArrangedSubview(button("scissors", "Trim") { [weak self] in self?.trimAction() })
+            }
             stack.addArrangedSubview(button("play.fill", "Open") { [weak self] in self?.openAction() })
             stack.addArrangedSubview(button("folder", "Show in Finder") { [weak self] in self?.revealAction() })
         }
@@ -346,6 +353,12 @@ public final class QuickAccessOverlayController: NSObject {
         let a = actions
         dismiss(reason: .actionTaken)
         a?.onOpen()
+    }
+    // Trimming opens its own window, which takes over from the overlay.
+    @objc private func trimAction() {
+        let a = actions
+        dismiss(reason: .actionTaken)
+        a?.onTrim?()
     }
     // Revealing in Finder is the recording's "I know where it lives now".
     @objc private func revealAction() {

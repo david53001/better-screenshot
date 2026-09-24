@@ -33,7 +33,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         recordingCoordinator.history = history
         historyWindow = HistoryWindowController(history: history, actions: HistoryWindowActions(
             annotate: { [weak self] image in self?.coordinator.annotate(image) },
-            pin: { [weak self] image in self?.coordinator.pin(image) }))
+            pin: { [weak self] image in self?.coordinator.pin(image) },
+            trim: { [weak self] url in self?.recordingCoordinator.presentTrim(url: url) }))
         recordingCoordinator.onStateChange = { [weak self] recording, elapsed in
             self?.menuBar.setRecording(recording, elapsed: elapsed)
         }
