@@ -489,6 +489,10 @@ private final class PillButton: NSButton {
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+    /// Frame == constraints: SF Symbols' alignment insets would otherwise grow some
+    /// buttons (and their hover/chip background) past 28 pt.
+    override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsetsZero }
+
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         trackingAreas.forEach(removeTrackingArea)
