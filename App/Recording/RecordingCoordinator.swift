@@ -28,6 +28,14 @@ final class RecordingCoordinator {
     private var tempOutputURL: URL?
     /// The open trim window, if any (one at a time).
     private var trimController: TrimWindowController?
+    // Live pill state for the current session (reset in arm()).
+    private var micMuted = false
+    private var soundMuted = false
+    private var hasCamera = false
+    /// A Switch window/area picker is up.
+    private var switching = false
+    /// What's being recorded and on which screen — updated by Switch, reused by Restart.
+    private var activeTarget: (target: RecordingTarget, screen: NSScreen)?
 
     /// Set by the app delegate; presents the one-button permission setup window.
     var presentSetup: (() -> Void)?
@@ -48,6 +56,12 @@ final class RecordingCoordinator {
         strip.onCancel = { [weak self] in self?.cancelStrip() }
         controls.onStop = { [weak self] in self?.stopFromControls() }
         controls.onPauseResume = { [weak self] in self?.pauseResume() }
+        controls.onToggleMic = { [weak self] in self?.toggleMicMute() }
+        controls.onToggleSound = { [weak self] in self?.toggleSoundMute() }
+        controls.onToggleCamera = { [weak self] in self?.toggleCamera() }
+        controls.onSwitch = { [weak self] in self?.switchTarget() }
+        controls.onRestart = { [weak self] in Task { await self?.restart() } }
+        controls.onDiscard = { [weak self] in Task { await self?.discard() } }
         recorder.onStreamError = { [weak self] _ in
             Task { @MainActor in self?.streamFailed() }
         }
@@ -101,6 +115,9 @@ final class RecordingCoordinator {
             return
         }
         guard state.transition(.arm) else { return }
+        micMuted = false; soundMuted = false; switching = false
+        recorder.setMicMuted(false); recorder.setSystemAudioMuted(false)
+        hasCamera = AVCaptureDevice.default(for: .video) != nil
         let screen = NSScreen.screens.first {
             $0.frame.contains(NSEvent.mouseLocation)
         } ?? NSScreen.main
@@ -143,6 +160,19 @@ final class RecordingCoordinator {
 
     private func beginWindowSelection() {
         strip.hide()
+        presentWindowPicker { [weak self] picked in
+            guard let self else { return }
+            guard let picked else { self.state.transition(.reset); self.notify(); return }
+            let center = CGPoint(x: picked.frame.midX, y: picked.frame.midY)
+            let screen = NSScreen.screens.first { $0.frame.contains(center) } ?? NSScreen.main
+            guard let screen else { self.state.transition(.reset); self.notify(); return }
+            Task { await self.begin(target: .window(picked.id), screen: screen) }
+        }
+    }
+
+    /// The hover-to-highlight window picker over every on-screen window except
+    /// our own; `onPicked(nil)` = cancelled.
+    private func presentWindowPicker(onPicked: @escaping (PickableWindow?) -> Void) {
         // CGWindowList bounds are top-left global; convert with the primary
         // display height (the screen whose origin is (0,0)).
         let primaryHeight = (NSScreen.screens.first { $0.frame.origin == .zero }
@@ -167,15 +197,8 @@ final class RecordingCoordinator {
             guard let w = WindowPicking.topmost(at: point, windows: windows,
                                                 excludingPID: ownPID) else { return nil }
             return (id: w.id, frame: w.frame, title: w.title)
-        }, onPicked: { [weak self] id in
-            guard let self else { return }
-            guard let id, let picked = windows.first(where: { $0.id == id }) else {
-                self.state.transition(.reset); self.notify(); return
-            }
-            let center = CGPoint(x: picked.frame.midX, y: picked.frame.midY)
-            let screen = NSScreen.screens.first { $0.frame.contains(center) } ?? NSScreen.main
-            guard let screen else { self.state.transition(.reset); self.notify(); return }
-            Task { await self.begin(target: .window(id), screen: screen) }
+        }, onPicked: { id in
+            onPicked(id.flatMap { id in windows.first { $0.id == id } })
         })
     }
 
@@ -194,6 +217,7 @@ final class RecordingCoordinator {
         // A ⌘⇧5 cancel can land while the selection overlay or permission prompts
         // were up — only proceed if we're still armed.
         guard case .armed = state else { return }
+        activeTarget = (target, screen)
         var config = settings.recording
         // Shown before the content query so the pill is a known SCWindow we can exclude.
         controls.show(on: screen)
@@ -356,6 +380,8 @@ final class RecordingCoordinator {
     }
 
     private func tearDownPanels() {
+        windowPicker.cancel()
+        if switching { selection.cancel() }   // a Switch area… selection, not the start one
         controls.hide()
         bubble.hide()
         clicks.stop()
@@ -376,7 +402,179 @@ final class RecordingCoordinator {
     private func notify() {
         onStateChange?(isRecording, state.elapsedString(now: Date()))
         onPauseStateChange?(isRecording, isPaused)
-        controls.update(elapsed: state.elapsedString(now: Date()), paused: isPaused)
+        controls.update(pillStatus())
+    }
+
+    // MARK: - Live pill (mute · camera · switch · restart · discard)
+
+    private static let noMicTip = "Mic wasn't on when this recording started — there's no mic track to mute"
+    private static let noSoundTip =
+        "System audio wasn't on when this recording started — there's no sound track to mute"
+
+    private func pillStatus() -> RecordingControlsController.Status {
+        let running = isRecording
+        let rec = settings.recording
+        // Audio tracks are fixed when the engine starts; during the countdown,
+        // show what it's about to record (mic permission was settled by then).
+        let hasMic = running ? recorder.recordsMicrophone
+            : rec.microphone && AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        let hasSound = running ? recorder.recordsSystemAudio : rec.systemAudio
+        var s = RecordingControlsController.Status(elapsed: state.elapsedString(now: Date()),
+                                                   paused: isPaused, running: running)
+        s.mic = hasMic ? (micMuted ? .off : .on) : .unavailable(Self.noMicTip)
+        s.sound = hasSound ? (soundMuted ? .off : .on) : .unavailable(Self.noSoundTip)
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .denied, .restricted:
+            s.camera = .unavailable("Camera access is off — allow BetterScreenshot in System Settings › "
+                                    + "Privacy & Security › Camera")
+        default:
+            s.camera = !hasCamera ? .unavailable("No camera found") : bubble.isVisible ? .on : .off
+        }
+        switch activeTarget?.target {
+        case .window: s.switchKind = .window
+        case .display(let rect): s.switchKind = rect == nil ? nil : .area   // full screen: nothing to switch
+        case nil: s.switchKind = nil
+        }
+        return s
+    }
+
+    /// Mute keeps the track and writes silence (ScreenRecorder + SilenceFill).
+    private func toggleMicMute() {
+        micMuted.toggle()
+        recorder.setMicMuted(micMuted)
+        notify()
+    }
+
+    private func toggleSoundMute() {
+        soundMuted.toggle()
+        recorder.setSystemAudioMuted(soundMuted)
+        notify()
+    }
+
+    /// Hides/re-shows the bubble in place, or shows it for the first time even if
+    /// the camera was off at start (it's recorded simply by being on screen).
+    private func toggleCamera() {
+        if bubble.exists {
+            bubble.setHidden(bubble.isVisible)
+            notify()
+            return
+        }
+        guard let active = activeTarget else { return }
+        Task {
+            guard await CameraBubbleController.ensurePermission(), !bubble.exists,
+                  activeTarget != nil else { notify(); return }
+            let anchor: CGRect
+            if case .display(let rect?) = active.target { anchor = rect } else { anchor = active.screen.frame }
+            bubble.show(near: anchor, on: active.screen, diameter: settings.recording.cameraSize.diameter)
+            notify()
+        }
+    }
+
+    /// Switch window… / Switch area…: pauses (so the picker overlay isn't
+    /// recorded), reuses the start pickers, retargets the live stream, resumes.
+    private func switchTarget() {
+        guard isRecording, !switching, let active = activeTarget else { return }
+        if case .display(nil) = active.target { return }
+        let previousApp = NSWorkspace.shared.frontmostApplication
+        let pausedForSwitch = !isPaused
+        if pausedForSwitch { pauseResume() }
+        switching = true
+        // The pickers activate us to receive Escape; hand focus back afterwards.
+        let finish = { [weak self] (app: NSRunningApplication?) in
+            guard let self else { return }
+            self.switching = false
+            if pausedForSwitch, self.isPaused { self.pauseResume() }
+            (app ?? previousApp)?.activate()
+            self.notify()
+        }
+        switch active.target {
+        case .window:
+            presentWindowPicker { [weak self] picked in
+                guard let self, let picked else { finish(nil); return }
+                Task {
+                    await self.retarget(toWindow: picked)
+                    finish(NSRunningApplication(processIdentifier: picked.ownerPID))
+                }
+            }
+        case .display:
+            selection.present { [weak self] result in
+                Task { @MainActor in
+                    if let self, let result { await self.retarget(toArea: result) }
+                    finish(nil)
+                }
+            }
+        }
+    }
+
+    private func retarget(toWindow picked: PickableWindow) async {
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            guard let window = content.windows.first(where: { $0.windowID == picked.id }),
+                  let current = activeTarget else { throw RecorderError.notRecording }
+            try await recorder.retarget(filter: SCContentFilter(desktopIndependentWindow: window),
+                                        sourceRect: nil)
+            let center = CGPoint(x: picked.frame.midX, y: picked.frame.midY)
+            activeTarget = (.window(picked.id),
+                            NSScreen.screens.first { $0.frame.contains(center) } ?? current.screen)
+        } catch {
+            hud.show("Couldn't switch — still recording the previous window", on: activeTarget?.screen)
+        }
+    }
+
+    private func retarget(toArea result: SelectionResult) async {
+        let config = settings.recording
+        do {
+            guard let screen = NSScreen.screens.first(where: {
+                      $0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")]
+                          as? CGDirectDisplayID == result.displayID }) else { throw RecorderError.notRecording }
+            let content = try await shareableContent(containing: config.controlsInRecording
+                                                     ? nil : controls.windowID)
+            guard let display = content.displays.first(where: { $0.displayID == result.displayID })
+            else { throw RecorderError.notRecording }
+            // Same filter shape as begin(): the pill stays out of the video.
+            let hidden = config.controlsInRecording ? [] : content.windows.filter {
+                $0.windowID == controls.windowID
+            }
+            let local = CaptureGeometry.pixelRect(forGlobalRect: result.globalRect,
+                                                  inDisplayFrame: screen.frame, scale: 1)
+            try await recorder.retarget(filter: SCContentFilter(display: display, excludingWindows: hidden),
+                                        sourceRect: local)
+            activeTarget = (.display(globalRect: result.globalRect), screen)
+        } catch {
+            hud.show("Couldn't switch — still recording the previous area", on: activeTarget?.screen)
+        }
+    }
+
+    /// Restart: throw away what's recorded so far and start again on the same
+    /// target with the same settings (countdown included). The pill, camera
+    /// bubble and overlays stay up; mute states carry over.
+    private func restart() async {
+        guard isRecording, let active = activeTarget, state.transition(.finish) else { return }
+        stopTimer()
+        let url = recorder.currentOutputURL
+        _ = try? await recorder.stop()
+        if let url { try? FileManager.default.removeItem(at: url) }
+        tempOutputURL = nil
+        state.transition(.reset)
+        state.transition(.arm)
+        notify()
+        await begin(target: active.target, screen: active.screen)
+    }
+
+    /// Discard: stop and delete the file — no card, no history entry.
+    private func discard() async {
+        guard state.transition(.finish) else { return }
+        let url = recorder.currentOutputURL
+        controls.hide()
+        stopTimer()
+        notify()
+        _ = try? await recorder.stop()
+        if let url { try? FileManager.default.removeItem(at: url) }
+        tearDownPanels()
+        state.transition(.reset)
+        tempOutputURL = nil
+        hud.show("Recording discarded", on: activeTarget?.screen ?? NSScreen.main)
+        notify()
     }
 
     /// On-screen shareable content. A just-ordered-in panel can take a moment to

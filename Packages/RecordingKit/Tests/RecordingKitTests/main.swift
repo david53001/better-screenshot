@@ -1,5 +1,5 @@
 import TestKit
 
 runTests("RecordingKitTests",
-    recorderStateTests + recordingConfigTests + pauseTimelineTests + trimRangeTests + trimExporterTests
+    recorderStateTests + recordingConfigTests + pauseTimelineTests + trimRangeTests + trimExporterTests + silenceFillTests + letterboxFitTests
 )
