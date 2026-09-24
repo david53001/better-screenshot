@@ -18,8 +18,7 @@ public enum InspectorSection: String, CaseIterable {
         case .redaction: return "Redaction"
         case .opacity: return "Opacity"
         case .arrange: return "Arrange"
-        case .cropHelp: return "Crop"
-        case .selectHelp: return nil
+        case .cropHelp, .selectHelp: return nil   // the panel heading already names the tool
         }
     }
 

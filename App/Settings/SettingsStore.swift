@@ -12,6 +12,8 @@ final class SettingsStore: ObservableObject {
     @Published var recording: RecordingConfig
     /// The annotation editor's sticky default style (color + sizes).
     @Published var editorStyle: AnnotationStyle
+    /// The editor's "Recent" colours, newest first (JSON under `editorRecentColors`).
+    @Published var editorRecentColors: [RGBAColor]
 
     private let defaults = UserDefaults.standard
 
@@ -38,6 +40,8 @@ final class SettingsStore: ObservableObject {
         } else {
             self.editorStyle = .default
         }
+        self.editorRecentColors = defaults.data(forKey: "editorRecentColors")
+            .flatMap { try? JSONDecoder().decode([RGBAColor].self, from: $0) } ?? []
     }
 
     func persist() {
@@ -50,6 +54,12 @@ final class SettingsStore: ObservableObject {
     func persistEditorStyle() {
         if let data = try? JSONEncoder().encode(editorStyle) {
             defaults.set(data, forKey: "editorDefaultStyle")
+        }
+    }
+
+    func persistEditorRecentColors() {
+        if let data = try? JSONEncoder().encode(editorRecentColors) {
+            defaults.set(data, forKey: "editorRecentColors")
         }
     }
 

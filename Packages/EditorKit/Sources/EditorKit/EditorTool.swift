@@ -66,3 +66,21 @@ public extension EditorTool {
         return allCases.first { $0.shortcutKey == c }
     }
 }
+
+public extension EditorTool {
+    /// The tool that draws `annotation` — how the inspector describes a selected object.
+    static func maker(of annotation: any Annotation) -> EditorTool? {
+        switch annotation {
+        case is ArrowAnnotation: return .arrow
+        case is LineAnnotation: return .line
+        case is RectangleAnnotation: return .rectangle
+        case is FilledRectangleAnnotation: return .filledRectangle
+        case is EllipseAnnotation: return .ellipse
+        case is TextAnnotation: return .text
+        case is CounterAnnotation: return .counter
+        case is BlurAnnotation: return .blur
+        case is PixelateAnnotation: return .pixelate
+        default: return nil
+        }
+    }
+}
