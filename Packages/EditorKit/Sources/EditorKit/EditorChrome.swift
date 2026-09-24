@@ -1,9 +1,9 @@
 import AppKit
 
-// Custom AppKit views backing the redesigned annotation editor chrome:
-// the floating glass tool-pill buttons, the inspector colour swatches, and a
+// Custom AppKit views backing the annotation editor chrome: the floating glass
+// tool-pill buttons, the side panel's colour swatches and labelled rows, and a
 // clip view that centres the canvas inside its scroll view. All are manual /
-// visually verified (no unit tests), matching the project's UI testing norm.
+// visually verified (headless probes), matching the project's UI testing norm.
 
 /// A single icon tool in the floating toolbar pill. Draws its own rounded
 /// hover / selected background and tints an SF Symbol template image.
@@ -67,7 +67,7 @@ final class IconToolButton: NSButton {
 
 /// A round colour swatch in the inspector, with a selection ring.
 final class SwatchButton: NSButton {
-    let swatchColor: NSColor
+    var swatchColor: NSColor { didSet { needsDisplay = true } }
     var isSelectedSwatch = false { didSet { needsDisplay = true } }
 
     init(color: NSColor, target: AnyObject?, action: Selector) {
@@ -100,6 +100,119 @@ final class SwatchButton: NSButton {
             ring.lineWidth = 2; ring.stroke()
         }
     }
+}
+
+// MARK: - Side-panel building blocks (dark HUD, 8pt grid, controls 22–28pt tall)
+
+enum InspectorStyle {
+    /// Width of the panel's content column (panel width minus 16pt padding each side).
+    static let contentWidth: CGFloat = EditorInspectorView.width - 32
+    static let primaryText = NSColor(white: 1, alpha: 0.88)
+    static let secondaryText = NSColor(white: 1, alpha: 0.55)
+
+    /// Small uppercase caption — section titles ("COLOUR") and in-row labels ("RECENT").
+    static func caption(_ text: String) -> NSTextField {
+        let l = NSTextField(labelWithString: text.uppercased())
+        l.font = .systemFont(ofSize: 10, weight: .semibold)
+        l.textColor = NSColor(white: 1, alpha: 0.45)
+        return l
+    }
+
+    /// Regular 12pt label for a row ("Width").
+    static func rowLabel(_ text: String) -> NSTextField {
+        let l = NSTextField(labelWithString: text)
+        l.font = .systemFont(ofSize: 12)
+        l.textColor = primaryText
+        return l
+    }
+
+    /// Wrapping explanatory text.
+    static func note(_ text: String) -> NSTextField {
+        let l = NSTextField(wrappingLabelWithString: text)
+        l.font = .systemFont(ofSize: 12)
+        l.textColor = NSColor(white: 1, alpha: 0.62)
+        l.preferredMaxLayoutWidth = contentWidth
+        return l
+    }
+
+    /// A horizontal row; `fill` adds a flexible spacer after the views (left-aligned row).
+    static func row(_ views: [NSView], spacing: CGFloat = 8, fill: Bool = false) -> NSStackView {
+        let r = NSStackView(views: views)
+        r.orientation = .horizontal
+        r.alignment = .centerY
+        r.spacing = spacing
+        if fill {
+            let spacer = NSView()
+            spacer.setContentHuggingPriority(.init(1), for: .horizontal)
+            r.addArrangedSubview(spacer)
+        }
+        return r
+    }
+
+    static func hairline() -> NSView {
+        let v = NSView()
+        v.translatesAutoresizingMaskIntoConstraints = false
+        v.wantsLayer = true
+        v.layer?.backgroundColor = NSColor(white: 1, alpha: 0.10).cgColor
+        v.heightAnchor.constraint(equalToConstant: 1).isActive = true
+        return v
+    }
+}
+
+/// "Label  ———●———  value" — a slider with an optional leading label and a live value
+/// readout. `onChange(value, finished)`: `finished` is false while the knob is dragged.
+final class LabeledSliderRow: NSStackView {
+    let slider: NSSlider
+    private let valueLabel = NSTextField(labelWithString: "")
+    private let format: (Double) -> String
+    var onChange: ((Double, Bool) -> Void)?
+
+    init(label: String?, range: ClosedRange<Double>, tooltip: String, format: @escaping (Double) -> String) {
+        slider = NSSlider(value: range.lowerBound, minValue: range.lowerBound,
+                          maxValue: range.upperBound, target: nil, action: nil)
+        self.format = format
+        super.init(frame: .zero)
+        orientation = .horizontal
+        alignment = .centerY
+        spacing = 8
+        slider.controlSize = .small
+        slider.isContinuous = true
+        slider.target = self
+        slider.action = #selector(sliderMoved(_:))
+        slider.toolTip = tooltip
+        valueLabel.font = .monospacedDigitSystemFont(ofSize: 11.5, weight: .regular)
+        valueLabel.textColor = InspectorStyle.secondaryText
+        valueLabel.alignment = .right
+        valueLabel.translatesAutoresizingMaskIntoConstraints = false
+        valueLabel.widthAnchor.constraint(equalToConstant: 40).isActive = true
+        if let label {
+            let l = InspectorStyle.rowLabel(label)
+            l.translatesAutoresizingMaskIntoConstraints = false
+            l.widthAnchor.constraint(equalToConstant: 44).isActive = true
+            addArrangedSubview(l)
+        }
+        addArrangedSubview(slider)
+        addArrangedSubview(valueLabel)
+        heightAnchor.constraint(equalToConstant: 24).isActive = true
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    var value: Double {
+        get { slider.doubleValue }
+        set { slider.doubleValue = newValue; valueLabel.stringValue = format(newValue) }
+    }
+
+    @objc private func sliderMoved(_ sender: NSSlider) {
+        valueLabel.stringValue = format(sender.doubleValue)
+        let type = NSApp.currentEvent?.type
+        let tracking = type == .leftMouseDown || type == .leftMouseDragged
+        onChange?(sender.doubleValue, !tracking)
+    }
+}
+
+/// Top-left-origin container so the panel's sections start at the top of its scroll view.
+final class FlippedView: NSView {
+    override var isFlipped: Bool { true }
 }
 
 /// Keeps the document view centred when it is smaller than the visible area,

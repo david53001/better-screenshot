@@ -9,7 +9,9 @@ public final class EditorCanvasView: NSView {
     public var onEditText: ((AnnotationStyle) -> Void)?
 
     // MARK: - Selection (supports multiple objects)
-    private var selectedIDs: Set<UUID> = []
+    private var selectedIDs: Set<UUID> = [] {
+        didSet { if selectedIDs != oldValue { openStyleGroup = nil } }
+    }
     /// The single selected annotation, or nil when zero or several are selected
     /// (resize handles only make sense for exactly one).
     private var soleSelectedID: UUID? { selectedIDs.count == 1 ? selectedIDs.first : nil }
@@ -42,11 +44,27 @@ public final class EditorCanvasView: NSView {
     public var hasSelection: Bool { !selectedIDs.isEmpty }
     public var canUndo: Bool { !undoStack.isEmpty }
     public var canRedo: Bool { !redoStack.isEmpty }
+    /// True while the inline text editor is open (tool shortcuts must not fire then).
+    public var isEditingText: Bool { activeField != nil }
+
+    /// The selected objects in document (stacking) order.
+    private var selectedAnnotations: [any Annotation] {
+        document.annotations.filter { selectedIDs.contains($0.id) }
+    }
+    /// The selection described by the tool that draws each object (for the inspector).
+    public var selectedTools: [EditorTool] { selectedAnnotations.compactMap(EditorTool.maker(of:)) }
+    /// The style the inspector shows for the selection (the backmost selected object's).
+    public var selectionStyle: AnnotationStyle? { selectedAnnotations.first?.style }
+
+    /// Style edits that share this group (one slider drag, one colour-panel session)
+    /// merge into a single undo step. Any other change or a new selection ends the group.
+    private var openStyleGroup: AnyHashable?
 
     private func snapshot() {
         undoStack.append(document)
         if undoStack.count > 50 { undoStack.removeFirst() }
         redoStack.removeAll()
+        openStyleGroup = nil
     }
 
     public init(document: EditorDocument) {
@@ -56,6 +74,16 @@ public final class EditorCanvasView: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     public override var isFlipped: Bool { true }
+
+    /// Zoom resizes the canvas; keep the live text editor on its text at the new scale.
+    public override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        guard let field = activeField else { return }
+        let p = NSPoint(x: textImageOrigin.x / scale, y: textImageOrigin.y / scale)
+        field.setFrameOrigin(p)
+        activeRoom = max(bounds.maxX - p.x, 40)
+        restyleActiveField()
+    }
 
     // MARK: - Coordinate mapping (view ↔ image)
     private var scale: CGFloat { document.size.width / max(bounds.width, 1) }
@@ -184,7 +212,12 @@ public final class EditorCanvasView: NSView {
         // the full-resolution document into a new CGImage on every redraw
         // (which allocated a base-image-sized context per drag tick).
         // DocumentRenderer still does the full-res flatten for export.
+        // Zoomed in far (≥ 3 screen pixels per image pixel): show crisp pixels, not a smear.
+        let context = NSGraphicsContext.current
+        let interpolation = context?.imageInterpolation ?? .default
+        if (window?.backingScaleFactor ?? 2) / scale >= 3 { context?.imageInterpolation = .none }
         baseNSImage.draw(in: bounds)
+        context?.imageInterpolation = interpolation
         // Annotations (and the live in-progress preview) draw themselves in
         // image-pixel coordinates; scale the context so image px → view points.
         // The view is flipped, matching the renderer's top-left convention.
@@ -192,8 +225,8 @@ public final class EditorCanvasView: NSView {
         let toView = NSAffineTransform()
         toView.scale(by: 1 / scale)
         toView.concat()
-        for a in document.annotations where a.id != editingID { a.draw() }
-        inProgress?.draw()
+        for a in document.annotations where a.id != editingID { a.drawComposited() }
+        inProgress?.drawComposited()
         NSGraphicsContext.restoreGraphicsState()
 
         // Live marquee for region tools (blur/pixelate/crop) that have no shape preview.
@@ -290,11 +323,8 @@ public final class EditorCanvasView: NSView {
                 textPressPending = true   // click = free label, drag = text box (mouseUp)
             }
         case .counter:
-            snapshot()
-            document.add(CounterAnnotation.centered(on: p,
-                                                    number: document.nextCounterNumber(),
-                                                    style: style))
-            onStateChange?(); needsDisplay = true
+            // Selected like any just-drawn object, so the panel restyles it straight away.
+            insert(CounterAnnotation.centered(on: p, number: document.nextCounterNumber(), style: style))
         default:
             inProgress = nil // shape creation happens on drag
         }
@@ -399,6 +429,7 @@ public final class EditorCanvasView: NSView {
             undoStack.append(snap)
             if undoStack.count > 50 { undoStack.removeFirst() }
             redoStack.removeAll()
+            openStyleGroup = nil
         }
         pendingDragSnapshot = nil; didDragMutate = false
         dragStartImagePoint = nil; regionMarquee = nil; marqueeRect = nil
@@ -459,11 +490,17 @@ public final class EditorCanvasView: NSView {
     public func undo() {
         guard let prev = undoStack.popLast() else { return }
         redoStack.append(document); document = prev
+        openStyleGroup = nil
         selectedIDs = []; onStateChange?(); needsDisplay = true
     }
     public func redo() {
         guard let next = redoStack.popLast() else { return }
         undoStack.append(document); document = next
+        openStyleGroup = nil
+        selectedIDs = []; onStateChange?(); needsDisplay = true
+    }
+    public func clearSelection() {
+        guard !selectedIDs.isEmpty else { return }
         selectedIDs = []; onStateChange?(); needsDisplay = true
     }
     public func deleteSelected() {
@@ -558,6 +595,7 @@ public final class EditorCanvasView: NSView {
         field.typingAttributes = attrs
         field.textStorage?.setAttributes(attrs, range: NSRange(location: 0, length: (field.string as NSString).length))
         field.insertionPointColor = style.strokeColor.nsColor
+        field.alphaValue = style.opacity   // match the committed text's opacity while typing
         resizeActiveField()
     }
 
@@ -600,24 +638,33 @@ public final class EditorCanvasView: NSView {
             onStateChange?(); needsDisplay = true
             return
         }
-        guard !text.isEmpty else { needsDisplay = true; return }
+        guard !text.isEmpty else { onStateChange?(); needsDisplay = true; return }
         insert(TextAnnotation(text: text, origin: textImageOrigin, style: style, wrapWidth: wrapWidth))
     }
 
-    /// Text-tool inspector changes restyle the selected text (the new style is
-    /// already the default for the next text). The live editor restyles via `style`.
-    public func applyStyleToSelectedText() {
-        guard activeField == nil, tool == .text else { return }
-        let targets = selectedIDs.compactMap { id -> TextAnnotation? in
-            guard let i = document.index(of: id), let ta = document.annotations[i] as? TextAnnotation,
-                  ta.style != style else { return nil }
-            return ta
+    /// Applies an inspector edit (e.g. "width = 7") to every selected object as one undo
+    /// step; edits passing the same `group` (a slider drag) merge into that step. The
+    /// window applies the same edit to `style`, the default for new objects; the live text
+    /// editor restyles from `style`, so this does nothing while text is being typed.
+    public func applyStyleEdit(_ edit: (inout AnnotationStyle) -> Void, group: AnyHashable? = nil) {
+        guard activeField == nil else { return }
+        var changed: [any Annotation] = []
+        for var a in selectedAnnotations {
+            var s = a.style
+            edit(&s)
+            guard s != a.style else { continue }
+            a.style = s
+            changed.append(a)
         }
-        guard !targets.isEmpty else { return }
-        snapshot()
-        for var ta in targets { ta.style = style; document.replace(id: ta.id, with: ta) }
+        guard !changed.isEmpty else { return }
+        if group == nil || group != openStyleGroup { snapshot() }
+        openStyleGroup = group
+        for a in changed { document.replace(id: a.id, with: a) }
         onStateChange?(); needsDisplay = true
     }
+
+    /// Ends a merged style edit (e.g. the slider was released), so the next edit is its own step.
+    public func endStyleEditGroup() { openStyleGroup = nil }
 }
 
 extension EditorCanvasView: NSTextViewDelegate {

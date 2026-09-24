@@ -32,13 +32,18 @@ final class CaptureCoordinator {
     private var previousApp: NSRunningApplication?
 
     func presentEditor(_ image: CGImage) {
-        let controller = EditorWindowController(image: image, defaultStyle: settings.editorStyle)
+        let controller = EditorWindowController(image: image, defaultStyle: settings.editorStyle,
+                                                recentColors: settings.editorRecentColors)
         controller.onCopy = { [weak self] img in self?.copy(img) }
         controller.onSave = { [weak self] img in self?.save(img) }
         controller.onAddToStack = { [weak self] img in self?.keepInStack(img) }
         controller.onStyleChanged = { [weak self] style in
             self?.settings.editorStyle = style
             self?.settings.persistEditorStyle()
+        }
+        controller.onRecentColorsChanged = { [weak self] colors in
+            self?.settings.editorRecentColors = colors
+            self?.settings.persistEditorRecentColors()
         }
         editorController = controller
         controller.showWindow(nil)
