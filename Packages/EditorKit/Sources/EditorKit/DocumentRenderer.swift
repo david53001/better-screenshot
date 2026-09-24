@@ -24,8 +24,8 @@ public enum DocumentRenderer {
 
         NSImage(cgImage: doc.baseImage, size: NSSize(width: w, height: h))
             .draw(in: NSRect(x: 0, y: 0, width: w, height: h))
-        for a in doc.annotations { a.draw() }
-        preview?.draw()
+        for a in doc.annotations { a.drawComposited() }
+        preview?.drawComposited()
 
         NSGraphicsContext.restoreGraphicsState()
         return ctx.makeImage()
