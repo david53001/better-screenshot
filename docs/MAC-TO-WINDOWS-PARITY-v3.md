@@ -1093,4 +1093,322 @@ segments with `-c copy` at stop**. A running ffmpeg can't change its inputs or r
 
 ## Part 6 — Video editor v2 (cut, per-segment speed/mute, GIF export)
 
-_(pending — filled when Part 6 lands)_
+**What it is.** The recording trim window (opened by a recording's Quick Access card ✂ **Trim** button,
+or History's **Trim…**; MP4 only) is now a small video editor. It replaces AVKit's single-range "yellow
+handles" trim mode with our own filmstrip timeline: split the clip at the playhead, delete segments,
+drag segment edges, give each segment a speed (1× / 1.5× / 2× / 4×) or mute it, undo / redo, and export
+as a copy, as a GIF, or over the original. Nothing touches the original file until an export. The Part 0
+card-restore rule applies to every way the window closes.
+
+**Terms.** *Source time* = seconds in the original recording. *Output time* = seconds in the exported
+video (kept segments back to back; a 2× segment lasts half as long). *Timeline time* = what the timeline
+draws: kept segments at their output length, cuts at their source length. *Cut list* = the ordered kept
+segments (the model, `CutList`). *Passthrough* = copying the compressed video without re-encoding
+(lossless, instant, but can only start on a *keyframe*); *re-encode* = decode + encode every frame
+(exact on any frame, takes seconds).
+
+### Layout (exact)
+
+Snapshots from the headless probe (1× PNGs): `docs/parity-v3/part6-editor.png` (two segments, a cut, the
+second segment at 2× and auto-muted), `part6-edge-drag.png` (dragging segment 1's end edge — the preview
+shows the frame under the handle), `part6-exporting.png` (progress bar), `part6-min-size.png` (minimum
+window size, one segment).
+
+```
+┌─ Edit Video — Recording 2026-09-24 at 12.00.00.mp4 ──────────────────────────────────────────┐
+│                                                                                              │
+│                 video preview — black letterbox, aspect-fit; click = play / pause            │
+│                                                                                              │
+│ ╭──────────────────────────────────────────────────────────────────────────────────────────╮ │
+│ │ ▶  0:05.0 / 0:10.5   [✂ Split] [🗑 Delete] │ [↶] [↷]                  🔍−  ──●──────  🔍+ │ │
+│ │                                          ●  (playhead knob)                              │ │
+│ │ ╭────────────────────────╮░░░░░░░✂░░░░░░░▐▌[2×][🔇] filmstrip — selected (yellow)   ▐▌ │ │
+│ │ │ filmstrip (segment 1)  │░ cut, dimmed ░│▐▌                                        ▐▌ │ │
+│ │ ╰────────────────────────╯░░░░░░░░░░░░░░░▐▌━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━▐▌ │ │
+│ │ Segment 2 of 2  0:09.0 – 0:20.0    Speed [ 1× | 1.5× | 2× | 4× ]   ☑ Mute segment       │ │
+│ │ ⓘ Sped-up segments are muted so the audio doesn't sound rushed — untick Mute segment …   │ │
+│ ╰──────────────────────────────────────────────────────────────────────────────────────────╯ │
+├──────────────────────────────────────────────────────────────────────────────────────────────┤
+│ 0:10.5 kept of 0:20.0   ☐ Mute audio                 [Cancel] [Save as Copy │▾] [Replace Original] │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Window.** Title `Edit Video — <file name>`. Content 960 × 720 pt at open (centred), resizable, minimum
+frame 780 × 560 pt. Always dark (dark appearance); window background `#171717` (white 0.09).
+Only one editor window exists at a time (opening another file closes the current one — Part 0).
+
+**Preview** (top, full width, down to 12 pt above the card; min height 200): plays the edit exactly as it
+will export (removed parts skipped, speeds applied, muted segments silent). No player controls on it; a
+click toggles play / pause.
+
+**Card** (dark HUD panel: translucent dark material, corner radius 12, 1 px border white 10%), inset 12 pt
+from the window's left/right edges and 12 pt above the action bar. Padding 12 top/bottom, 14 left/right;
+rows 10 pt apart (8 pt between the segment row and the hint line). Four rows:
+
+1. **Transport / edit row** (≈ 28 pt tall, items 8 pt apart, left to right):
+   | Item | Look | Tooltip (verbatim) | Shortcut | Enabled when |
+   |---|---|---|---|---|
+   | Play / Pause | borderless icon, `play.fill` ↔ `pause.fill`, 15 pt semibold, white 85%, 29 pt wide | `Play (Space)` / `Pause (Space)` | Space | loaded, not exporting |
+   | Time | `0:05.0 / 0:10.5` = playhead / edit length (output time), 12 pt monospaced-digit medium, white 85%, min width 116 | `Playhead / length of the edit` | — | — |
+   | (10 pt gap) | | | | |
+   | **Split** | rounded push button, `scissors` 12 pt + "Split" | `Split the segment at the playhead (S or ⌘B)` | S, ⌘B | the playhead is ≥ 0.1 s inside a segment |
+   | **Delete** | rounded push button, `trash` + "Delete" | `Delete the selected (yellow) segment (⌫)` | ⌫ / Delete | more than one segment |
+   | divider | 1 × 18 pt, white 15% | | | |
+   | Undo | rounded push button, icon only `arrow.uturn.backward` | `Undo (⌘Z)` | ⌘Z | something to undo |
+   | Redo | rounded push button, icon only `arrow.uturn.forward` | `Redo (⇧⌘Z)` | ⇧⌘Z | something to redo |
+   | (flexible space) | | | | |
+   | Zoom out | borderless `minus.magnifyingglass` 12 pt, 26 pt wide | `Zoom out the timeline` | — | zoom > 1 (÷ 1.5 per click) |
+   | Zoom slider | small slider, 110 pt wide, 1…12 (1 = fit to width), continuous | `Timeline zoom` | — | loaded |
+   | Zoom in | borderless `plus.magnifyingglass` 12 pt | `Zoom in the timeline` | — | zoom < 12 (× 1.5 per click) |
+2. **Timeline** — 66 pt tall, full card width, scrolls horizontally when zoomed (overlay scroller, no
+   bounce). Tooltip: `Click to move the playhead and pick a segment · drag a yellow edge to trim · right-click for speed and mute`.
+   Drawing spec below.
+3. **Selected-segment row** (items 8 pt apart): `Segment 2 of 3` (11 pt semibold, white 90%) ·
+   `0:09.0 – 0:20.0` (the segment's **source** range; 11 pt monospaced-digit, white 50%; tooltip
+   `Where this segment comes from in the original recording`) · 14 pt gap · `Speed` (11 pt, white 60%) ·
+   small segmented control `1×` `1.5×` `2×` `4×` (each 40 pt wide; tooltip
+   `Play this segment faster (sped-up segments start muted)`) · 10 pt gap · small checkbox
+   `Mute segment` (11 pt; tooltip `Silence this segment's audio (the rest keeps its sound)`; shown ticked
+   and disabled while whole-file **Mute audio** is on).
+4. **Hint line**: `info.circle` 11 pt (white 45%) + one sentence, 11 pt white 55%, truncated at the end if
+   too long. Text (first match wins, verbatim):
+   1. exporting → `Exporting — the original stays untouched until it's done.`
+   2. Mute audio ticked → `Mute audio is on: the saved video will have no sound at all.`
+   3. selected segment sped up and muted → `Sped-up segments are muted so the audio doesn't sound rushed — untick Mute segment to keep it.`
+   4. selected segment sped up, not muted → `Sped-up audio keeps its pitch but plays faster.`
+   5. only one segment → `Move the playhead, then press S (or ⌘B) to split · drag the yellow edges to trim · I / O set in / out`
+   6. otherwise → `Click a segment to select it · ⌫ deletes it · right-click for speed and mute · Space plays the edit`
+
+**Action bar** (bottom, 52 pt tall, standard header material, 1 px separator on top; row inset 16 pt,
+items 10 pt apart): kept label (12 pt monospaced-digit, secondary colour; tooltip
+`Length of the saved video / length of the recording`) · 4 pt gap · checkbox `Mute audio` (tooltip
+`Save without any sound`) · 8 pt gap · progress bar (140 pt, hidden except while exporting; the kept
+label hides while it shows) + progress text · flexible space · **Cancel** (tooltip `Close without saving`;
+reads **Done** with tooltip `Close the editor` after Replace Original) · **Save as Copy ▾** — a split
+button: the main part saves a copy, the ▾ opens a menu with one item `Export as GIF` (tooltip on the
+button `Save the edit as a new file next to the original — the ▾ menu exports a GIF`; on the item
+`Save the edit as an animated GIF next to the original (10 fps, up to 960 px wide)`) · **Replace
+Original** (accent-tinted, deliberately **no** Return shortcut; tooltip
+`Overwrite the original recording with the edit`).
+
+Kept label texts (verbatim; times are `m:ss.t`, rounded to tenths — `TrimRange.timestamp`):
+`Loading…` · `This recording can't be opened for editing.` · `Whole recording · 0:45.0` (nothing edited)
+· `0:31.2 kept of 0:45.0` · and one-off notes that stay until the next edit: `Edited ✓ original replaced · 0:31.2`,
+`GIF saved ✓ <gif file name>`, `Couldn't export the edit — original untouched`,
+`Couldn't export the GIF — nothing was changed`. Progress text: `Exporting… 42%` (re-encode or GIF,
+determinate bar) or `Saving…` (passthrough, indeterminate bar).
+
+**Icons** (SF Symbol → port icon key in `windows/src/BetterScreenshot.App/Resources/Icons.xaml`):
+`play.fill` → `icon-play`; `trash` → `icon-trash`; `arrow.uturn.backward` / `.forward` → `icon-undo` /
+`icon-redo`. **New glyphs to author:** `pause.fill` → `icon-pause`, `scissors` → `icon-scissors`,
+`minus.magnifyingglass` / `plus.magnifyingglass` → `icon-zoom-out` / `icon-zoom-in`, `info.circle` →
+`icon-info`, `speaker.slash.fill` → `icon-speaker-off`.
+
+### Timeline — drawing spec
+
+- 12 pt inset at both ends. Scale (pt per timeline second) = (view width − 24) ÷ timeline length; view
+  width = visible width × zoom. Track: y 10 … height − 6 (50 pt of a 66 pt view); behind it a rounded
+  rect (radius 8, black 35%) 2 pt in from the sides and 3 pt beyond the track top/bottom.
+- **Kept segment**: its rect inset 1 pt left/right (so adjacent segments show a 2 pt gap), radius 6,
+  filled with the filmstrip, 1 px border white 22%.
+- **Filmstrip**: tiles `track height × video aspect` wide (clamped 24…160 pt), starting at each block's
+  left edge; each tile aspect-fills the thumbnail nearest to the **source** time at the tile's centre
+  (so a 2× segment shows twice the footage per tile). Thumbnails: `clamp(2 × duration, 12, 240)` frames at
+  `(k + 0.5) × duration / count`, max 320 × 200 px, loaded in the background; until then tiles are grey 22%.
+- **Cut** (removed range): its rect inset 1 pt left/right and 4 pt top/bottom, radius 4; filmstrip, then
+  black 66%, then 45° hatch lines (white 9%, 1.5 pt, every 7 pt), and a centred `scissors` glyph (11 pt,
+  white 45%) if the block is ≥ 22 pt wide. Cuts before the first and after the last segment are drawn too.
+- **Badges** (top-left of a kept segment, 5 pt from its left, 4 pt from the top): 16 pt-tall fully rounded
+  pills, black 70%, 5 pt side padding, 4 pt apart: the speed (`1.5×`, `2×`, `4×`; 10 pt bold white) when
+  not 1×, then `speaker.slash.fill` (9 pt bold white) when muted. A badge that doesn't fit is skipped.
+- **Selection** (exactly one segment is always selected): system-yellow 2.5 pt border (radius 6) plus two
+  solid yellow handles, 10 pt wide (or a third of the segment if narrower), radius 4, each with a centred
+  2 × 14 pt grip (black 55%).
+- **Playhead**: 2 pt white line from y 3 to the bottom with a 10 pt white circle knob at the top, soft
+  shadow (black 60%, blur 2). While playing, the view scrolls so the playhead stays visible (re-anchored
+  at 15% from the left when it leaves).
+- **Cursor**: left-right resize cursor within ±7 pt of any kept segment's edge.
+
+### Behaviour
+
+**Mouse on the timeline.**
+- Click a kept segment → select it and move the playhead to that point; keep dragging to scrub.
+- Click a cut → the playhead jumps to the start of the next kept segment (or the end if none); drag scrubs.
+- **Edge drag** (press within ±7 pt of a kept segment's edge; if two edges are in reach, the selected
+  segment's wins, otherwise the one on the pointer's side of the shared boundary). The segment becomes
+  selected, playback pauses, and the preview switches to the plain source showing the frame at the edge
+  (start edge: the new first frame; end edge: the frame 1/60 s before the new end). The scale is frozen
+  during the drag so the edge stays under the pointer: start edge → `newStart = previousKeptEnd (or 0) +
+  (pointerTimeline − displayStartOfTheCutBefore)`; end edge → `newEnd = start + (pointerTimeline −
+  segmentDisplayStart) × speed`; then clamped by `CutList.setStart/setEnd` (can't cross a neighbour, ≥ 0.1 s
+  long). Dragging an edge into a cut brings that footage back. Release = **one** undo step; the preview is
+  rebuilt with the playhead at the segment's new start (start edge) or 1/60 s before its end (end edge).
+- Right-click a kept segment → selects it and shows: `Speed ▸` (`1× (normal)`, `1.5×`, `2×`, `4×`, current
+  one checked) · `Mute Segment` (checked when muted; disabled while Mute audio is on) · separator ·
+  `Split at Playhead ⌘B` (enabled like the Split button) · `Delete Segment ⌫` (disabled with one segment).
+
+**Edits** (each is one undo step; a refused edit beeps and changes nothing):
+| Edit | Trigger | Rule | Selection after | Playhead after |
+|---|---|---|---|---|
+| Split | S, ⌘B, Split, menu | splits the segment under the playhead into two with the same speed + mute; refused within 0.1 s of a segment edge | the **left** half (so "split, move, split, ⌫" removes the middle) | unchanged |
+| Delete | ⌫ / Delete key, button, menu | removes the selected segment; the last one can't be removed | the segment now at that position (or the new last) | where the deleted segment began |
+| In point | I | drops everything before the playhead | first segment | 0 |
+| Out point | O | drops everything after the playhead | last segment | 1/60 s before the end |
+| Speed | segmented control, menu | 1× → faster also **mutes** the segment; back to 1× **unmutes**; changing between faster speeds keeps the current mute | same | same source frame |
+| Mute segment | checkbox, menu | toggles the selected segment's audio | same | unchanged |
+| Undo / Redo | ⌘Z / ⇧⌘Z, buttons | whole cut-list states | clamped to the segment count | same source frame if still kept, else 0 |
+
+Other keys: **Space** play / pause (restarts from 0 when at the end); **← / →** pause and step one frame.
+Plain-key shortcuts are ignored while a ⌘/⌥/⌃ modifier is held and while exporting. The whole-file
+**Mute audio** box mutes the preview immediately and makes the export drop all audio.
+
+**Exports** (all controls, Cancel and the close box are disabled while one runs; failures leave the
+original untouched and show the note above):
+- **Save as Copy** → `<stem> (trimmed).mp4` next to the original (`TrimmedFileName`, " 2", " 3"… on
+  collision). The window closes; the copy gets its own Quick Access card + History entry; the original's
+  card comes back (Part 0).
+- **Export as GIF** → renders the edit (always without sound) to a temporary MP4, converts it with the
+  existing GIF exporter (10 fps, ≤ 960 px wide, loops) to `<stem> (edited).gif` next to the original
+  (uniquified). The window **stays open**; the kept label shows `GIF saved ✓ <name>`; the GIF gets a card +
+  History entry. Progress: first half = render, second half = GIF frames.
+- **Replace Original** → export to a temp file on the same volume, then an atomic swap. The window stays
+  open and reloads the new file: a fresh single-segment cut list (undo history cleared), Mute audio
+  unticked, Cancel reads **Done**, note `Edited ✓ original replaced · <new length>`; a HUD says
+  `Recording edited`.
+- **Passthrough or re-encode:** passthrough (lossless, instant) when the cut list is one contiguous
+  stretch at 1× with a single mute state — a plain start/end trim (adjacent split pieces count as
+  contiguous; all-muted = whole-file mute). Everything else — a middle cut, any speed change, mixed
+  per-segment mute — is **re-encoded**: H.264 highest quality at the source's frame rate (clamped 30…60
+  fps), AAC audio, sped audio time-stretched with its pitch kept. A recording with two audio tracks
+  (system audio + microphone) keeps both as separate tracks in either path (probed), exactly like the
+  original recording.
+- **Recording change:** new recordings get a keyframe at least every 0.5 s (was the encoder default),
+  so passthrough trims start close to the chosen frame.
+
+**Timing (probe, M3 MacBook, macOS 26.6, other builds running):** 60 s 1080p60 source, keep
+[0,20] [25,45] [50,60] (50 s): passthrough trim 0.06 s; re-encode **14.3 s** (PSNR 56–60 dB vs the source
+— visually lossless); same with the middle segment at 2× (40 s out) 14.2 s.
+
+**macOS-specific findings** (why the mac code looks the way it does — not needed on Windows, but explains
+the rules): `AVAssetExportPresetHighestQuality` does **not** re-encode a plain cut composition — it copies
+the samples and hides the extra frames behind an MP4 edit list (3 edit-list entries, 0.07 s), which only
+edit-list-aware players honour, so the mac export always renders through a video composition to force a
+real re-encode; and a sped-up segment followed by the next stretch of the same source fails to export
+(AVFoundation error -16364) without one.
+
+### Data
+
+No new persisted settings. `RecordingConfig.keyFrameInterval = 0.5` (seconds) is a constant, not a user
+setting.
+
+### Pure logic to port 1:1 (with the macOS tests)
+
+`CutList` (`Packages/RecordingKit/Sources/RecordingKit/CutList.swift`), a value type:
+- `duration` (source seconds); `segments: [CutSegment]` — never empty, ordered, non-overlapping; a
+  segment = `start`, `end` (source seconds), `speed` (one of `speeds = [1, 1.5, 2, 4]`), `muted`.
+  `length = end − start`; `outputLength = length / speed`. `minimumSegment = 0.1`; comparisons use ε = 1e-6.
+- `init(duration:)` → one segment `[0, duration]`; `init(range:duration:)` → the single-segment case of a
+  plain trim (`TrimRange`).
+- `keptDuration` = Σ outputLength. `outputStart(of: i)` = Σ outputLength before i.
+  `segmentIndex(atOutput: t)` — a boundary belongs to the later segment, the very end to the last.
+  `sourceTime(forOutput:)`, `segmentIndex(containingSource:)` (shared boundary → later segment; the
+  last segment's end is inclusive), `outputTime(forSource:)` (nil inside a cut).
+- `passthrough` → `(range, muted)` when all segments are adjacent (|a.end − b.start| ≤ ε), all at 1×, all
+  with the same mute; else nil.
+- Edits return false and change nothing when they can't apply: `split(atSource:)` (needs t within
+  [start + 0.1, end − 0.1] of a segment; both halves keep speed + mute) · `remove(at:)` (not the last
+  segment) · `setStart(_:of:)` clamped to [previous end or 0, own end − 0.1] · `setEnd(_:of:)` clamped
+  to [own start + 0.1, next start or duration] · `setSpeed(_:of:)` (only listed speeds; 1× → faster sets
+  muted; → 1× clears it) · `setMuted(_:of:)` · `trimBefore(source:)` (in point: drop segments ending ≤ t,
+  clip the first to start at t but keep ≥ 0.1 s) · `trimAfter(source:)` (out point, mirrored).
+- Timeline: `timeline` = items in order — a `removed` item for every gap > ε (including before the first
+  and after the last segment) with display length = its source length, and a `kept(i)` item with display
+  length = the segment's output length. `timelineLength`, `timelinePosition(forOutput:)`,
+  `outputTime(forTimelinePosition:)` (inside a cut → the next kept segment's output start, or
+  `keptDuration` if none), `sourceTime(forTimelinePosition:)` (cuts 1:1, kept at × speed — for the filmstrip).
+- `CutHistory`: `current`, undo and redo stacks of whole `CutList` values. `commit(list)` pushes the
+  current value only if `list` differs and clears redo; `apply(edit)` = edit a copy, commit on success;
+  `undo()` / `redo()` return false when empty. An edge drag edits a working copy and commits once on release.
+
+Test cases (`Tests/RecordingKitTests/CutListTests.swift`; re-create them): whole recording is one segment
+(kept 45, passthrough [0,45] unmuted) · `TrimRange` is the single-segment case · split at 3 then 7 of 10 →
+[0,3][3,7][7,10] · split keeps speed / mute · split refuses 0.05, 9.95, 0 and an existing split point ·
+split inside a cut fails · remove the middle → kept 7, can't remove index 5 or the last segment · kept
+duration with speeds ([0,2] + [4,8] at 2× = 4; 8 s at 4× = 2; at 1.5× = 5.333…) · speed mutes by default
+and an explicit unmute survives 2×→4×, back to 1× unmutes, 3× is refused, no-op returns false · edge drags
+clamp to neighbours and the minimum ([0,3][6,10]: start 4 ok, start 1 → 3, end 9.99 refused, end 0 → 0.1,
+start 99 → 9.9) · in/out ([0,3][3,6][6,10]: in 4 → [4,6][6,10]; out 8 → [4,6][6,8]; out 6 → [4,6]; in at
+9.99 of a fresh list → start 9.9) · output/source mapping on [0,2] + [4,8]@2× (output 1 → 1, 3 → 6, 4 → 8;
+source 6 → output 3, source 3 → nil; output 2 → segment 1) · passthrough: a split alone → [0,10]; both
+muted → muted; mixed mute, a middle cut, 1.5× → nil; start 1 / end 9 → [1,9] · timeline of [0,2] + [4,8]@2×
+of 10 s = kept(0) 0–2, removed 2–4, kept(1) display 4–6, removed display 6–8 (length 8); output 3 ↔
+timeline 5; a click at 3 → output 2, at 7.5 → output 4; source at timeline 3 → 3, at 5 → 6 · history:
+split, remove, refused remove adds no step, undo ×2, redo, a committed drag is one step and clears redo.
+
+`TrimmedFileName` gained a suffix and an extension: `name(forOriginal:suffix:ext:)` /
+`unique(forOriginal:suffix:ext:exists:)`, suffix `trimmed` (default) or `edited`; an existing
+` (trimmed)` or ` (edited)` suffix, with or without ` N`, is stripped first. Tests:
+`Recording 2026-09-24 at 10.00.00.mp4` → `… (edited).gif`; `Rec (trimmed).mp4` and `Rec (trimmed) 2.mp4` →
+`Rec (edited).gif`; `Rec (edited).mp4` → `Rec (trimmed).mp4`; with `Rec (edited).gif` taken →
+`Rec (edited) 2.gif` (plus the existing `(trimmed)` cases).
+
+AV tests on a generated MP4 (10 fps, grey level 8·i in frame i, optional 440 Hz tone): a 3-segment cut
+([0,1] [1.5,2] [2.5,3]) is 2 s with video + audio and each sampled output frame matches the source frame
+it maps to (grey level within 3) even off-keyframe; [0,2] at 2× + [2,3] is 2 s with audio and frame-exact;
+a muted first segment is silent (RMS < 0.01) while the rest keeps its tone (> 0.1); a start/end trim plus
+a split stays passthrough (1.5 s, audio kept); GIF of the 3-segment cut ≈ 20 frames, named
+`Recording (edited).gif` then `Recording (edited) 2.gif`, no temp file left; Replace Original with cuts
+leaves only the original, now 2 s; a failed export leaves the original's bytes unchanged.
+
+### Where it goes in the port
+
+- Pure: `windows/src/BetterScreenshot.Recording/CutList.cs` (+ `CutHistory`), `TrimRange.cs`,
+  `TrimmedFileName.cs`, and `FfmpegArgs.BuildCutExport(...)` / `BuildPassthroughTrim(...)` next to
+  `BuildGifConversion` in `windows/src/BetterScreenshot.Recording/FfmpegArgs.cs` (unit-test the strings).
+- UI: new `windows/src/BetterScreenshot.App/Recording/VideoEditorWindow.xaml(.cs)` + a custom-drawn
+  `CutTimeline` `FrameworkElement` (OnRender) in the same folder; dark theme from `Resources/Theme.xaml`,
+  the card from `Controls/DarkSection.cs`-style chrome.
+- Entry points: `QuickAccessActions.OnTrim` (`Overlays/QuickAccessTypes.cs`) + a Trim button on MP4
+  recording cards (`Overlays/QuickAccessWindow.xaml`), wired in `Capture/CaptureCoordinator.ShowRecordingCard`
+  with the Part 0 `restoreCard`; a `Trim…` command in `History/HistoryWindow.xaml(.cs)`. Copy / GIF
+  results go through `CaptureCoordinator.OnRecordingFinished(path, thumbnail)`.
+- Running ffmpeg: `windows/src/BetterScreenshot.Platform/FfmpegRunner.RunAsync` (add a progress callback
+  that parses `-progress pipe:1` output); GIF via `Recording/GifExporter.ConvertAsync` (it deletes its
+  source MP4 on success — fine for the temp render).
+
+### Platform notes (ffmpeg instead of AVFoundation)
+
+- **Passthrough trim** (plain start/end, 1×): `ffmpeg -y -ss <start> -to <end> -i in.mp4 -c copy
+  -avoid_negative_ts make_zero -movflags +faststart out.mp4` (add `-an` for Mute audio). `-ss` before `-i`
+  with `-c copy` starts on the keyframe at or before `start` — hence the 0.5 s keyframes below.
+- **Re-encode** (cuts / speed / per-segment mute) — one `filter_complex`, one segment per `trim`/`atrim`
+  pair, speed via `setpts` + `atempo` (pitch-preserving; chain `atempo=2,atempo=2` for 4× on ffmpeg builds
+  that cap one `atempo` at 2.0), mute via `volume=0` (keeps the audio stream continuous), then `concat`.
+  Example — keep [0,20], [25,45] at 2× (auto-muted), [50,60]:
+  ```
+  ffmpeg -y -i in.mp4 -filter_complex "
+   [0:v]trim=start=0:end=20,setpts=PTS-STARTPTS[v0];
+   [0:a]atrim=start=0:end=20,asetpts=PTS-STARTPTS[a0];
+   [0:v]trim=start=25:end=45,setpts=(PTS-STARTPTS)/2[v1];
+   [0:a]atrim=start=25:end=45,asetpts=PTS-STARTPTS,atempo=2,volume=0[a1];
+   [0:v]trim=start=50:end=60,setpts=PTS-STARTPTS[v2];
+   [0:a]atrim=start=50:end=60,asetpts=PTS-STARTPTS[a2];
+   [v0][a0][v1][a1][v2][a2]concat=n=3:v=1:a=1[v][a]"
+   -map "[v]" -map "[a]" -r <source fps, 30…60> -c:v h264_nvenc -preset p5 -cq 19 -pix_fmt yuv420p
+   -c:a aac -b:a 128k -movflags +faststart -progress pipe:1 -nostats out.mp4
+  ```
+  Use `h264_nvenc` when available (the owner's PC has an RTX 3060 Ti), else `libx264 -preset veryfast
+  -crf 18`. Whole-file Mute audio: no `atrim` chains, `concat=n=N:v=1:a=0`, `-an`. Two audio tracks
+  (system + mic — the port records them as separate dshow tracks too): run the `atrim…` chain on
+  `[0:a:0]` and `[0:a:1]` for every segment, use `concat=n=N:v=1:a=2`, and `-map` both audio outputs so
+  the result keeps two tracks like the mac export. The progress fraction =
+  `out_time_ms / (keptDuration × 1e6)`.
+- **Export as GIF**: render the edit as above (with `-an`) to a temp MP4, then
+  `FfmpegArgs.BuildGifConversion(temp, "<stem> (edited).gif")`.
+- **Keyframes while recording**: add `-g <fps / 2>` (or `-force_key_frames "expr:gte(t,n_forced*0.5)"`)
+  to the H.264 output in `FfmpegArgs.BuildRecording`.
+- **Preview**: WPF's `MediaElement` can't play a cut list; play the source and skip through the list
+  (at a segment's end jump to the next segment's start; set `SpeedRatio` per segment; set `IsMuted` for
+  muted segments), and step frames with pause + position ± 1/fps. For the edge-drag preview just seek to
+  the edge time. Thumbnails: one ffmpeg pass `-vf "fps=<count/duration>,scale=-2:100"` to numbered PNGs
+  in a temp folder, or `-ss t -frames:v 1` per tile.
