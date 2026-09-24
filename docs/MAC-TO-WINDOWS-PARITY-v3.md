@@ -473,7 +473,272 @@ _(pending — filled when Part 2 lands)_
 
 ## Part 3 — Redaction strength, Highlighter, Spotlight
 
-_(pending — filled when Part 3 lands)_
+**What changed, in one paragraph.** Blur and pixelate get a **Strength** (blur radius / pixel size) and a
+third mode, **Black-out** (a solid black box). A three-way **Blur / Pixelate / Black-out** switch in the side
+panel **converts a selected redaction in place**. A redaction's pixels are now **re-rendered from the base
+image for its current position and size** — this fixes a bug where a moved blur kept showing the blur of the
+area it was drawn over (and a resized one stretched it). Two new tools: **Highlighter (H)**, a translucent
+marker that *multiplies* with the image so text under it stays readable, with its own remembered colour /
+width / opacity; and **Spotlight (S)**, which dims everything outside one or more rectangles/ellipses. macOS
+code: `Packages/EditorKit/Sources/EditorKit/` — `RedactionAnnotations.swift`, `Redactor.swift`,
+`HighlighterAnnotation.swift`, `SpotlightAnnotation.swift` (+ `AnnotationPainter`, the shared draw order),
+`ToolDefaults.swift`, and edits to `AnnotationStyle.swift`, `Annotation.swift` (`blendMode`),
+`EditorTool.swift`, `InspectorModel.swift`, `EditorInspectorView.swift`, `EditorCanvasView.swift`,
+`EditorDocument.swift`, `DocumentRenderer.swift`, `EditorWindowController.swift`.
+
+Snapshots from the headless probe (Retina): `docs/parity-v3/part3-panels.png` (the side panel for Blur,
+Pixelate, Black-out, Highlighter, Spotlight, left to right) and `docs/parity-v3/part3-select-spotlight.png`
+(Select tool with a spotlight selected: two spotlights, highlighter strokes, a dimmed blur, an arrow above the
+dim).
+
+### 3.1 Layout (exact, as built)
+
+**Toolbar pill** — two new buttons (same 38×38 look as Part 1). Groups are now:
+`[Select] | [Arrow, Line, Rectangle, Filled Rectangle, Ellipse] | [Text, Counter, Highlighter] |
+[Blur, Pixelate, Spotlight] | [Crop]` — 13 buttons, **558pt wide**, so it still fits the 600pt canvas column at
+the minimum window width (21pt spare each side).
+
+| Tool | SF Symbol | Port icon (`Icons.xaml`) | Key | Tooltip | In toolbar |
+|---|---|---|---|---|---|
+| Highlighter | `highlighter` | **new** `icon-highlighter` (a marker pen) | H | Highlighter (H) | yes, after Counter |
+| Spotlight | `flashlight.on.fill` | **new** `icon-spotlight` (a torch/flashlight) | S | Spotlight (S) | yes, after Pixelate |
+| Black-out | `rectangle.inset.filled` | — | X | Black-out (X) | **no** — reached with X or the Redaction switch; while it is active no toolbar button is highlighted |
+
+**Side panel sections** (same section chrome as Part 1: caption 10pt semibold UPPERCASE white 45%, 12/16/14
+padding, 8pt between rows, 232pt content width, hairlines between sections). Full panel order is now:
+Colour · Stroke · **Stroke (highlighter)** · Font · Background · Redaction · **Strength** · **Shape** ·
+**Dim outside** · Opacity · Arrange.
+
+```
+ Blur / Pixelate               Black-out                     Highlighter                   Spotlight
+┌──────────────────────────┐  ┌──────────────────────────┐  ┌──────────────────────────┐  ┌──────────────────────────┐
+│ Blur                     │  │ Black-out                │  │ Highlighter              │  │ Spotlight                │
+│ REDACTION                │  │ REDACTION                │  │ COLOUR                   │  │ SHAPE                    │
+│ [Blur|Pixelate|Black-out]│  │ [Blur|Pixelate|Black-out]│  │ ● ● (●) ● ● ● ● ●        │  │ [▭ Rectangle|◯ Ellipse]  │
+│ Softens what's under-    │  │ Covers it with solid     │  │ [▬] [⌖ Pick from Screen] │  │ ──────────────────────── │
+│ neath. Raise the strength│  │ black — the safest       │  │ ──────────────────────── │  │ DIM OUTSIDE              │
+│ until it can't be read.  │  │ choice, nothing can be   │  │ STROKE                   │  │ ──────●────────── 60%    │
+│ ──────────────────────── │  │ recovered.               │  │ Width ────●──── 20 px    │  └──────────────────────────┘
+│ STRENGTH                 │  └──────────────────────────┘  │ [Thin|Medium|Thick]      │
+│ ───●──────────── 12 px   │                                │ ──────────────────────── │
+└──────────────────────────┘                                │ OPACITY                  │
+                                                            │ ────●──────────── 40%    │
+                                                            └──────────────────────────┘
+```
+Under Select, a selected object shows the same sections plus **Arrange** (e.g. one blur → Redaction · Strength ·
+Arrange; one spotlight → Shape · Dim outside · Arrange).
+
+| Section (caption) | Rows (exact) |
+|---|---|
+| **Redaction** (Blur, Pixelate, Black-out) | ① Segmented **Blur / Pixelate / Black-out**, small, full width, equal segments; tooltips "Blur (B)", "Pixelate (P)", "Black-out (X)". Selected segment = the active redaction tool, or (under Select) the selected redaction's mode. ② A note (12pt, white 62%, wraps at 232pt) that follows the mode — Blur: "Softens what's underneath. Raise the strength until it can't be read." · Pixelate: "Turns what's underneath into blocks. Bigger blocks hide more." · Black-out: "Covers it with solid black — the safest choice, nothing can be recovered." |
+| **Strength** (Blur, Pixelate — not Black-out) | Slider with **no label** (like Opacity) · value "12 px" (11.5pt monospaced digits, white 55%, 40pt, right-aligned). Blur: 2…40, tooltip "Blur radius, in image pixels". Pixelate: 4…48, tooltip "Size of each block, in image pixels". Whole pixels. Blur and Pixelate share this section, so switching between them only changes the range, value and tooltip. |
+| **Stroke** (Highlighter — its own section, same look as Part 1's Stroke) | ① "Width" label (44pt) · slider **4…48** · value "20 px". ② Segmented **Thin / Medium / Thick** = **12 / 20 / 32 px** (tooltips "12 px", "20 px", "32 px"); no segment highlighted for other widths. |
+| **Colour**, **Opacity** (Highlighter) | Exactly Part 1's sections; they show and edit the highlighter's own pen (default Yellow ring, 40%). |
+| **Shape** (Spotlight) | Segmented **Rectangle / Ellipse**, small, full width, equal segments, each with an icon before the label (SF `rectangle`, `circle`; port: rectangle / circle outline icons); tooltips "Rectangle", "Ellipse — or hold ⌥ while dragging". |
+| **Dim outside** (Spotlight) | Slider with no label, **10…90 %**, value "60%", tooltip "How dark everything outside the spotlights gets". |
+
+**Hint line — new / changed sentences (verbatim):**
+
+| When | Sentence |
+|---|---|
+| Highlighter | Drag to highlight, like a marker pen — hold ⇧ for a straight line. |
+| Spotlight | Drag over what matters — everything else is dimmed. Hold ⌥ for an ellipse. |
+| Black-out | Drag over anything you want to hide — it's covered in solid black when you let go. |
+| Select, one black-out or spotlight | Drag to move it, drag a handle to resize it, or press Delete to remove it. (same as rectangles/blur) |
+| Select, one highlighter stroke | Drag to move it, or press Delete to remove it. (same as arrows) |
+
+Blur / Pixelate hints are unchanged. On Windows write Shift for ⇧ and Alt for ⌥.
+
+### 3.2 Which sections show (pure `InspectorModel` — port 1:1)
+
+| Active tool / selected object | Sections |
+|---|---|
+| Blur, Pixelate | Redaction · Strength |
+| Black-out | Redaction |
+| Highlighter | Colour · Stroke (highlighter) · Opacity |
+| Spotlight | Shape · Dim outside |
+
+Under Select the Part 1 rule still applies (sections every selected object has, in panel order, + Arrange),
+with **one extra rule: Strength only shows when every selected object is drawn by the same tool** (a blur and a
+pixelate together show Redaction + Arrange — one slider can't be a blur radius and a pixel size at once). A
+highlighter + an arrow share Colour · Opacity only (their Stroke sections differ).
+
+### 3.3 Behaviour
+
+**Redactions (Blur / Pixelate / Black-out).**
+- One object type, `RedactionAnnotation` (frame + style); its **mode and strength live in the style**
+  (`redactionMode`, `blurRadius`, `pixelSize`), so panel edits reach selected redactions through the ordinary
+  Part 1 style-edit path (one undo step; a slider drag = one step; the value becomes the sticky default).
+- **The patch is rendered from the base image for the current frame** every time it is drawn, cached on
+  (base image identity, frame rect, mode, strength) — so moving, resizing or dragging the strength slider
+  re-renders only when something changed (probe: 1.6 ms per move tick for a 600×160 px blur at radius 30).
+  The patch rect is the frame **snapped outward to whole pixels and clipped to the image** (no sliver of the
+  original at a fractional edge). After a crop, redactions render from the cropped image.
+- **Blur** = Gaussian blur with σ = strength (CoreImage `CIGaussianBlur` radius), reading up to
+  `ceil(3 × strength)` px of the **real image around the box** (clamped at the image edges only), then keeping
+  only the box. (Before, the box's own edge pixels were smeared outward, which streaked at high strengths.)
+- **Pixelate** = mosaic of `strength`-px square blocks, **each block its average colour**, using only the box's
+  own pixels (edge-clamped). The grid is **centred on the box's centre** (partial blocks at the edges).
+- **Black-out** = solid **opaque black `#000000`**, always black — not the palette colour (the Filled Rectangle
+  tool already draws coloured boxes; black is the unambiguous "redacted" look). No strength.
+- Redactions are **always opaque** (opacity forced to 100%, whatever the default style's opacity is).
+- **The switch**: choosing a segment (a) sets `redactionMode` on every selected redaction — **converted in
+  place** (same object, same stacking position), one undo step — and on the default style; (b) if a redaction
+  tool is active, switches the tool to that mode **without clearing the selection** (so the just-drawn,
+  just-converted box stays selected). Under Select the tool stays Select; the heading follows the object
+  ("Black-out"). New redactions take their mode from the tool (B / P / X), not from the default style.
+- Drawing: drag a box (dashed marquee while dragging); on release a box smaller than 2×2 px is ignored; the box
+  is clipped to the image.
+
+**Highlighter.**
+- Drag draws a freehand path: each drag event adds the pointer position (image px) if it is ≥ 0.5 px from the
+  last point. **⇧ (Shift) held** → the path becomes a straight line from the drag's start to the pointer. A click
+  without a drag draws nothing. The stroke is live while dragging; it is selected when drawn.
+- Drawn as **one path, stroked once** (round caps and joins, width = style line width), so where the stroke
+  crosses itself it doesn't get darker. The object is composited as **one layer at its opacity with multiply
+  blending** — multiply against everything drawn before it: black text stays black, white paper takes the
+  colour, a mid-grey keeps its red/green and loses blue under yellow.
+- **Own sticky pen** (`highlighterPen`): colour **Yellow (1.00, 0.84, 0.04)**, width **20 px**, opacity **40%**
+  by default. While the Highlighter tool is active — or under Select when **only** highlighter strokes are
+  selected — the Colour / Stroke / Opacity sections show and edit the pen (and the selected strokes); other
+  tools' colour / width / opacity are untouched (after a yellow 40% highlight, the next arrow is still red,
+  4 px, 100%).
+- Bounding box = the points' bounds grown by half the width on every side. Selectable (Part 1's box hit-test
+  + 6 px slop), movable, deletable; **no resize handles** (like arrows/lines).
+
+**Spotlight.**
+- Drag a rectangle; **⌥ (Alt) held during the drag → ellipse** (otherwise the panel's Shape). The whole dim is
+  previewed live while dragging. On release, a spotlight narrower or shorter than **4 px is discarded**.
+- **One dim layer for all spotlights**: black at the dim amount over the whole image, with every spotlight's
+  shape **cleared out** (the union of the holes — overlapping spotlights stay bright where they overlap; a
+  plain even-odd fill would re-dim the overlap, so it is not used). Dim amount = the topmost spotlight's, and
+  the editor keeps all spotlights' dims equal: **a Dim-outside change applies to every spotlight in the
+  document, even with nothing selected** (e.g. right after pressing S), as one undo step. Shape changes apply
+  to the selected spotlight(s) only.
+- **Draw order:** base image → dim layer → every other object in stacking order, so arrows, text, shapes and
+  highlights stay bright. **Redactions count as part of the picture:** after each redaction is drawn, the dim
+  layer is drawn again clipped to that redaction's rect, so a blur outside the spotlight is dimmed like the
+  pixels around it.
+- Selectable, movable, **resizable with the 8 handles**. Hit-testing tries every other object first and
+  spotlights last, so clicking an arrow inside a spotlight picks the arrow; clicking empty spotlight area
+  picks the spotlight. Arrange › Front/Back has no visible effect on a spotlight (it always draws beneath).
+
+**Opening a text for editing** (Part 1 makes its style the default) now keeps the current redaction / pen /
+spotlight settings instead of the copies stored with that old text (`keepingToolDefaults(of:)`).
+
+### 3.4 Data
+
+All inside the `editorDefaultStyle` JSON blob (`AnnotationStyle`), and on every object's style:
+
+| JSON key | Type & default | Legacy / bad-value rule |
+|---|---|---|
+| `redactionMode` | `"blur"` \| `"pixelate"` \| `"blackout"`, default `"blur"` | missing or unknown → `"blur"` |
+| `blurRadius` | number, px, **2…40**, default **12** | missing → 12; clamped |
+| `pixelSize` | number, px, **4…48**, default **12** | missing → 12; clamped |
+| `highlighterPen` | `{"color": {"r","g","b","a"}, "width": n, "opacity": n}`, default `{yellow (1, 0.84, 0.04, 1), 20, 0.4}` | missing/corrupt → default; width clamped 4…48, opacity 0.1…1 |
+| `spotlightShape` | `"rectangle"` \| `"ellipse"`, default `"rectangle"` | missing or unknown → `"rectangle"` |
+| `spotlightDim` | number **0.1…0.9**, default **0.6** | missing → 0.6; clamped |
+
+Port: add these as `init` properties with those defaults to `AnnotationStyle` in
+`windows/src/BetterScreenshot.Editor/EditorStyle.cs`; enums need
+`[JsonConverter(typeof(JsonStringEnumConverter))]` with camelCase names (`blur`, `blackout`, `rectangle`…) and
+a fallback for unknown strings (catch + default); clamp after `FromJson`.
+
+### 3.5 Pure logic to port 1:1 (with the macOS tests)
+
+- **Redactor** — `blur(base, region, radius)`, `pixelate(base, region, blockSize)` as described in §3.3. Tests
+  (`RedactorTests.swift`): higherBlurStrengthLeavesLessDetail (400×400 random-noise image, region
+  (120, 140, 160×120): the red-channel **variance** of the patch falls strictly for radius 2, 6, 12, 24, 40) ·
+  biggerPixelsLeaveLessDetail (same region: the **mean absolute difference between neighbouring pixels** falls
+  strictly for block 4, 8, 16, 32, 48) · plus the existing size / destroys-detail tests.
+- **RedactionAnnotation** — tests (`RedactionTests.swift`): movedRedactionRedactsItsNewRegion (noise image; a
+  30×20 box drawn at (10,10), rendered, moved by (60,50): the rendered pixels at (70,60) equal a fresh
+  `blur`/`pixelate` of that region within 2 levels) · resizedRedactionIsRenderedNotStretched (20×20 → 60×50:
+  patch is 60 wide and equals a fresh render) · patchIsCachedUntilFrameOrStrengthChanges ·
+  redactionIsAlwaysOpaque (style opacity 0.3 → 1) · redactionFollowsTheBaseIntoACrop ·
+  redactionMapsToTheToolOfItsMode · blackoutIsSolidBlackAndHasNoPatch (frame (20.4, 10.6, 30×20): every pixel
+  of (20, 10, 31×21) is opaque black) · switchingModeConvertsTheSelectedRedactionInPlace (same id; blur →
+  pixelate → black-out; one undo per switch) · strengthEditsRestyleTheSelectedRedaction (grouped slider edits
+  12 → 32 = one undo step) · legacyStyleDecodesRedactionDefaults · redactionFieldsRoundTripAndClamp (500 → 40,
+  0 → 4, `"smudge"` → blur).
+- **Highlighter** — tests (`HighlighterTests.swift`), on a white image with a black band and a mid-grey band,
+  yellow (1,1,0) pen, stroke across y = 50: highlighterMultipliesSoTextUnderneathStaysReadable (100%: white →
+  (≥245, ≥245, <10), black stays < 10, grey keeps its R/G within 4 and loses blue) ·
+  highlighterOpacityFadesTheTint (40% on white → blue ≈ 153 = 0.6 × 255; black stays black) ·
+  selfCrossingStrokeDoesNotDarkenTwice · canvasMultipliesToo · boundingBoxIsPathPlusHalfWidthAndMovesWithIt
+  (points (10,20), (60,25), (40,50), width 20 → (0, 10, 70×50)) · penStyleIsItsOwnStickyDefault ·
+  adoptingAnObjectsStyleKeepsTheCurrentToolDefaults · legacyStyleDecodesTheDefaultPenAndClampsABadOne.
+- **Spotlight** — tests (`SpotlightTests.swift`), white 100×100 image: insideUnchangedOutsideDarkenedByTheDimAmount
+  (rect (20,20,40×40): inside 255; outside 255 × (1 − dim) = 102 at 0.6, 179 at 0.3, ±3) ·
+  ellipseSpotlightDimsTheBoxCorners · severalSpotlightsMakeOneLayerWithSeveralHoles (overlap stays 255, outside
+  dimmed once) · otherObjectsStayBrightAboveTheDim (a red box drawn before the spotlight stays full red) ·
+  redactionsOutsideTheSpotlightAreDimmedToo · canvasDrawsTheDimLayerToo · dimEditReachesEverySpotlight (dim edit
+  with one of two selected → both; shape edit → only the selected; with nothing selected the dim still changes
+  both; one undo step) · spotlightsAreHitLastAndResizeLikeBoxes · legacyStyleDecodesSpotlightDefaultsAndClamps
+  (1 → 0.9).
+- **InspectorModel** additions (`InspectorModelTests.swift`): redactionAndCropTools (Blur/Pixelate → Redaction,
+  Strength; Black-out → Redaction, heading "Black-out") · selectWithOneObjectShowsItsSectionsPlusArrange (one
+  blur → Redaction, Strength, Arrange) · highlighterShowsColourItsOwnStrokeOpacity ·
+  spotlightShowsShapeAndDim · redactionSelectionsShareStrengthOnlyWithinOneMode (blur+blur keep Strength;
+  blur+pixelate and pixelate+black-out → Redaction, Arrange) · toolShortcutsAreUniqueAndCaseInsensitive now
+  covers H, S, X.
+- **`keepingToolDefaults(of:)`** — copy `redactionMode`, `blurRadius`, `pixelSize`, `highlighterPen`,
+  `spotlightShape`, `spotlightDim` from the current default onto an adopted object style.
+
+### 3.6 Where it goes in the port
+
+- `windows/src/BetterScreenshot.Editor/Annotations.cs` — replace `PixelateAnnotation` / `BlurAnnotation` (which
+  carry a baked `Patch`) with `RedactionAnnotation(Guid Id, AnnotationStyle Style, PxRect Frame)` (mode in the
+  style, no patch); add `HighlighterAnnotation(Id, Style, IReadOnlyList<PxPoint> Points)` (bounding box = points'
+  bounds ± width/2; `MovedBy` offsets every point) and `SpotlightAnnotation(Id, Style, PxRect Frame)`.
+- `windows/src/BetterScreenshot.Editor/Redactor.cs` — `Blur(source, region, radius)` / `Pixelate(source, region,
+  blockSize)` take the strength; Blur reads a `3 × radius` margin of the real image (clamped to the image) and
+  approximates the Gaussian with **three box passes of radius ≈ strength**, using running sums (O(1) per pixel —
+  the current per-pixel O(radius) loop gets slow at radius 40 on big boxes); Pixelate already averages blocks —
+  centre its grid on the region's centre. Add a `Blackout` path in the renderer (no Redactor call).
+- `windows/src/BetterScreenshot.Editor/EditorDocument.cs` — `TopmostHit`: non-spotlights first, then spotlights.
+- `windows/src/BetterScreenshot.Editor/EditorTool.cs` — add `Highlighter`, `Spotlight`, `Blackout` (+ the Part 1
+  name / key / tooltip / `MakerOf` helpers; `MakerOf(RedactionAnnotation)` = the tool of its style's mode).
+- `windows/src/BetterScreenshot.Editor/EditorStyle.cs` — the §3.4 fields; `InspectorModel.cs` (from Part 1) — the
+  §3.2 rules and hint strings; a `KeepingToolDefaults` helper.
+- `windows/src/BetterScreenshot.App/Editor/DocumentRenderer.cs` — the draw order of §3.3 (base → dim layer →
+  objects, dim re-applied over each redaction); redaction patches computed **here from `baseImage`** for the
+  current frame (cache keyed on frame + mode + strength, e.g. a `ConditionalWeakTable<RedactionAnnotation, …>` or
+  a dictionary by `Id`); the highlighter's multiply (see §3.7).
+- `windows/src/BetterScreenshot.App/Editor/EditorWindow.xaml(.cs)` — the two toolbar buttons + H / S / X keys;
+  mouse handling (`ApplyRedaction` just adds a `RedactionAnnotation`; highlighter path + Shift; spotlight + Alt,
+  4 px minimum); the panel sections; the pen routing (the window keeps `_style` and shows/edits
+  `_style.HighlighterPen` as colour/width/opacity while the Highlighter is active or only highlighter strokes are
+  selected); the "dim applies to every spotlight" rule in the style-edit path; the Redaction switch
+  (convert selected + switch tool keeping the selection).
+- `windows/src/BetterScreenshot.App/Resources/Icons.xaml` — new: `icon-highlighter`, `icon-spotlight`, and small
+  rectangle / circle outline icons for the Shape segments (existing `icon-rect` / `icon-ellipse` will do).
+- Tests: `windows/tests/BetterScreenshot.Tests/` — recreate §3.5.
+
+### 3.7 Platform notes (Windows)
+
+- **Multiply blending isn't available in WPF** (no blend modes on `DrawingContext`, and a `ShaderEffect` can't read
+  what is behind an element). Because the port's canvas already shows the flattened `DocumentRenderer.Render`
+  bitmap (`Redraw()`), do the multiply **on the CPU inside the renderer**: when the draw loop reaches a
+  highlighter, flatten what has been drawn so far to a `RenderTargetBitmap`, render the stroke's **coverage
+  mask** (the path in opaque white on transparent, round caps/joins, one geometry so self-overlaps count once)
+  over the stroke's bounding box, then per pixel `out_c = dst_c × (1 − k × (1 − colour_c))` with
+  `k = opacity × coverage` (straight colour 0…1 per channel), write it back (`WriteableBitmap`) and keep drawing
+  on top. A single-colour multiply can't be faked with normal alpha (the needed alpha differs per channel).
+- **Dim layer:** `Geometry dim = Geometry.Combine(new RectangleGeometry(imageRect), holes,
+  GeometryCombineMode.Exclude, null)` where `holes` is the **union** of the spotlight shapes (successive
+  `Geometry.Combine(..., GeometryCombineMode.Union, ...)` of `RectangleGeometry` / `EllipseGeometry`);
+  `dc.DrawGeometry(new SolidColorBrush(Color.FromArgb((byte)(dim*255), 0, 0, 0)), null, dim)`. Over each
+  redaction: `dc.PushClip(new RectangleGeometry(redactionRect))`, draw the same geometry, `dc.Pop()`.
+- **Move optimisation:** the port renders "everything except the moved object" once and draws the moved object
+  over it while dragging (`_moveBackground`). A moved redaction must still take its patch from `_baseImage`
+  (not from that background), and when spotlights are involved (moving one, or any spotlight in the document)
+  the dim layer must be recomputed — simplest is a full `Render` per tick in that case.
+- **Modifiers:** ⇧ → Shift, ⌥ → **Alt** (`Keyboard.Modifiers.HasFlag(ModifierKeys.Alt)` during `MouseMove`; the
+  editor has no menu bar, so Alt won't steal focus). Hint strings: "…hold Shift for a straight line.",
+  "…Hold Alt for an ellipse.", tooltip "Ellipse — or hold Alt while dragging".
+- **Blur quality:** WPF's `BlurEffect` is GPU-only and resolution-dependent at render time — keep the CPU
+  `Redactor` so export and screen match pixel for pixel.
 
 ---
 
