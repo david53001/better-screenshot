@@ -2,4 +2,5 @@ import TestKit
 
 runTests("RecordingKitTests",
     recorderStateTests + recordingConfigTests + pauseTimelineTests + trimRangeTests + trimExporterTests
+        + deviceChoiceTests + micLevelTests
 )
