@@ -102,6 +102,24 @@ let highlighterTests: [TestCase] = [
         t.approxEqual(Double(s.lineWidth), 4, tol: 1e-9)
         t.approxEqual(Double(s.opacity), 1, tol: 1e-9)
     },
+    TestCase("adoptingAnObjectsStyleKeepsTheCurrentToolDefaults") { t in
+        // An old text carries the defaults from when it was drawn; opening it must not roll them back.
+        let old = AnnotationStyle.default
+        var current = AnnotationStyle.default
+        current.blurRadius = 30; current.pixelSize = 20; current.redactionMode = .blackout
+        current.highlighterPen.width = 32; current.spotlightShape = .ellipse; current.spotlightDim = 0.3
+        var text = old
+        text.fontSize = 48
+        let adopted = text.keepingToolDefaults(of: current)
+        t.approxEqual(Double(adopted.fontSize), 48)
+        t.isTrue(adopted.keepingToolDefaults(of: text) == text, "only the tool-default fields change")
+        t.approxEqual(Double(adopted.blurRadius), 30)
+        t.approxEqual(Double(adopted.pixelSize), 20)
+        t.equal(adopted.redactionMode, .blackout)
+        t.approxEqual(Double(adopted.highlighterPen.width), 32)
+        t.equal(adopted.spotlightShape, .ellipse)
+        t.approxEqual(Double(adopted.spotlightDim), 0.3, tol: 1e-9)
+    },
     TestCase("legacyStyleDecodesTheDefaultPenAndClampsABadOne") { t in
         do {
             let legacy = try JSONDecoder().decode(AnnotationStyle.self, from: Data("""

@@ -86,7 +86,7 @@ public final class EditorWindowController: NSWindowController {
         canvas.onEditText = { [weak self] textStyle in
             // Show the edited text's own style; not persisted until the user changes it.
             guard let self else { return }
-            self.style = textStyle
+            self.style = textStyle.keepingToolDefaults(of: self.style)
             self.canvas.style = textStyle
             self.selectTool(.text)
         }
