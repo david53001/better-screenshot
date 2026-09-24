@@ -23,12 +23,13 @@ public enum TrimExporter {
                              to: destination, progress: progress)
             return
         }
-        let (composition, video) = try await CutComposition.make(asset: AVURLAsset(url: source),
-                                                                 cuts: cuts, muteAll: muted)
+        let asset = AVURLAsset(url: source)
+        let composition = try await CutComposition.make(asset: asset, cuts: cuts, muteAll: muted)
         guard let session = AVAssetExportSession(asset: composition,
                                                  presetName: AVAssetExportPresetHighestQuality)
         else { throw ExportError.cannotExport }
-        session.videoComposition = video
+        // Forces a real re-encode (see CutComposition.videoComposition).
+        session.videoComposition = try await CutComposition.videoComposition(for: composition, source: asset)
         session.audioTimePitchAlgorithm = .spectral
         try await run(session, to: destination, progress: progress)
     }

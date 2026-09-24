@@ -1,18 +1,20 @@
 import AppKit
 import AVKit
 
-/// The recording trim window: an AVPlayerView in AVKit's native trim mode
-/// (QuickTime-style yellow handles) over an action bar — range label · Mute audio ·
-/// Adjust Trim · Cancel · Save as Copy · Replace Original.
-///
-/// AVKit's own Trim button only *records* the range; nothing touches the file until
-/// Save as Copy (writes "<name> (trimmed).mp4" and closes) or Replace Original (swaps
-/// the file in place and reloads the player so the result can be reviewed or trimmed again).
+/// The video editor for an MP4 recording (opened from the Quick Access card's ✂ or
+/// History's Trim…): a preview over a cut timeline in a dark HUD card, then an action
+/// bar. Split at the playhead, delete segments, drag segment edges, per-segment speed
+/// and mute, undo / redo; the preview plays only what's kept. Nothing touches the file
+/// until an export: Save as Copy ("<name> (trimmed).mp4", closes), Export as GIF
+/// ("<name> (edited).gif", stays open) or Replace Original (atomic swap, then reloads
+/// the result for review / more edits).
 @MainActor
 public final class TrimWindowController: NSWindowController, NSWindowDelegate {
     public private(set) var url: URL
     /// A copy was written (the window has closed).
     public var onSavedCopy: ((URL) -> Void)?
+    /// A GIF of the edit was written next to the original (the window stays open).
+    public var onExportedGIF: ((URL) -> Void)?
     /// The original file was replaced in place (the window stays open).
     public var onReplaced: ((URL) -> Void)?
     /// Export failed — the message is ready for a HUD / label.
@@ -20,37 +22,87 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
     /// The window closed (any reason) — release the controller.
     public var onClosed: (() -> Void)?
 
-    private let playerView = AVPlayerView()
-    private let rangeLabel = NSTextField(labelWithString: "")
-    private let muteBox = NSButton(checkboxWithTitle: "Mute audio", target: nil, action: nil)
-    private let adjustButton = NSButton(title: "Adjust Trim", target: nil, action: nil)
-    private let cancelButton = NSButton(title: "Cancel", target: nil, action: nil)
-    private let copyButton = NSButton(title: "Save as Copy", target: nil, action: nil)
-    private let replaceButton = NSButton(title: "Replace Original", target: nil, action: nil)
-    private let spinner = NSProgressIndicator()
+    // Preview
+    private let playerView = PreviewPlayerView()
+    private let player = AVPlayer()
+    private lazy var seeker = ChaseSeeker(player)
+    /// Plain playback of the whole source, shown while an edge is dragged so the
+    /// preview follows the handle.
+    private var sourceSeeker: ChaseSeeker?
+    private var asset: AVURLAsset?
+    private var timeObserver: Any?
+    private var playingObservation: NSKeyValueObservation?
 
-    private var duration: Double = 0
-    private var range: TrimRange?
-    private var isTrimming = false
+    // Timeline card
+    private let timeline = CutTimelineView()
+    private let timelineScroll = TimelineScrollView()
+    private let playButton = TrimWindowController.iconButton("play.fill", tip: "Play (Space)", size: 15)
+    private let timeLabel = NSTextField(labelWithString: "0:00.0 / 0:00.0")
+    private let splitButton = TrimWindowController.textButton("Split", symbol: "scissors",
+        tip: "Split the segment at the playhead (S or ⌘B)")
+    private let deleteButton = TrimWindowController.textButton("Delete", symbol: "trash",
+        tip: "Delete the selected (yellow) segment (⌫)")
+    private let undoButton = TrimWindowController.textButton(nil, symbol: "arrow.uturn.backward", tip: "Undo (⌘Z)")
+    private let redoButton = TrimWindowController.textButton(nil, symbol: "arrow.uturn.forward", tip: "Redo (⇧⌘Z)")
+    private let zoomOutButton = TrimWindowController.iconButton("minus.magnifyingglass",
+                                                                tip: "Zoom out the timeline", size: 12)
+    private let zoomInButton = TrimWindowController.iconButton("plus.magnifyingglass",
+                                                               tip: "Zoom in the timeline", size: 12)
+    private let zoomSlider = NSSlider(value: 1, minValue: 1, maxValue: 12, target: nil, action: nil)
+    private let segmentTitle = NSTextField(labelWithString: "")
+    private let segmentRange = NSTextField(labelWithString: "")
+    private let speedLabel = NSTextField(labelWithString: "Speed")
+    private let speedControl = NSSegmentedControl(labels: CutList.speeds.map(CutTimelineView.speedLabel),
+                                                  trackingMode: .selectOne, target: nil, action: nil)
+    private let segmentMuteBox = NSButton(checkboxWithTitle: "Mute segment", target: nil, action: nil)
+    private let hintLabel = NSTextField(labelWithString: "")
+
+    // Action bar
+    private let keptLabel = NSTextField(labelWithString: "Loading…")
+    private let muteBox = NSButton(checkboxWithTitle: "Mute audio", target: nil, action: nil)
+    private let progressBar = NSProgressIndicator()
+    private let progressLabel = NSTextField(labelWithString: "")
+    private let cancelButton = NSButton(title: "Cancel", target: nil, action: nil)
+    private let replaceButton = NSButton(title: "Replace Original", target: nil, action: nil)
+    private lazy var copyButton: NSComboButton = {
+        let menu = NSMenu()
+        let gif = NSMenuItem(title: "Export as GIF", action: #selector(exportGIF), keyEquivalent: "")
+        gif.target = self
+        gif.toolTip = "Save the edit as an animated GIF next to the original (10 fps, up to 960 px wide)"
+        menu.addItem(gif)
+        return NSComboButton(title: "Save as Copy", menu: menu, target: self, action: #selector(saveCopy))
+    }()
+
+    // Model
+    private var history = CutHistory(CutList(duration: 0))
+    private var cuts: CutList { history.current }
+    /// The working copy while an edge is dragged (committed as one undo step on release).
+    private var dragList: CutList?
+    private var selected = 0
+    private var loaded = false
+    private var loadFailed = false
     private var isExporting = false
-    private var canTrim = false
-    /// Enter AVKit trim mode as soon as the item is ready (off after Replace Original,
-    /// which lands on plain playback of the result).
-    private var trimWhenReady = true
-    /// Shown instead of "Whole recording" once the original has been replaced.
-    private var replacedNote = false
-    private var statusObservation: NSKeyValueObservation?
+    /// A new preview is being built — the player's reported times are stale until it lands.
+    private var rebuilding = false
+    /// Shown instead of the kept-duration label until the next edit.
+    private var note: String?
+    private var loadTask: Task<Void, Never>?
+    private var rebuildTask: Task<Void, Never>?
+    private var thumbnailTask: Task<Void, Never>?
 
     public init(url: URL) {
         self.url = url
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 960, height: 720),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable],
                               backing: .buffered, defer: false)
-        window.minSize = NSSize(width: 640, height: 480)
+        window.minSize = NSSize(width: 780, height: 560)
         window.isReleasedWhenClosed = false
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.backgroundColor = NSColor(white: 0.09, alpha: 1)
         super.init(window: window)
         window.delegate = self
         buildUI()
+        window.initialFirstResponder = timeline
         load()
         window.center()
     }
@@ -60,189 +112,688 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
 
     private func buildUI() {
         guard let content = window?.contentView else { return }
-        playerView.controlsStyle = .inline
+        playerView.controlsStyle = .none
+        playerView.videoGravity = .resizeAspect
+        playerView.player = player
+        playerView.onClick = { [weak self] in self?.togglePlay() }
         playerView.translatesAutoresizingMaskIntoConstraints = false
 
-        let bar = NSVisualEffectView()
-        bar.material = .headerView
-        bar.blendingMode = .withinWindow
-        bar.translatesAutoresizingMaskIntoConstraints = false
-
-        rangeLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
-        rangeLabel.textColor = .secondaryLabelColor
-        rangeLabel.lineBreakMode = .byTruncatingTail
-        rangeLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        adjustButton.target = self; adjustButton.action = #selector(adjustTrim)
-        adjustButton.bezelStyle = .rounded
-        cancelButton.target = self; cancelButton.action = #selector(cancel)
-        cancelButton.bezelStyle = .rounded
-        copyButton.target = self; copyButton.action = #selector(saveCopy)
-        copyButton.bezelStyle = .rounded
-        replaceButton.target = self; replaceButton.action = #selector(replaceOriginal)
-        replaceButton.bezelStyle = .rounded
-        // Accent look without a Return shortcut: AVKit's trim mode uses Return/Esc,
-        // and replacing the file shouldn't be one stray keypress away.
-        replaceButton.bezelColor = .controlAccentColor
-        spinner.style = .spinning
-        spinner.controlSize = .small
-        spinner.isDisplayedWhenStopped = false
-
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.init(1), for: .horizontal)
-        let row = NSStackView(views: [rangeLabel, muteBox, spacer, spinner, adjustButton,
-                                      cancelButton, copyButton, replaceButton])
-        row.orientation = .horizontal
-        row.spacing = 10
-        row.translatesAutoresizingMaskIntoConstraints = false
-        bar.addSubview(row)
-
+        let card = buildCard()
+        let bar = buildActionBar()
         content.addSubview(playerView)
+        content.addSubview(card)
         content.addSubview(bar)
         NSLayoutConstraint.activate([
             playerView.topAnchor.constraint(equalTo: content.topAnchor),
             playerView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             playerView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            playerView.bottomAnchor.constraint(equalTo: bar.topAnchor),
+            playerView.bottomAnchor.constraint(equalTo: card.topAnchor, constant: -12),
+            playerView.heightAnchor.constraint(greaterThanOrEqualToConstant: 200),
+            card.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12),
+            card.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12),
+            card.bottomAnchor.constraint(equalTo: bar.topAnchor, constant: -12),
             bar.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             bar.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             bar.bottomAnchor.constraint(equalTo: content.bottomAnchor),
             bar.heightAnchor.constraint(equalToConstant: 52),
+        ])
+        timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 30),
+                                                      queue: .main) { [weak self] time in
+            MainActor.assumeIsolated { self?.playerTimeChanged(time.seconds) }
+        }
+        playingObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] _, _ in
+            Task { @MainActor in self?.refreshPlayButton() }
+        }
+    }
+
+    /// The dark HUD card: transport row · timeline · selected-segment row · hint line.
+    private func buildCard() -> NSView {
+        let card = NSVisualEffectView()
+        card.translatesAutoresizingMaskIntoConstraints = false
+        card.appearance = NSAppearance(named: .vibrantDark)
+        card.material = .hudWindow
+        card.blendingMode = .withinWindow
+        card.state = .active
+        card.wantsLayer = true
+        card.layer?.cornerRadius = 12
+        card.layer?.masksToBounds = true
+        card.layer?.borderWidth = 1
+        card.layer?.borderColor = NSColor(white: 1, alpha: 0.10).cgColor
+
+        // Transport + edit row.
+        playButton.target = self; playButton.action = #selector(togglePlay)
+        timeLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+        timeLabel.textColor = NSColor(white: 1, alpha: 0.85)
+        timeLabel.toolTip = "Playhead / length of the edit"
+        timeLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 116).isActive = true
+        splitButton.target = self; splitButton.action = #selector(splitAtPlayhead)
+        splitButton.keyEquivalent = "b"; splitButton.keyEquivalentModifierMask = [.command]
+        deleteButton.target = self; deleteButton.action = #selector(deleteSelected)
+        undoButton.target = self; undoButton.action = #selector(undo)
+        undoButton.keyEquivalent = "z"; undoButton.keyEquivalentModifierMask = [.command]
+        redoButton.target = self; redoButton.action = #selector(redo)
+        redoButton.keyEquivalent = "z"; redoButton.keyEquivalentModifierMask = [.command, .shift]
+        zoomSlider.target = self; zoomSlider.action = #selector(zoomChanged)
+        zoomSlider.isContinuous = true
+        zoomSlider.controlSize = .small
+        zoomSlider.toolTip = "Timeline zoom"
+        zoomSlider.widthAnchor.constraint(equalToConstant: 110).isActive = true
+        zoomOutButton.target = self; zoomOutButton.action = #selector(zoomOut)
+        zoomInButton.target = self; zoomInButton.action = #selector(zoomIn)
+        let row1 = Self.row([playButton, timeLabel, Self.gap(10), splitButton, deleteButton, Self.divider(),
+                             undoButton, redoButton, Self.flexible(), zoomOutButton, zoomSlider, zoomInButton],
+                            spacing: 8)
+
+        // Timeline.
+        timelineScroll.documentView = timeline
+        timelineScroll.drawsBackground = false
+        timelineScroll.hasHorizontalScroller = true
+        timelineScroll.scrollerStyle = .overlay
+        timelineScroll.horizontalScrollElasticity = .none
+        timelineScroll.verticalScrollElasticity = .none
+        timelineScroll.translatesAutoresizingMaskIntoConstraints = false
+        timelineScroll.heightAnchor.constraint(equalToConstant: 66).isActive = true
+        timeline.toolTip = "Click to move the playhead and pick a segment · drag a yellow edge to trim · right-click for speed and mute"
+        timeline.onScrub = { [weak self] t in self?.scrub(to: t) }
+        timeline.onSelect = { [weak self] i in self?.select(i) }
+        timeline.onEdgeDrag = { [weak self] i, edge, t, phase in self?.edgeDrag(i, edge, t, phase) }
+        timeline.menuForSegment = { [weak self] i in self?.segmentMenu(i) }
+
+        // Selected segment row.
+        segmentTitle.font = .systemFont(ofSize: 11, weight: .semibold)
+        segmentTitle.textColor = NSColor(white: 1, alpha: 0.9)
+        segmentRange.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        segmentRange.textColor = NSColor(white: 1, alpha: 0.5)
+        segmentRange.toolTip = "Where this segment comes from in the original recording"
+        speedLabel.font = .systemFont(ofSize: 11)
+        speedLabel.textColor = NSColor(white: 1, alpha: 0.6)
+        speedControl.controlSize = .small
+        speedControl.target = self; speedControl.action = #selector(speedPicked)
+        speedControl.toolTip = "Play this segment faster (sped-up segments start muted)"
+        for i in 0..<speedControl.segmentCount { speedControl.setWidth(40, forSegment: i) }
+        segmentMuteBox.controlSize = .small
+        segmentMuteBox.font = .systemFont(ofSize: 11)
+        segmentMuteBox.target = self; segmentMuteBox.action = #selector(segmentMuteToggled)
+        segmentMuteBox.toolTip = "Silence this segment's audio (the rest keeps its sound)"
+        let row2 = Self.row([segmentTitle, segmentRange, Self.gap(14), speedLabel, speedControl, Self.gap(10),
+                             segmentMuteBox, Self.flexible()], spacing: 8)
+
+        // Hint line.
+        let info = NSImageView(image: NSImage(systemSymbolName: "info.circle", accessibilityDescription: nil)!
+            .withSymbolConfiguration(.init(pointSize: 11, weight: .regular))!)
+        info.contentTintColor = NSColor(white: 1, alpha: 0.45)
+        hintLabel.font = .systemFont(ofSize: 11)
+        hintLabel.textColor = NSColor(white: 1, alpha: 0.55)
+        hintLabel.lineBreakMode = .byTruncatingTail
+        hintLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let row3 = Self.row([info, hintLabel], spacing: 6)
+
+        let stack = NSStackView(views: [row1, timelineScroll, row2, row3])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 10
+        stack.setCustomSpacing(8, after: row2)
+        stack.edgeInsets = NSEdgeInsets(top: 12, left: 14, bottom: 12, right: 14)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(stack)
+        for v in [row1, timelineScroll, row2, row3] {
+            v.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -28).isActive = true
+        }
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: card.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor),
+            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+        ])
+        return card
+    }
+
+    private func buildActionBar() -> NSView {
+        let bar = NSVisualEffectView()
+        bar.material = .headerView
+        bar.blendingMode = .withinWindow
+        bar.state = .active
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        let hairline = NSBox()
+        hairline.boxType = .separator
+        hairline.translatesAutoresizingMaskIntoConstraints = false
+        bar.addSubview(hairline)
+
+        keptLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        keptLabel.textColor = .secondaryLabelColor
+        keptLabel.lineBreakMode = .byTruncatingTail
+        keptLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        keptLabel.toolTip = "Length of the saved video / length of the recording"
+        muteBox.target = self; muteBox.action = #selector(muteAllToggled)
+        muteBox.toolTip = "Save without any sound"
+        progressBar.style = .bar
+        progressBar.controlSize = .small
+        progressBar.minValue = 0; progressBar.maxValue = 1
+        progressBar.widthAnchor.constraint(equalToConstant: 140).isActive = true
+        progressBar.isHidden = true
+        progressLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        progressLabel.textColor = .secondaryLabelColor
+        progressLabel.isHidden = true
+        cancelButton.target = self; cancelButton.action = #selector(cancel)
+        cancelButton.bezelStyle = .rounded
+        cancelButton.toolTip = "Close without saving"
+        copyButton.toolTip = "Save the edit as a new file next to the original — the ▾ menu exports a GIF"
+        replaceButton.target = self; replaceButton.action = #selector(replaceOriginal)
+        replaceButton.bezelStyle = .rounded
+        // Accent look without a Return shortcut: replacing the file shouldn't be one
+        // stray keypress away.
+        replaceButton.bezelColor = .controlAccentColor
+        replaceButton.toolTip = "Overwrite the original recording with the edit"
+
+        let row = Self.row([keptLabel, Self.gap(4), muteBox, Self.gap(8), progressBar, progressLabel,
+                            Self.flexible(), cancelButton, copyButton, replaceButton], spacing: 10)
+        bar.addSubview(row)
+        NSLayoutConstraint.activate([
+            hairline.topAnchor.constraint(equalTo: bar.topAnchor),
+            hairline.leadingAnchor.constraint(equalTo: bar.leadingAnchor),
+            hairline.trailingAnchor.constraint(equalTo: bar.trailingAnchor),
             row.leadingAnchor.constraint(equalTo: bar.leadingAnchor, constant: 16),
             row.trailingAnchor.constraint(equalTo: bar.trailingAnchor, constant: -16),
             row.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
         ])
+        return bar
     }
 
-    // MARK: - Player
+    // MARK: - Loading
 
-    /// (Re)loads `url` into a fresh player — also used after Replace Original.
-    private func load() {
-        window?.title = "Trim — \(url.lastPathComponent)"
-        range = nil
-        canTrim = false
-        let item = AVPlayerItem(asset: AVURLAsset(url: url))
-        playerView.player = AVPlayer(playerItem: item)
+    /// (Re)loads `url` — also used after Replace Original, with `noteAfter`.
+    private func load(noteAfter: String? = nil) {
+        window?.title = "Edit Video — \(url.lastPathComponent)"
+        loaded = false; loadFailed = false
+        rebuildTask?.cancel(); thumbnailTask?.cancel()
+        timeline.resetThumbnails()
+        player.replaceCurrentItem(with: nil)
+        let asset = AVURLAsset(url: url)
+        self.asset = asset
+        sourceSeeker = nil
         refreshChrome()
-        statusObservation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
-            Task { @MainActor in self?.itemStatusChanged(item) }
+        loadTask = Task { [weak self] in
+            do {
+                let duration = try await asset.load(.duration).seconds
+                guard let track = try await asset.loadTracks(withMediaType: .video).first,
+                      duration.isFinite, duration > 0 else { throw TrimExporter.ExportError.noVideoTrack }
+                let size = try await track.load(.naturalSize).applying(try await track.load(.preferredTransform))
+                guard let self, !Task.isCancelled else { return }
+                self.history = CutHistory(CutList(duration: duration))
+                self.timeline.aspect = size.height != 0 ? abs(size.width / size.height) : 16 / 10
+                self.loaded = true
+                self.note = noteAfter.map { "\($0) · \(TrimRange.timestamp(duration))" }
+                self.didChangeCuts(select: 0, playhead: 0)
+                self.loadThumbnails(asset: asset, duration: duration)
+            } catch {
+                guard let self, !Task.isCancelled else { return }
+                self.loadFailed = true
+                self.refreshChrome()
+            }
         }
     }
 
-    private func itemStatusChanged(_ item: AVPlayerItem) {
-        guard item === playerView.player?.currentItem else { return }
-        switch item.status {
-        case .readyToPlay:
-            statusObservation = nil
-            duration = item.duration.seconds.isFinite ? item.duration.seconds : 0
-            canTrim = playerView.canBeginTrimming
+    /// Filmstrip frames, evenly spaced (2 per second, 12…240), loaded in the background.
+    private func loadThumbnails(asset: AVAsset, duration: Double) {
+        let count = min(max(Int(duration * 2), 12), 240)
+        let times = (0..<count).map {
+            CMTime(seconds: (Double($0) + 0.5) * duration / Double(count), preferredTimescale: 600)
+        }
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 320, height: 200)
+        let tolerance = CMTime(seconds: duration / Double(count) / 2, preferredTimescale: 600)
+        generator.requestedTimeToleranceBefore = tolerance
+        generator.requestedTimeToleranceAfter = tolerance
+        thumbnailTask = Task { [weak self] in
+            for await result in generator.images(for: times) {
+                guard !Task.isCancelled else { return }
+                if case .success(let requested, let image, _) = result {
+                    self?.timeline.addThumbnail(time: requested.seconds, image: image)
+                }
+            }
+        }
+    }
+
+    // MARK: - Preview
+
+    /// Rebuilds the preview from the current cut list and parks the playhead at `t`.
+    private func rebuildPreview(playhead t: Double) {
+        guard let asset else { return }
+        let cuts = self.cuts
+        rebuilding = true
+        rebuildTask?.cancel()
+        rebuildTask = Task { [weak self] in
+            do {
+                let composition = try await CutComposition.make(asset: asset, cuts: cuts, muteAll: false)
+                let video = cuts.segments.contains { $0.speed != 1 }
+                    ? try await CutComposition.videoComposition(for: composition, source: asset) : nil
+                guard let self, !Task.isCancelled else { return }
+                let item = AVPlayerItem(asset: composition)
+                item.videoComposition = video
+                item.audioTimePitchAlgorithm = .spectral
+                self.player.replaceCurrentItem(with: item)
+                self.seeker.seek(t)
+                self.rebuilding = false
+            } catch {
+                self?.rebuilding = false
+            }
+        }
+    }
+
+    private func playerTimeChanged(_ t: Double) {
+        // Ignore the stale times reported while a seek / rebuild / edge drag is pending.
+        guard loaded, t.isFinite, seeker.isIdle, !rebuilding, dragList == nil else { return }
+        timeline.playhead = min(max(t, 0), cuts.keptDuration)
+        refreshTimeLabel()
+        if player.rate != 0 { keepPlayheadVisible() } else { refreshChrome() }
+    }
+
+    private func scrub(to t: Double) {
+        guard loaded, dragList == nil else { return }
+        timeline.playhead = t
+        seeker.seek(t)
+        refreshTimeLabel()
+        refreshChrome()
+    }
+
+    @objc private func togglePlay() {
+        guard loaded, !isExporting else { return }
+        if player.rate != 0 {
+            player.pause()
+        } else {
+            if timeline.playhead >= cuts.keptDuration - 0.05 { timeline.playhead = 0; seeker.seek(0) }
+            player.play()
+        }
+    }
+
+    private func refreshPlayButton() {
+        let playing = player.timeControlStatus != .paused
+        playButton.image = NSImage(systemSymbolName: playing ? "pause.fill" : "play.fill",
+                                   accessibilityDescription: playing ? "Pause" : "Play")?
+            .withSymbolConfiguration(.init(pointSize: 15, weight: .semibold))
+        playButton.toolTip = playing ? "Pause (Space)" : "Play (Space)"
+    }
+
+    private func step(_ frames: Int) {
+        guard loaded else { return }
+        player.pause()
+        player.currentItem?.step(byCount: frames)
+    }
+
+    private func keepPlayheadVisible() {
+        let visible = timelineScroll.contentView.bounds
+        let x = timeline.playheadX
+        guard x < visible.minX + 8 || x > visible.maxX - 8 else { return }
+        let target = min(x - visible.width * 0.15, timeline.bounds.width - visible.width)
+        timelineScroll.contentView.scroll(to: NSPoint(x: max(target, 0), y: 0))
+        timelineScroll.reflectScrolledClipView(timelineScroll.contentView)
+    }
+
+    // MARK: - Edits
+
+    /// Applies one undoable edit; `select` / `playhead` are read from the edited list.
+    private func perform(_ edit: (inout CutList) -> Bool, select: (CutList) -> Int,
+                         playhead: (CutList) -> Double) {
+        guard loaded, !isExporting, dragList == nil else { return }
+        guard history.apply(edit) else { NSSound.beep(); return }
+        note = nil
+        didChangeCuts(select: select(cuts), playhead: playhead(cuts))
+    }
+
+    private func didChangeCuts(select: Int, playhead: Double) {
+        selected = min(max(select, 0), cuts.segments.count - 1)
+        timeline.cuts = cuts
+        timeline.selected = selected
+        let t = min(max(playhead, 0), cuts.keptDuration)
+        timeline.playhead = t
+        rebuildPreview(playhead: t)
+        refreshTimeLabel()
+        refreshChrome()
+    }
+
+    private var playheadSource: Double { cuts.sourceTime(forOutput: timeline.playhead) }
+
+    @objc private func splitAtPlayhead() {
+        let s = playheadSource, t = timeline.playhead
+        // The left half stays selected, so "split, move, split, ⌫" removes the middle.
+        perform({ $0.split(atSource: s) },
+                select: { ($0.segmentIndex(containingSource: s) ?? 1) - 1 }, playhead: { _ in t })
+    }
+
+    @objc private func deleteSelected() {
+        let i = selected, start = cuts.outputStart(of: i)
+        perform({ $0.remove(at: i) }, select: { _ in i }, playhead: { _ in start })
+    }
+
+    private func setIn() {
+        let s = playheadSource
+        perform({ $0.trimBefore(source: s) }, select: { _ in 0 }, playhead: { _ in 0 })
+    }
+
+    private func setOut() {
+        let s = playheadSource
+        perform({ $0.trimAfter(source: s) }, select: { $0.segments.count - 1 },
+                playhead: { $0.keptDuration - 1.0 / 60 })
+    }
+
+    private func setSpeed(_ speed: Double, of i: Int) {
+        let s = playheadSource
+        perform({ $0.setSpeed(speed, of: i) }, select: { _ in i },
+                playhead: { $0.outputTime(forSource: s) ?? $0.outputStart(of: i) })
+    }
+
+    private func setSegmentMuted(_ muted: Bool, of i: Int) {
+        let t = timeline.playhead
+        perform({ $0.setMuted(muted, of: i) }, select: { _ in i }, playhead: { _ in t })
+    }
+
+    @objc private func undo() { stepHistory { $0.undo() } }
+    @objc private func redo() { stepHistory { $0.redo() } }
+
+    private func stepHistory(_ step: (inout CutHistory) -> Bool) {
+        guard loaded, !isExporting, dragList == nil else { return }
+        let s = playheadSource
+        guard step(&history) else { NSSound.beep(); return }
+        note = nil
+        didChangeCuts(select: selected, playhead: cuts.outputTime(forSource: s) ?? 0)
+    }
+
+    private func select(_ i: Int) {
+        guard i != selected, cuts.segments.indices.contains(i) else { return }
+        selected = i
+        timeline.selected = i
+        refreshChrome()
+    }
+
+    private func edgeDrag(_ i: Int, _ edge: CutTimelineView.Edge, _ t: Double,
+                          _ phase: CutTimelineView.DragPhase) {
+        guard loaded, !isExporting, cuts.segments.indices.contains(i) else { return }
+        if phase == .began {
+            player.pause()
+            if sourceSeeker == nil, let asset {
+                sourceSeeker = ChaseSeeker(AVPlayer(playerItem: AVPlayerItem(asset: asset)))
+            }
+            playerView.player = sourceSeeker?.player
+        }
+        var list = cuts
+        _ = edge == .start ? list.setStart(t, of: i) : list.setEnd(t, of: i)
+        let segment = list.segments[i]
+        // The preview shows the first kept frame for a start edge, the last for an end edge.
+        sourceSeeker?.seek(edge == .start ? segment.start : max(segment.start, segment.end - 1.0 / 60))
+        guard phase == .ended else {
+            dragList = list
+            timeline.cuts = list
+            selected = i; timeline.selected = i
+            refreshTimeLabel()
             refreshChrome()
-            if canTrim && trimWhenReady { beginTrimming() }
-        case .failed:
-            statusObservation = nil
-            canTrim = false
-            refreshChrome()
-            rangeLabel.stringValue = "This recording can't be opened for trimming."
-        default:
-            break
+            return
         }
+        dragList = nil
+        playerView.player = player
+        if list != cuts { note = nil }
+        history.commit(list)
+        let start = list.outputStart(of: i)
+        didChangeCuts(select: i, playhead: edge == .start ? start : max(start, start + segment.outputLength - 1.0 / 60))
     }
 
-    private func beginTrimming() {
-        guard canTrim, !isTrimming else { return }
-        isTrimming = true
-        refreshChrome()
-        playerView.beginTrimming { [weak self] result in
-            Task { @MainActor in self?.trimmingEnded(result) }
-        }
+    // MARK: - Segment controls
+
+    @objc private func speedPicked() {
+        guard CutList.speeds.indices.contains(speedControl.selectedSegment) else { return }
+        setSpeed(CutList.speeds[speedControl.selectedSegment], of: selected)
     }
 
-    private func trimmingEnded(_ result: AVPlayerViewTrimResult) {
-        isTrimming = false
-        if result == .okButton, let item = playerView.player?.currentItem {
-            // AVKit reports the handles as the item's playback end times (invalid = untouched end).
-            let s = item.reversePlaybackEndTime.isValid ? item.reversePlaybackEndTime.seconds : 0
-            let e = item.forwardPlaybackEndTime.isValid ? item.forwardPlaybackEndTime.seconds : duration
-            let r = TrimRange.clamped(start: s, end: e, duration: duration)
-            range = r.isNoOp(duration: duration) ? nil : r
-        }
+    @objc private func segmentMuteToggled() { setSegmentMuted(segmentMuteBox.state == .on, of: selected) }
+
+    @objc private func muteAllToggled() {
+        player.isMuted = muteBox.state == .on
         refreshChrome()
+    }
+
+    private func segmentMenu(_ i: Int) -> NSMenu? {
+        guard loaded, !isExporting, cuts.segments.indices.contains(i) else { return nil }
+        let segment = cuts.segments[i]
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        let speed = NSMenuItem(title: "Speed", action: nil, keyEquivalent: "")
+        let speeds = NSMenu()
+        for s in CutList.speeds {
+            let item = NSMenuItem(title: s == 1 ? "1× (normal)" : CutTimelineView.speedLabel(s),
+                                  action: #selector(speedMenuPicked(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = s
+            item.state = segment.speed == s ? .on : .off
+            speeds.addItem(item)
+        }
+        speed.submenu = speeds
+        menu.addItem(speed)
+        let mute = NSMenuItem(title: "Mute Segment", action: #selector(segmentMenuMute), keyEquivalent: "")
+        mute.target = self
+        mute.state = segment.muted ? .on : .off
+        mute.isEnabled = muteBox.state == .off
+        menu.addItem(mute)
+        menu.addItem(.separator())
+        let split = NSMenuItem(title: "Split at Playhead", action: #selector(splitAtPlayhead), keyEquivalent: "b")
+        split.target = self
+        split.isEnabled = splitButton.isEnabled
+        menu.addItem(split)
+        let delete = NSMenuItem(title: "Delete Segment", action: #selector(deleteSelected),
+                                keyEquivalent: "\u{8}")
+        delete.keyEquivalentModifierMask = []
+        delete.target = self
+        delete.isEnabled = cuts.segments.count > 1
+        menu.addItem(delete)
+        return menu
+    }
+
+    @objc private func speedMenuPicked(_ item: NSMenuItem) {
+        if let s = item.representedObject as? Double { setSpeed(s, of: selected) }
+    }
+
+    @objc private func segmentMenuMute() {
+        guard cuts.segments.indices.contains(selected) else { return }
+        setSegmentMuted(!cuts.segments[selected].muted, of: selected)
+    }
+
+    // MARK: - Zoom
+
+    @objc private func zoomChanged() { applyZoom(zoomSlider.doubleValue) }
+    @objc private func zoomOut() { applyZoom(zoomSlider.doubleValue / 1.5) }
+    @objc private func zoomIn() { applyZoom(zoomSlider.doubleValue * 1.5) }
+
+    /// Zooms the timeline, keeping the playhead where it is on screen.
+    private func applyZoom(_ value: Double) {
+        let zoom = min(max(value, zoomSlider.minValue), zoomSlider.maxValue)
+        zoomSlider.doubleValue = zoom
+        let clip = timelineScroll.contentView
+        let onScreen = timeline.playheadX - clip.bounds.minX
+        timelineScroll.zoom = CGFloat(zoom)
+        let maxX = max(timeline.bounds.width - clip.bounds.width, 0)
+        clip.scroll(to: NSPoint(x: min(max(timeline.playheadX - onScreen, 0), maxX), y: 0))
+        timelineScroll.reflectScrolledClipView(clip)
+        refreshChrome()
+    }
+
+    // MARK: - Keyboard
+
+    public override func keyDown(with event: NSEvent) {
+        if !handleKey(event) { super.keyDown(with: event) }
+    }
+
+    /// Plain-key shortcuts (the ⌘ ones are the buttons' key equivalents).
+    private func handleKey(_ event: NSEvent) -> Bool {
+        guard loaded, !isExporting else { return false }
+        guard event.modifierFlags.intersection([.command, .option, .control]).isEmpty else { return false }
+        switch event.specialKey {
+        case .leftArrow?: step(-1); return true
+        case .rightArrow?: step(1); return true
+        case .delete?, .deleteForward?: deleteSelected(); return true
+        default: break
+        }
+        switch event.charactersIgnoringModifiers?.lowercased() {
+        case " ": togglePlay()
+        case "s": splitAtPlayhead()
+        case "i": setIn()
+        case "o": setOut()
+        default: return false
+        }
+        return true
+    }
+
+    // MARK: - Chrome
+
+    private func refreshTimeLabel() {
+        let list = dragList ?? cuts
+        timeLabel.stringValue = "\(TrimRange.timestamp(timeline.playhead)) / \(TrimRange.timestamp(list.keptDuration))"
     }
 
     private func refreshChrome() {
-        let busy = isExporting || isTrimming
-        adjustButton.isEnabled = canTrim && !busy
-        copyButton.isEnabled = canTrim && !busy
-        replaceButton.isEnabled = canTrim && !busy
-        muteBox.isEnabled = canTrim && !isExporting
+        let list = dragList ?? cuts
+        let ready = loaded && !isExporting
+        let s = playheadSource
+        let canSplit = list.segments.contains {
+            s >= $0.start + CutList.minimumSegment && s <= $0.end - CutList.minimumSegment
+        }
+        splitButton.isEnabled = ready && canSplit
+        deleteButton.isEnabled = ready && list.segments.count > 1
+        undoButton.isEnabled = ready && history.canUndo
+        redoButton.isEnabled = ready && history.canRedo
+        playButton.isEnabled = ready
+        zoomSlider.isEnabled = loaded
+        zoomOutButton.isEnabled = loaded && zoomSlider.doubleValue > zoomSlider.minValue
+        zoomInButton.isEnabled = loaded && zoomSlider.doubleValue < zoomSlider.maxValue
+        speedControl.isEnabled = ready
+        segmentMuteBox.isEnabled = ready && muteBox.state == .off
+        muteBox.isEnabled = ready
+        copyButton.isEnabled = ready
+        replaceButton.isEnabled = ready
         cancelButton.isEnabled = !isExporting
-        if isExporting { spinner.startAnimation(nil) } else { spinner.stopAnimation(nil) }
-        guard canTrim else { rangeLabel.stringValue = duration > 0 ? "This recording can't be trimmed." : "Loading…"; return }
-        if isTrimming {
-            rangeLabel.stringValue = "Drag the yellow handles, then press Trim"
-        } else if let range {
-            rangeLabel.stringValue = range.label(duration: duration)
-        } else if replacedNote {
-            rangeLabel.stringValue = "Trimmed ✓ original replaced · \(TrimRange.timestamp(duration))"
+
+        if list.segments.indices.contains(selected) {
+            let segment = list.segments[selected]
+            segmentTitle.stringValue = "Segment \(selected + 1) of \(list.segments.count)"
+            segmentRange.stringValue = "\(TrimRange.timestamp(segment.start)) – \(TrimRange.timestamp(segment.end))"
+            speedControl.selectedSegment = CutList.speeds.firstIndex(of: segment.speed) ?? 0
+            segmentMuteBox.state = segment.muted || muteBox.state == .on ? .on : .off
+        }
+        hintLabel.stringValue = hint(for: list)
+
+        if loadFailed {
+            keptLabel.stringValue = "This recording can't be opened for editing."
+        } else if !loaded {
+            keptLabel.stringValue = "Loading…"
+        } else if let note {
+            keptLabel.stringValue = note
+        } else if list == CutList(duration: list.duration) {
+            keptLabel.stringValue = "Whole recording · \(TrimRange.timestamp(list.duration))"
         } else {
-            rangeLabel.stringValue = "Whole recording · \(TrimRange.timestamp(duration))"
+            keptLabel.stringValue = "\(TrimRange.timestamp(list.keptDuration)) kept of \(TrimRange.timestamp(list.duration))"
         }
     }
 
-    // MARK: - Actions
-
-    @objc private func adjustTrim() {
-        replacedNote = false
-        beginTrimming()
+    private func hint(for list: CutList) -> String {
+        if isExporting { return "Exporting — the original stays untouched until it's done." }
+        if muteBox.state == .on { return "Mute audio is on: the saved video will have no sound at all." }
+        if list.segments.indices.contains(selected) {
+            let segment = list.segments[selected]
+            if segment.speed != 1 && segment.muted {
+                return "Sped-up segments are muted so the audio doesn't sound rushed — untick Mute segment to keep it."
+            }
+            if segment.speed != 1 { return "Sped-up audio keeps its pitch but plays faster." }
+        }
+        if list.segments.count == 1 {
+            return "Move the playhead, then press S (or ⌘B) to split · drag the yellow edges to trim · I / O set in / out"
+        }
+        return "Click a segment to select it · ⌫ deletes it · right-click for speed and mute · Space plays the edit"
     }
+
+    // MARK: - Export
 
     @objc private func cancel() { close() }
 
     @objc private func saveCopy() {
-        let muted = muteBox.state == .on
-        export { [url, range, duration] in
-            try await TrimExporter.exportCopy(source: url, cuts: range.map { CutList(range: $0, duration: duration) } ?? CutList(duration: duration), muted: muted)
-        } done: { [weak self] newURL in
-            self?.onSavedCopy?(newURL)
+        let (url, cuts, muted) = (self.url, self.cuts, muteBox.state == .on)
+        runExport(determinate: TrimExporter.needsReencode(cuts),
+                  failure: "Couldn't export the edit — original untouched") {
+            try await TrimExporter.exportCopy(source: url, cuts: cuts, muted: muted, progress: $0)
+        } done: { [weak self] copy in
+            self?.onSavedCopy?(copy)
             self?.close()
         }
     }
 
     @objc private func replaceOriginal() {
-        let muted = muteBox.state == .on
-        export { [url, range, duration] in
-            try await TrimExporter.replaceOriginal(source: url, cuts: range.map { CutList(range: $0, duration: duration) } ?? CutList(duration: duration), muted: muted)
+        let (url, cuts, muted) = (self.url, self.cuts, muteBox.state == .on)
+        runExport(determinate: TrimExporter.needsReencode(cuts),
+                  failure: "Couldn't export the edit — original untouched") {
+            try await TrimExporter.replaceOriginal(source: url, cuts: cuts, muted: muted, progress: $0)
             return url
         } done: { [weak self] url in
             guard let self else { return }
-            // Back to plain playback of the trimmed file; Adjust Trim trims it again.
+            // Back to plain playback of the result, ready for more edits.
             self.muteBox.state = .off
-            self.trimWhenReady = false
-            self.replacedNote = true
+            self.player.isMuted = false
             self.cancelButton.title = "Done"
-            self.load()
+            self.cancelButton.toolTip = "Close the editor"
+            self.load(noteAfter: "Edited ✓ original replaced")
             self.onReplaced?(url)
         }
     }
 
-    private func export(_ work: @escaping () async throws -> URL, done: @escaping (URL) -> Void) {
-        guard !isExporting else { return }
+    @objc private func exportGIF() {
+        let (url, cuts) = (self.url, self.cuts)
+        runExport(determinate: true, failure: "Couldn't export the GIF — nothing was changed") {
+            try await TrimExporter.exportGIF(source: url, cuts: cuts, progress: $0)
+        } done: { [weak self] gif in
+            self?.note = "GIF saved ✓ \(gif.lastPathComponent)"
+            self?.refreshChrome()
+            self?.onExportedGIF?(gif)
+        }
+    }
+
+    private func runExport(determinate: Bool, failure: String,
+                           _ work: @escaping (@escaping TrimExporter.Progress) async throws -> URL,
+                           done: @escaping (URL) -> Void) {
+        guard loaded, !isExporting else { return }
         isExporting = true
-        playerView.player?.pause()
+        player.pause()
+        progressBar.isIndeterminate = !determinate
+        progressBar.doubleValue = 0
+        progressBar.isHidden = false
+        progressLabel.isHidden = false
+        progressLabel.stringValue = determinate ? "Exporting… 0%" : "Saving…"
+        keptLabel.isHidden = true
+        if !determinate { progressBar.startAnimation(nil) }
         refreshChrome()
-        Task { @MainActor in
-            do {
-                let result = try await work()
-                isExporting = false
-                refreshChrome()
-                done(result)
-            } catch {
-                isExporting = false
-                refreshChrome()
-                let message = "Couldn't export trimmed recording — original untouched"
-                rangeLabel.stringValue = message
-                onFailed?(message)
+        let progress: TrimExporter.Progress = { [weak self] p in
+            Task { @MainActor in
+                guard let self, self.isExporting, determinate else { return }
+                self.progressBar.doubleValue = p
+                self.progressLabel.stringValue = "Exporting… \(Int((p * 100).rounded()))%"
             }
         }
+        Task { @MainActor in
+            do {
+                let result = try await work(progress)
+                finishExport()
+                done(result)
+            } catch {
+                finishExport()
+                note = failure
+                refreshChrome()
+                onFailed?(failure)
+            }
+        }
+    }
+
+    private func finishExport() {
+        isExporting = false
+        progressBar.stopAnimation(nil)
+        progressBar.isHidden = true
+        progressLabel.isHidden = true
+        keptLabel.isHidden = false
+        refreshChrome()
     }
 
     // MARK: - NSWindowDelegate
@@ -250,8 +801,119 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
     public func windowShouldClose(_ sender: NSWindow) -> Bool { !isExporting }
 
     public func windowWillClose(_ notification: Notification) {
-        playerView.player?.pause()
+        loadTask?.cancel(); rebuildTask?.cancel(); thumbnailTask?.cancel()
+        player.pause()
+        if let timeObserver { player.removeTimeObserver(timeObserver) }
+        timeObserver = nil
+        playingObservation = nil
         playerView.player = nil
+        sourceSeeker?.player.pause()
         onClosed?()
+    }
+
+    // MARK: - Control factories
+
+    private static func iconButton(_ symbol: String, tip: String, size: CGFloat) -> NSButton {
+        let b = NSButton(image: NSImage(systemSymbolName: symbol, accessibilityDescription: tip)!
+                            .withSymbolConfiguration(.init(pointSize: size, weight: .semibold))!,
+                         target: nil, action: nil)
+        b.isBordered = false
+        b.imagePosition = .imageOnly
+        b.contentTintColor = NSColor(white: 1, alpha: 0.85)
+        b.toolTip = tip
+        b.setAccessibilityLabel(tip)
+        b.widthAnchor.constraint(equalToConstant: size + 14).isActive = true
+        return b
+    }
+
+    /// A rounded push button: icon + short title, or icon only when `title` is nil.
+    private static func textButton(_ title: String?, symbol: String, tip: String) -> NSButton {
+        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: title ?? tip)!
+            .withSymbolConfiguration(.init(pointSize: 12, weight: .medium))!
+        let b = title.map { NSButton(title: $0, image: image, target: nil, action: nil) }
+            ?? NSButton(image: image, target: nil, action: nil)
+        b.bezelStyle = .rounded
+        b.imagePosition = title == nil ? .imageOnly : .imageLeading
+        b.imageHugsTitle = true
+        b.toolTip = tip
+        b.setAccessibilityLabel(title ?? tip)
+        return b
+    }
+
+    private static func row(_ views: [NSView], spacing: CGFloat) -> NSStackView {
+        let row = NSStackView(views: views)
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = spacing
+        row.translatesAutoresizingMaskIntoConstraints = false
+        return row
+    }
+
+    private static func gap(_ width: CGFloat) -> NSView {
+        let v = NSView()
+        v.widthAnchor.constraint(equalToConstant: width).isActive = true
+        return v
+    }
+
+    private static func flexible() -> NSView {
+        let v = NSView()
+        v.setContentHuggingPriority(.init(1), for: .horizontal)
+        v.setContentCompressionResistancePriority(.init(1), for: .horizontal)
+        return v
+    }
+
+    private static func divider() -> NSView {
+        let v = NSView()
+        v.wantsLayer = true
+        v.layer?.backgroundColor = NSColor(white: 1, alpha: 0.15).cgColor
+        NSLayoutConstraint.activate([v.widthAnchor.constraint(equalToConstant: 1),
+                                     v.heightAnchor.constraint(equalToConstant: 18)])
+        return v
+    }
+}
+
+/// The preview: no AVKit controls; a click toggles play / pause.
+final class PreviewPlayerView: AVPlayerView {
+    var onClick: (() -> Void)?
+    override func hitTest(_ point: NSPoint) -> NSView? { frame.contains(point) ? self : nil }
+    override func mouseDown(with event: NSEvent) { onClick?() }
+    override var acceptsFirstResponder: Bool { false }
+}
+
+/// Keeps the timeline document as wide as the visible area × `zoom`.
+final class TimelineScrollView: NSScrollView {
+    var zoom: CGFloat = 1 { didSet { tile() } }
+    override func tile() {
+        super.tile()
+        guard let doc = documentView else { return }
+        let size = NSSize(width: max(contentSize.width, (contentSize.width * zoom).rounded()),
+                          height: contentSize.height)
+        if doc.frame.size != size { doc.setFrameSize(size) }
+    }
+}
+
+/// Seeks a player frame-exactly without piling up stale seeks: while one runs, only
+/// the latest requested time is kept (smooth scrubbing).
+@MainActor
+final class ChaseSeeker {
+    let player: AVPlayer
+    private var pending: CMTime?
+    private var busy = false
+    var isIdle: Bool { !busy && pending == nil }
+
+    init(_ player: AVPlayer) { self.player = player }
+
+    func seek(_ seconds: Double) {
+        pending = CMTime(seconds: max(seconds, 0), preferredTimescale: 600)
+        if !busy { next() }
+    }
+
+    private func next() {
+        guard let time = pending else { busy = false; return }
+        pending = nil
+        busy = true
+        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.next() } }
+        }
     }
 }

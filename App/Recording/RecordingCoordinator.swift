@@ -425,7 +425,10 @@ final class RecordingCoordinator {
         c.onSavedCopy = { [weak self] copy in
             Task { await self?.finishRecording(at: copy) }
         }
-        c.onReplaced = { [weak self] _ in self?.hud.show("Recording trimmed") }
+        c.onExportedGIF = { [weak self] gif in
+            Task { await self?.finishRecording(at: gif) }
+        }
+        c.onReplaced = { [weak self] _ in self?.hud.show("Recording edited") }
         c.onFailed = { [weak self] message in self?.hud.show(message) }
         c.onClosed = { [weak self, weak c] in
             if self?.trimController === c { self?.trimController = nil }

@@ -6,26 +6,28 @@ import AVFoundation
 public enum CutComposition {
     static func time(_ seconds: Double) -> CMTime { CMTime(seconds: seconds, preferredTimescale: 600) }
 
-    /// The composition, plus a video composition when a segment is sped up — apply
-    /// both to the player item / export session. Without it, a sped-up segment followed
-    /// by the next stretch of the *same* source (a split, then a speed change) makes
-    /// AVAssetExportSession fail with -16364 (probed 2026-09-24, macOS 26); rendering
-    /// through a video composition at a constant frame rate avoids that.
-    public static func make(asset: AVAsset, cuts: CutList,
-                            muteAll: Bool) async throws -> (AVMutableComposition, AVVideoComposition?) {
-        let composition = try await makeComposition(asset: asset, cuts: cuts, muteAll: muteAll)
-        guard cuts.segments.contains(where: { $0.speed != 1 }) else { return (composition, nil) }
+    /// A video composition that renders `composition` frame by frame at the source's
+    /// own frame rate (its shortest frame interval, 30…60 fps). Needed for two reasons
+    /// (both probed 2026-09-24 on macOS 26):
+    /// - Export: without one, AVAssetExportPresetHighestQuality *doesn't re-encode* a
+    ///   plain cut composition — it copies the samples and hides the extra frames with
+    ///   an MP4 edit list, which only edit-list-aware players honour. Rendering forces a
+    ///   real re-encode, so every cut is exact in every player.
+    /// - Speed: a sped-up segment followed by the next stretch of the same source (a
+    ///   split, then a speed change) fails to export (-16364) without one. The preview
+    ///   uses one only in that case.
+    public static func videoComposition(for composition: AVComposition,
+                                        source asset: AVAsset) async throws -> AVVideoComposition {
         let video = try await AVMutableVideoComposition.videoComposition(withPropertiesOf: composition)
-        // The source's own frame rate (its shortest frame interval), 30…60 fps.
         let minFrame = try await asset.loadTracks(withMediaType: .video).first?.load(.minFrameDuration)
         let fps = minFrame.map { $0.isValid && $0.seconds > 0 ? 1 / $0.seconds : 30 } ?? 30
         video.frameDuration = CMTime(value: 1, timescale: CMTimeScale(min(max(fps.rounded(), 30), 60)))
-        return (composition, video)
+        return video
     }
 
     /// `muteAll` (the whole-file Mute audio box) leaves the audio out entirely, as
     /// does a list whose every segment is muted.
-    static func makeComposition(asset: AVAsset, cuts: CutList, muteAll: Bool) async throws -> AVMutableComposition {
+    public static func make(asset: AVAsset, cuts: CutList, muteAll: Bool) async throws -> AVMutableComposition {
         let videoTracks = try await asset.loadTracks(withMediaType: .video)
         guard !videoTracks.isEmpty else { throw TrimExporter.ExportError.noVideoTrack }
         let keepAudio = !muteAll && cuts.segments.contains { !$0.muted }
