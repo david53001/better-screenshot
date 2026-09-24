@@ -17,6 +17,8 @@ public final class EditorWindowController: NSWindowController {
     private var toolButtons: [EditorTool: IconToolButton] = [:]
     private let inspectorEffect = NSVisualEffectView()
     private let inspectorStack = NSStackView()
+    /// Second inspector row — only the Text tool uses it (font controls).
+    private let inspectorRow2 = NSStackView()
     private let dimsLabel = NSTextField(labelWithString: "")
     private let undoButton = NSButton()
     private let redoButton = NSButton()
@@ -46,7 +48,7 @@ public final class EditorWindowController: NSWindowController {
         .rectangle: ("rectangle", "Rectangle"),
         .filledRectangle: ("rectangle.fill", "Filled Rectangle"),
         .ellipse: ("circle", "Ellipse"),
-        .text: ("textformat", "Text"),
+        .text: ("textformat", "Text — click to type, drag for a text box, double-click text to edit"),
         .counter: ("1.circle.fill", "Counter"),
         .blur: ("drop.fill", "Blur"),
         .pixelate: ("square.grid.3x3.fill", "Pixelate"),
@@ -92,6 +94,13 @@ public final class EditorWindowController: NSWindowController {
         // first responder up front instead of requiring a click first.
         window.initialFirstResponder = canvas
         canvas.onStateChange = { [weak self] in self?.refreshChrome() }
+        canvas.onEditText = { [weak self] textStyle in
+            // Show the edited text's own style; not persisted until the user changes it.
+            guard let self else { return }
+            self.style = textStyle
+            self.canvas.style = textStyle
+            self.selectTool(.text)
+        }
         selectTool(.arrow)
     }
     required init?(coder: NSCoder) { fatalError() }
@@ -146,7 +155,7 @@ public final class EditorWindowController: NSWindowController {
 
             inspectorEffect.centerXAnchor.constraint(equalTo: content.centerXAnchor),
             inspectorEffect.topAnchor.constraint(equalTo: toolbar.bottomAnchor, constant: 8),
-            inspectorEffect.heightAnchor.constraint(equalToConstant: 44),
+            inspectorEffect.widthAnchor.constraint(lessThanOrEqualTo: content.widthAnchor, constant: -16),
         ])
     }
 
@@ -219,15 +228,25 @@ public final class EditorWindowController: NSWindowController {
         pill.layer?.borderWidth = 1
         pill.layer?.borderColor = NSColor(white: 1, alpha: 0.09).cgColor
 
-        inspectorStack.orientation = .horizontal
-        inspectorStack.spacing = 12
-        inspectorStack.alignment = .centerY
-        inspectorStack.translatesAutoresizingMaskIntoConstraints = false
-        pill.addSubview(inspectorStack)
+        for row in [inspectorStack, inspectorRow2] {
+            row.orientation = .horizontal
+            row.spacing = 12
+            row.alignment = .centerY
+            row.heightAnchor.constraint(greaterThanOrEqualToConstant: 28).isActive = true
+        }
+        // Rows stack vertically; a hidden (empty) second row takes no space, so
+        // single-row tools keep the original 44pt pill.
+        let rows = NSStackView(views: [inspectorStack, inspectorRow2])
+        rows.orientation = .vertical
+        rows.alignment = .centerX
+        rows.spacing = 8
+        rows.translatesAutoresizingMaskIntoConstraints = false
+        pill.addSubview(rows)
         NSLayoutConstraint.activate([
-            inspectorStack.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
-            inspectorStack.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 14),
-            inspectorStack.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: -14),
+            rows.topAnchor.constraint(equalTo: pill.topAnchor, constant: 8),
+            rows.bottomAnchor.constraint(equalTo: pill.bottomAnchor, constant: -8),
+            rows.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 14),
+            rows.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: -14),
         ])
     }
 
@@ -337,6 +356,8 @@ public final class EditorWindowController: NSWindowController {
 
     private func rebuildInspector(for tool: EditorTool) {
         inspectorStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        inspectorRow2.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        defer { inspectorRow2.isHidden = inspectorRow2.arrangedSubviews.isEmpty }
         swatchButtons.removeAll()
         selectionDependentButtons.removeAll()
 
@@ -356,9 +377,12 @@ public final class EditorWindowController: NSWindowController {
             inspectorStack.addArrangedSubview(makeLabel("Text"))
             inspectorStack.addArrangedSubview(makeColorRow())
             inspectorStack.addArrangedSubview(makeDivider())
-            inspectorStack.addArrangedSubview(makeSizeSegment())
-            inspectorStack.addArrangedSubview(makeDivider())
             inspectorStack.addArrangedSubview(makeTextBackgroundToggle())
+            inspectorRow2.addArrangedSubview(makeFontPopup())
+            inspectorRow2.addArrangedSubview(makeFontSizePopup())
+            inspectorRow2.addArrangedSubview(makeDivider())
+            inspectorRow2.addArrangedSubview(makeBoldItalicSegment())
+            inspectorRow2.addArrangedSubview(makeAlignmentSegment())
         case .counter:
             inspectorStack.addArrangedSubview(makeLabel("Counter"))
             inspectorStack.addArrangedSubview(makeColorRow())
@@ -429,12 +453,75 @@ public final class EditorWindowController: NSWindowController {
         return seg
     }
 
-    private func makeSizeSegment() -> NSSegmentedControl {
-        let seg = NSSegmentedControl(labels: ["S", "M", "L"], trackingMode: .selectOne,
-                                     target: self, action: #selector(sizeChanged(_:)))
+    private static let fontSizes: [CGFloat] = [12, 14, 18, 24, 30, 36, 48, 64, 96]
+
+    private func makeFontPopup() -> NSPopUpButton {
+        let pop = NSPopUpButton(frame: .zero, pullsDown: false)
+        pop.controlSize = .small
+        pop.target = self
+        pop.action = #selector(fontFamilyChanged(_:))
+        let menu = pop.menu!
+        for preset in TextFont.presets {
+            let item = NSMenuItem(title: preset.label, action: nil, keyEquivalent: "")
+            item.representedObject = preset.family
+            item.attributedTitle = NSAttributedString(string: preset.label, attributes: [
+                .font: TextFont.font(family: preset.family, size: 13, bold: false, italic: false)])
+            menu.addItem(item)
+        }
+        menu.addItem(.separator())
+        for family in TextFont.installedFamilies {
+            let item = NSMenuItem(title: family, action: nil, keyEquivalent: "")
+            item.representedObject = family
+            menu.addItem(item)
+        }
+        if let item = menu.items.first(where: { ($0.representedObject as? String) == style.fontFamily }) {
+            pop.select(item)
+        } else {
+            // A persisted family that's no longer installed renders as System — say so.
+            pop.selectItem(at: 0)
+        }
+        pop.toolTip = "Font"
+        pop.widthAnchor.constraint(lessThanOrEqualToConstant: 150).isActive = true
+        return pop
+    }
+
+    private func makeFontSizePopup() -> NSPopUpButton {
+        let pop = NSPopUpButton(frame: .zero, pullsDown: false)
+        pop.controlSize = .small
+        pop.target = self
+        pop.action = #selector(fontSizeChanged(_:))
+        var sizes = Self.fontSizes
+        if !sizes.contains(style.fontSize) { sizes.append(style.fontSize); sizes.sort() }
+        for size in sizes {
+            pop.addItem(withTitle: "\(Int(size)) pt")
+            pop.lastItem?.representedObject = size
+        }
+        pop.selectItem(at: sizes.firstIndex(of: style.fontSize) ?? 0)
+        pop.toolTip = "Font size"
+        return pop
+    }
+
+    private func makeBoldItalicSegment() -> NSSegmentedControl {
+        let seg = NSSegmentedControl(images: [
+            NSImage(systemSymbolName: "bold", accessibilityDescription: "Bold")!,
+            NSImage(systemSymbolName: "italic", accessibilityDescription: "Italic")!,
+        ], trackingMode: .selectAny, target: self, action: #selector(boldItalicChanged(_:)))
         seg.segmentStyle = .rounded
-        let sizes: [CGFloat] = [18, 24, 36]
-        seg.selectedSegment = sizes.firstIndex(of: style.fontSize) ?? 1
+        seg.setSelected(style.fontBold, forSegment: 0)
+        seg.setSelected(style.fontItalic, forSegment: 1)
+        seg.setToolTip("Bold", forSegment: 0)
+        seg.setToolTip("Italic", forSegment: 1)
+        return seg
+    }
+
+    private func makeAlignmentSegment() -> NSSegmentedControl {
+        let seg = NSSegmentedControl(images: [
+            NSImage(systemSymbolName: "text.alignleft", accessibilityDescription: "Align left")!,
+            NSImage(systemSymbolName: "text.aligncenter", accessibilityDescription: "Align centre")!,
+            NSImage(systemSymbolName: "text.alignright", accessibilityDescription: "Align right")!,
+        ], trackingMode: .selectOne, target: self, action: #selector(alignmentChanged(_:)))
+        seg.segmentStyle = .rounded
+        seg.selectedSegment = TextAlign.allCases.firstIndex(of: style.textAlignment) ?? 0
         return seg
     }
 
@@ -503,28 +590,49 @@ public final class EditorWindowController: NSWindowController {
         let c = color.usingColorSpace(.sRGB) ?? color
         style.strokeColor = RGBAColor(c)
         style.fillColor = RGBAColor(c.withAlphaComponent(0.25))
+        styleDidChange()
+    }
+
+    /// Pushes `style` to the canvas (new objects + the live text editor + selected
+    /// text under the Text tool) and reports it for persistence as the sticky default.
+    private func styleDidChange() {
         canvas.style = style
+        canvas.applyStyleToSelectedText()
         onStyleChanged?(style)
     }
 
     @objc private func weightChanged(_ sender: NSSegmentedControl) {
         let widths: [CGFloat] = [2, 4, 7]
         style.lineWidth = widths[max(0, sender.selectedSegment)]
-        canvas.style = style
-        onStyleChanged?(style)
+        styleDidChange()
     }
 
-    @objc private func sizeChanged(_ sender: NSSegmentedControl) {
-        let sizes: [CGFloat] = [18, 24, 36]
-        style.fontSize = sizes[max(0, sender.selectedSegment)]
-        canvas.style = style
-        onStyleChanged?(style)
+    @objc private func fontSizeChanged(_ sender: NSPopUpButton) {
+        guard let size = sender.selectedItem?.representedObject as? CGFloat else { return }
+        style.fontSize = size
+        styleDidChange()
+    }
+
+    @objc private func fontFamilyChanged(_ sender: NSPopUpButton) {
+        guard let family = sender.selectedItem?.representedObject as? String else { return }
+        style.fontFamily = family
+        styleDidChange()
+    }
+
+    @objc private func boldItalicChanged(_ sender: NSSegmentedControl) {
+        style.fontBold = sender.isSelected(forSegment: 0)
+        style.fontItalic = sender.isSelected(forSegment: 1)
+        styleDidChange()
+    }
+
+    @objc private func alignmentChanged(_ sender: NSSegmentedControl) {
+        style.textAlignment = TextAlign.allCases[max(0, sender.selectedSegment)]
+        styleDidChange()
     }
 
     @objc private func textBackgroundChanged(_ sender: NSButton) {
         style.textBackground = (sender.state == .on)
-        canvas.style = style
-        onStyleChanged?(style)
+        styleDidChange()
     }
 
     @objc private func redactChanged(_ sender: NSSegmentedControl) {
@@ -541,14 +649,17 @@ public final class EditorWindowController: NSWindowController {
     @objc private func redoAction() { canvas.redo() }
 
     @objc private func copyAction() {
+        canvas.commitPendingText()
         guard let img = DocumentRenderer.render(canvas.currentDocument()) else { return }
         onCopy?(img)
     }
     @objc private func saveAction() {
+        canvas.commitPendingText()
         guard let img = DocumentRenderer.render(canvas.currentDocument()) else { return }
         onSave?(img)
     }
     @objc private func addToStackAction() {
+        canvas.commitPendingText()
         guard let img = DocumentRenderer.render(canvas.currentDocument()) else { return }
         onAddToStack?(img)
         window?.close()

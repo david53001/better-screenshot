@@ -7,7 +7,10 @@ renderer. Imported by the `App/` target (capture flow opens the editor).
 - `EditorDocument.swift` — the annotation document model.
 - Annotation types: `Annotation.swift`, `ArrowAnnotation.swift`, `ShapeAnnotations.swift`,
   `TextAnnotation.swift`, `CounterAnnotation.swift`, `RedactionAnnotations.swift`.
-- Styling: `AnnotationStyle.swift`, `RGBAColor.swift` (Codable — persisted as the app's sticky default).
+- Styling: `AnnotationStyle.swift`, `RGBAColor.swift` (Codable — persisted as the app's sticky default),
+  `TextFont.swift` (font family/bold/italic → `NSFont`; unknown family falls back to system).
+- Text: `TextAnnotation.wrapWidth` = text-box width (nil = free label). The canvas's inline editor is
+  an `NSTextView` laid out with the same attributes as the committed annotation.
 - UI: `EditorWindowController.swift`, `EditorCanvasView.swift`, `EditorChrome.swift`, `EditorTool.swift`.
 - Rendering/geometry: `DocumentRenderer.swift`, `Redactor.swift`, `ArrowGeometry.swift`.
 

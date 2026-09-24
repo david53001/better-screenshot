@@ -68,4 +68,27 @@ let annotationStyleCodableTests: [TestCase] = [
             t.fail("round-trip threw: \(error)")
         }
     },
+    TestCase("legacyStyleDecodesWithTodaysTextLook") { t in
+        let legacyJSON = """
+        {"strokeColor": {"r": 1, "g": 0, "b": 0, "a": 1},
+         "fillColor": {"r": 1, "g": 0, "b": 0, "a": 0.25},
+         "lineWidth": 4, "fontSize": 24, "textBackground": true}
+        """
+        do {
+            let s = try JSONDecoder().decode(AnnotationStyle.self, from: Data(legacyJSON.utf8))
+            t.equal(s.fontFamily, TextFont.system)
+            t.isTrue(s.fontBold, "legacy text was semibold")
+            t.isFalse(s.fontItalic)
+            t.equal(s.textAlignment, .left)
+            t.isTrue(s.textBackground)
+        } catch { t.fail("legacy decode threw: \(error)") }
+    },
+    TestCase("textFontFieldsRoundTrip") { t in
+        var s = AnnotationStyle.default
+        s.fontFamily = "Georgia"; s.fontBold = false; s.fontItalic = true; s.textAlignment = .center
+        do {
+            let d = try JSONDecoder().decode(AnnotationStyle.self, from: JSONEncoder().encode(s))
+            t.isTrue(d == s, "round-trip keeps font fields")
+        } catch { t.fail("round-trip threw: \(error)") }
+    },
 ]

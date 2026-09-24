@@ -3,8 +3,10 @@ import AppKit
 public final class EditorCanvasView: NSView {
     public private(set) var document: EditorDocument
     public var tool: EditorTool = .select
-    public var style = AnnotationStyle.default { didSet { needsDisplay = true } }
-    public var onTextRequested: ((CGPoint) -> Void)?   // Task 11 wires inline editing
+    public var style = AnnotationStyle.default { didSet { restyleActiveField(); needsDisplay = true } }
+    /// Fired when an existing text annotation opens for editing, with its style, so
+    /// the window can switch to the Text tool and show that style in the inspector.
+    public var onEditText: ((AnnotationStyle) -> Void)?
 
     // MARK: - Selection (supports multiple objects)
     private var selectedIDs: Set<UUID> = []
@@ -50,7 +52,6 @@ public final class EditorCanvasView: NSView {
     public init(document: EditorDocument) {
         self.document = document
         super.init(frame: NSRect(origin: .zero, size: document.size))
-        self.onTextRequested = { [weak self] p in self?.beginTextEditing(atImagePoint: p) }
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -91,11 +92,17 @@ public final class EditorCanvasView: NSView {
         ]
     }
 
+    /// Handle indices the sole selection offers: text only resizes its box width (ML/MR).
+    private var activeHandleIndices: [Int] {
+        guard let id = soleSelectedID, let i = document.index(of: id) else { return [] }
+        return document.annotations[i] is TextAnnotation ? [3, 4] : Array(0..<8)
+    }
+
     /// Returns the index (0-7) of the handle hit at viewPoint, or nil.
     private func hitHandle(at viewPoint: NSPoint, viewRect: NSRect) -> Int? {
         let rects = handleRects(for: viewRect)
-        for (i, r) in rects.enumerated() {
-            if r.insetBy(dx: -2, dy: -2).contains(viewPoint) { return i }
+        for i in activeHandleIndices where rects[i].insetBy(dx: -2, dy: -2).contains(viewPoint) {
+            return i
         }
         return nil
     }
@@ -125,7 +132,7 @@ public final class EditorCanvasView: NSView {
         let a = document.annotations[i]
         guard a is RectangleAnnotation || a is FilledRectangleAnnotation
            || a is EllipseAnnotation   || a is BlurAnnotation
-           || a is PixelateAnnotation  else { return nil }
+           || a is PixelateAnnotation  || a is TextAnnotation else { return nil }
         let bb = a.boundingBox()
         return NSRect(x: bb.minX / scale, y: bb.minY / scale,
                       width: bb.width / scale, height: bb.height / scale)
@@ -158,6 +165,13 @@ public final class EditorCanvasView: NSView {
             var c = b; c.frame = newImageFrame; updated = c
         case let p as PixelateAnnotation:
             var c = p; c.frame = newImageFrame; updated = c
+        case let t as TextAnnotation:
+            // Side handles set the box width (text reflows); height follows the text.
+            var c = t
+            c.wrapWidth = max(newImageFrame.width, t.style.fontSize)
+            c.origin.x = newImageFrame.width >= t.style.fontSize
+                ? newImageFrame.minX : newImageFrame.maxX - t.style.fontSize
+            updated = c
         default:
             updated = nil
         }
@@ -178,7 +192,7 @@ public final class EditorCanvasView: NSView {
         let toView = NSAffineTransform()
         toView.scale(by: 1 / scale)
         toView.concat()
-        for a in document.annotations { a.draw() }
+        for a in document.annotations where a.id != editingID { a.draw() }
         inProgress?.draw()
         NSGraphicsContext.restoreGraphicsState()
 
@@ -217,7 +231,8 @@ public final class EditorCanvasView: NSView {
         if let vr = selectedViewRect() {
             NSColor.white.setFill()
             NSColor.systemBlue.setStroke()
-            for r in handleRects(for: vr) {
+            let rects = handleRects(for: vr)
+            for r in activeHandleIndices.map({ rects[$0] }) {
                 let path = NSBezierPath(rect: r)
                 path.fill(); path.lineWidth = 1; path.stroke()
             }
@@ -233,8 +248,15 @@ public final class EditorCanvasView: NSView {
         regionMarquee = nil
         marqueeRect = nil
 
+        textPressPending = false
         switch tool {
         case .select:
+            if event.clickCount == 2, let hit = document.topmostHit(at: p),
+               document.annotations[document.index(of: hit)!] is TextAnnotation {
+                dragStartImagePoint = nil
+                editExistingText(id: hit)
+                return
+            }
             // Resize handle (single selection) first, then an object hit, then
             // an empty-space drag starts a rubber-band marquee.
             if let vr = selectedViewRect(), let hi = hitHandle(at: viewPt, viewRect: vr) {
@@ -252,7 +274,21 @@ public final class EditorCanvasView: NSView {
             }
             onStateChange?(); needsDisplay = true
         case .text:
-            onTextRequested?(p)
+            // Resize handles of a selected text box still work under the Text tool.
+            if let vr = selectedViewRect(), let hi = hitHandle(at: viewPt, viewRect: vr) {
+                activeHandleIndex = hi
+                handleOriginalFrame = document.annotations[document.index(of: soleSelectedID!)!].boundingBox()
+                pendingDragSnapshot = document; didDragMutate = false
+            } else if let hit = document.topmostHit(at: p),
+                      document.annotations[document.index(of: hit)!] is TextAnnotation {
+                dragStartImagePoint = nil
+                editExistingText(id: hit)
+            } else if event.timestamp == focusCommitTimestamp {
+                // This click only ended the previous text's editing — don't start another.
+                dragStartImagePoint = nil
+            } else {
+                textPressPending = true   // click = free label, drag = text box (mouseUp)
+            }
         case .counter:
             snapshot()
             document.add(CounterAnnotation.centered(on: p,
@@ -301,6 +337,14 @@ public final class EditorCanvasView: NSView {
             inProgress = EllipseAnnotation(frame: rect(start, p), style: style)
         case .blur, .pixelate, .crop:
             regionMarquee = rect(start, p)
+        case .text:
+            if let hi = activeHandleIndex {
+                let delta = CGVector(dx: p.x - start.x, dy: p.y - start.y)
+                replaceFrame(resizedFrame(original: handleOriginalFrame, handleIdx: hi, delta: delta))
+                didDragMutate = true
+            } else if textPressPending {
+                regionMarquee = rect(start, p)
+            }
         default: break
         }
         needsDisplay = true
@@ -336,6 +380,16 @@ public final class EditorCanvasView: NSView {
                 }
             case .crop:
                 if r.width >= 4, r.height >= 4 { applyCrop(to: r) }
+            case .text:
+                guard textPressPending else { break }
+                textPressPending = false
+                let box = rect(start, EditorBoundsClamp.point(p, into: document.size))
+                // A real drag (≥ 12 view points wide) makes a fixed-width text box.
+                if box.width / scale >= 12 {
+                    beginTextEditing(atImagePoint: box.origin, fixedWidth: box.width)
+                } else {
+                    beginTextEditing(atImagePoint: start)
+                }
             default:
                 if let a = inProgress { inProgress = nil; insert(a) }  // insert() snapshots
             }
@@ -438,30 +492,158 @@ public final class EditorCanvasView: NSView {
     }
 
     // MARK: - Inline text editing (Task 11)
-    private var activeField: NSTextField?
+    // An NSTextView laid out exactly like the committed TextAnnotation. A free label
+    // (click) grows rightward to the canvas edge, then wraps and grows down; a text
+    // box (drag, or an existing box) keeps its width and grows down. Return commits,
+    // ⇧/⌥Return inserts a newline, Esc or clicking away also commits.
+    private var activeField: NSTextView?
+    private var textImageOrigin: CGPoint = .zero
+    /// Free label: room (view points) from the origin to the canvas's right edge.
+    private var activeRoom: CGFloat = 0
+    /// Text box width in image px; nil while editing a free label.
+    private var activeBoxWidth: CGFloat?
+    /// The existing annotation being edited (hidden from the canvas meanwhile).
+    private var editingID: UUID?
+    private var textPressPending = false
+    /// Timestamp of the mouse-down that ended editing, so that same click doesn't open a new text.
+    private var focusCommitTimestamp: TimeInterval?
 
-    private func beginTextEditing(atImagePoint p: CGPoint) {
+    private var editorAttributes: [NSAttributedString.Key: Any] {
+        TextAnnotation.attributes(for: style, fontSize: style.fontSize / scale)
+    }
+
+    private func beginTextEditing(atImagePoint p: CGPoint, fixedWidth: CGFloat? = nil, text: String = "") {
         let viewPoint = NSPoint(x: p.x / scale, y: p.y / scale)
-        let field = NSTextField(frame: NSRect(x: viewPoint.x, y: viewPoint.y, width: 200, height: 28))
-        field.font = .systemFont(ofSize: style.fontSize / scale, weight: .semibold)
-        field.textColor = style.strokeColor.nsColor
-        field.backgroundColor = .clear
-        field.isBordered = false
-        field.focusRingType = .none
-        field.target = self
-        field.action = #selector(commitText(_:))
+        activeRoom = max(bounds.maxX - viewPoint.x, 40)
+        activeBoxWidth = fixedWidth
+        let field = NSTextView(frame: NSRect(x: viewPoint.x, y: viewPoint.y, width: 20, height: 20))
+        field.isRichText = false
+        field.drawsBackground = false
+        field.allowsUndo = true
+        field.textContainerInset = .zero
+        field.textContainer?.lineFragmentPadding = 0
+        field.textContainer?.widthTracksTextView = false
+        field.string = text
+        field.delegate = self
         addSubview(field)
-        window?.makeFirstResponder(field)
         activeField = field
         textImageOrigin = p
+        restyleActiveField()
+        window?.makeFirstResponder(field)
+        needsDisplay = true
     }
-    private var textImageOrigin: CGPoint = .zero
 
-    @objc private func commitText(_ sender: NSTextField) {
-        let text = sender.stringValue
-        sender.removeFromSuperview(); activeField = nil
-        window?.makeFirstResponder(self)
+    private func editExistingText(id: UUID) {
+        guard let i = document.index(of: id), let ta = document.annotations[i] as? TextAnnotation else { return }
+        selectedIDs = []
+        onEditText?(ta.style)
+        style = ta.style
+        editingID = id
+        beginTextEditing(atImagePoint: ta.origin, fixedWidth: ta.wrapWidth, text: ta.text)
+        onStateChange?()
+    }
+
+    /// Natural single-line-per-paragraph width of the editor's text, in view points.
+    private func activeNaturalWidth() -> CGFloat {
+        guard let field = activeField else { return 0 }
+        let s = NSAttributedString(string: field.string.isEmpty ? " " : field.string, attributes: editorAttributes)
+        return ceil(s.boundingRect(with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude),
+                                   options: [.usesLineFragmentOrigin, .usesFontLeading]).width)
+    }
+
+    /// Re-applies the current style to the live editor (inspector changes while typing) and re-fits it.
+    private func restyleActiveField() {
+        guard let field = activeField else { return }
+        let attrs = editorAttributes
+        field.typingAttributes = attrs
+        field.textStorage?.setAttributes(attrs, range: NSRange(location: 0, length: (field.string as NSString).length))
+        field.insertionPointColor = style.strokeColor.nsColor
+        resizeActiveField()
+    }
+
+    private func resizeActiveField() {
+        guard let field = activeField, let lm = field.layoutManager, let tc = field.textContainer else { return }
+        // Container width == frame width, so centre/right alignment lands where it will render.
+        let width = activeBoxWidth.map { $0 / scale } ?? min(activeNaturalWidth() + 2, activeRoom)
+        tc.containerSize = NSSize(width: width, height: .greatestFiniteMagnitude)
+        lm.ensureLayout(for: tc)
+        let used = lm.usedRect(for: tc)
+        let font = editorAttributes[.font] as? NSFont ?? .systemFont(ofSize: 12)
+        field.setFrameSize(NSSize(width: width, height: max(ceil(used.height), ceil(lm.defaultLineHeight(for: font)))))
+    }
+
+    /// Commits any in-progress text — call before exporting so typed text isn't lost.
+    public func commitPendingText() { commitText(refocusCanvas: true) }
+
+    private func commitText(refocusCanvas: Bool) {
+        guard let field = activeField else { return }
+        let text = field.string
+        let wrapWidth: CGFloat? = activeBoxWidth
+            ?? (activeNaturalWidth() > activeRoom ? activeRoom * scale : nil)
+        activeField = nil
+        field.delegate = nil
+        field.removeFromSuperview()
+        if refocusCanvas { window?.makeFirstResponder(self) }
+        let editedID = editingID
+        editingID = nil
+        if let id = editedID, let i = document.index(of: id), var ta = document.annotations[i] as? TextAnnotation {
+            if text.isEmpty {
+                snapshot(); document.remove(id: id); selectedIDs = []
+            } else if ta.text != text || ta.style != style || ta.wrapWidth != wrapWidth {
+                snapshot()
+                ta.text = text; ta.style = style; ta.wrapWidth = wrapWidth
+                document.replace(id: id, with: ta)
+                selectedIDs = [id]
+            } else {
+                selectedIDs = [id]
+            }
+            onStateChange?(); needsDisplay = true
+            return
+        }
         guard !text.isEmpty else { needsDisplay = true; return }
-        insert(TextAnnotation(text: text, origin: textImageOrigin, style: style))
+        insert(TextAnnotation(text: text, origin: textImageOrigin, style: style, wrapWidth: wrapWidth))
+    }
+
+    /// Text-tool inspector changes restyle the selected text (the new style is
+    /// already the default for the next text). The live editor restyles via `style`.
+    public func applyStyleToSelectedText() {
+        guard activeField == nil, tool == .text else { return }
+        let targets = selectedIDs.compactMap { id -> TextAnnotation? in
+            guard let i = document.index(of: id), let ta = document.annotations[i] as? TextAnnotation,
+                  ta.style != style else { return nil }
+            return ta
+        }
+        guard !targets.isEmpty else { return }
+        snapshot()
+        for var ta in targets { ta.style = style; document.replace(id: ta.id, with: ta) }
+        onStateChange?(); needsDisplay = true
+    }
+}
+
+extension EditorCanvasView: NSTextViewDelegate {
+    public func textDidChange(_ notification: Notification) { resizeActiveField() }
+
+    public func textDidEndEditing(_ notification: Notification) {
+        // Focus moved elsewhere (e.g. a click on the canvas): don't fight the new responder.
+        if let e = NSApp.currentEvent, e.type == .leftMouseDown { focusCommitTimestamp = e.timestamp }
+        commitText(refocusCanvas: false)
+    }
+
+    public func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        switch selector {
+        case #selector(NSResponder.insertNewline(_:)):
+            let mods = NSApp.currentEvent?.modifierFlags ?? []
+            if mods.contains(.shift) || mods.contains(.option) {
+                textView.insertNewlineIgnoringFieldEditor(nil)
+            } else {
+                commitText(refocusCanvas: true)
+            }
+            return true
+        case #selector(NSResponder.cancelOperation(_:)):
+            commitText(refocusCanvas: true)
+            return true
+        default:
+            return false
+        }
     }
 }
