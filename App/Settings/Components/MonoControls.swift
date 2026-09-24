@@ -81,6 +81,7 @@ struct MonoComboField<T: Hashable>: View {
                 Text(currentLabel)
                     .font(.system(size: 12))
                     .foregroundColor(SettingsTheme.textPrimary)
+                    .lineLimit(1)   // long device names truncate instead of wrapping
                 Spacer()
                 Image(systemName: "chevron.down")
                     .font(.system(size: 10, weight: .semibold))
@@ -96,8 +97,14 @@ struct MonoComboField<T: Hashable>: View {
                 RoundedRectangle(cornerRadius: 6)
                     .stroke(SettingsTheme.border, lineWidth: 1)
             )
+            .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
+        // `.borderlessButton` drops this label's box and adds a second chevron (macOS 26);
+        // a plain button menu draws the label exactly as styled above.
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .frame(maxWidth: .infinity)
     }
 }
 
