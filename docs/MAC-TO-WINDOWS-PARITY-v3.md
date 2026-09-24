@@ -785,8 +785,8 @@ the minimum window width (21pt spare each side).
 
 **Side panel sections** (same section chrome as Part 1: caption 10pt semibold UPPERCASE white 45%, 12/16/14
 padding, 8pt between rows, 232pt content width, hairlines between sections). Full panel order is now:
-Colour · Stroke · **Stroke (highlighter)** · Font · Background · Redaction · **Strength** · **Shape** ·
-**Dim outside** · Opacity · Arrange.
+Styles · Colour · Stroke · **Stroke (highlighter)** · Font · Background · Effects · Redaction · **Strength** ·
+**Shape** · **Dim outside** · Opacity · Arrange (Styles and Effects are Part 2's text sections).
 
 ```
  Blur / Pixelate               Black-out                     Highlighter                   Spotlight
