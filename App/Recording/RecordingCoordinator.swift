@@ -406,9 +406,19 @@ final class RecordingCoordinator {
     }
 
     /// Opens the trim window for an MP4 recording (Quick Access card or History).
-    func presentTrim(url: URL) {
+    /// `restoreCard` runs once when the window closes, for any reason — the card path
+    /// passes one that brings back the Quick Access card the ✂ button dismissed
+    /// (History passes nil). Save as Copy still shows the copy's own card as well.
+    func presentTrim(url: URL, restoreCard: (() -> Void)? = nil) {
         if let open = trimController {
-            if open.url == url { open.showWindow(nil); NSApp.activate(ignoringOtherApps: true); return }
+            if open.url == url {
+                // Another card for the same file was dismissed: bring it back too.
+                if let restoreCard {
+                    let previous = open.onClosed
+                    open.onClosed = { previous?(); restoreCard() }
+                }
+                open.showWindow(nil); NSApp.activate(ignoringOtherApps: true); return
+            }
             open.close()
         }
         let c = TrimWindowController(url: url)
@@ -419,6 +429,7 @@ final class RecordingCoordinator {
         c.onFailed = { [weak self] message in self?.hud.show(message) }
         c.onClosed = { [weak self, weak c] in
             if self?.trimController === c { self?.trimController = nil }
+            restoreCard?()
         }
         trimController = c
         c.showWindow(nil)
@@ -442,7 +453,11 @@ final class RecordingCoordinator {
             onReveal: { NSWorkspace.shared.activateFileViewerSelecting([url]) },
             fileURLForDrag: { url },
             onTrim: url.pathExtension.lowercased() == "mp4"
-                ? { [weak self] in self?.presentTrim(url: url) } : nil)
+                ? { [weak self] in
+                    self?.presentTrim(url: url, restoreCard: { [weak self] in
+                        self?.bringBackCard(for: url, historyID: historyID)
+                    })
+                } : nil)
         let corner = settings.settings.overlayCorner
         // visibleFrame excludes the Dock and menu bar, so the overlay sits above
         // the Dock instead of being tucked into the very bottom corner behind it.
@@ -455,6 +470,15 @@ final class RecordingCoordinator {
                 self?.history?.noteOverlayClosed(historyID: historyID)
             }
         })
+    }
+
+    /// Re-presents the card the trim window replaced, with a fresh thumbnail — after
+    /// Replace Original that's the trimmed file's first frame. Skipped if the file is gone.
+    private func bringBackCard(for url: URL, historyID: UUID?) {
+        Task { [weak self] in
+            guard let image = await Self.thumbnail(for: url) else { return }
+            self?.presentCard(for: url, image: image, historyID: historyID)
+        }
     }
 
     /// First frame of the saved recording (GIFs decode directly; MP4s via
