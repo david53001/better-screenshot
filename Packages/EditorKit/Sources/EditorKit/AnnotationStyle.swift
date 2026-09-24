@@ -17,21 +17,27 @@ public struct AnnotationStyle: Equatable, Codable {
     public var fontBold: Bool
     public var fontItalic: Bool
     public var textAlignment: TextAlign
+    /// Whole-object opacity, `opacityRange` (1 = opaque). Applied as one transparency
+    /// layer per object (`Annotation.drawComposited()`), so overlapping parts don't double up.
+    public var opacity: CGFloat
+
+    public static let opacityRange: ClosedRange<CGFloat> = 0.1...1
 
     public init(strokeColor: RGBAColor, fillColor: RGBAColor,
                 lineWidth: CGFloat, fontSize: CGFloat, textBackground: Bool = false,
                 fontFamily: String = TextFont.system, fontBold: Bool = true,
-                fontItalic: Bool = false, textAlignment: TextAlign = .left) {
+                fontItalic: Bool = false, textAlignment: TextAlign = .left, opacity: CGFloat = 1) {
         self.strokeColor = strokeColor; self.fillColor = fillColor
         self.lineWidth = lineWidth; self.fontSize = fontSize
         self.textBackground = textBackground
         self.fontFamily = fontFamily; self.fontBold = fontBold
         self.fontItalic = fontItalic; self.textAlignment = textAlignment
+        self.opacity = opacity
     }
 
     private enum CodingKeys: String, CodingKey {
         case strokeColor, fillColor, lineWidth, fontSize, textBackground
-        case fontFamily, fontBold, fontItalic, textAlignment
+        case fontFamily, fontBold, fontItalic, textAlignment, opacity
     }
 
     public init(from decoder: Decoder) throws {
@@ -46,6 +52,9 @@ public struct AnnotationStyle: Equatable, Codable {
         fontBold = try container.decodeIfPresent(Bool.self, forKey: .fontBold) ?? true
         fontItalic = try container.decodeIfPresent(Bool.self, forKey: .fontItalic) ?? false
         textAlignment = (try? container.decodeIfPresent(TextAlign.self, forKey: .textAlignment)) ?? .left
+        // Opacity arrived in v3; older styles are opaque. Clamped so a bad value can't hide objects.
+        let o = try container.decodeIfPresent(CGFloat.self, forKey: .opacity) ?? 1
+        opacity = min(max(o, Self.opacityRange.lowerBound), Self.opacityRange.upperBound)
     }
 
     public static let `default` = AnnotationStyle(

@@ -192,8 +192,8 @@ public final class EditorCanvasView: NSView {
         let toView = NSAffineTransform()
         toView.scale(by: 1 / scale)
         toView.concat()
-        for a in document.annotations where a.id != editingID { a.draw() }
-        inProgress?.draw()
+        for a in document.annotations where a.id != editingID { a.drawComposited() }
+        inProgress?.drawComposited()
         NSGraphicsContext.restoreGraphicsState()
 
         // Live marquee for region tools (blur/pixelate/crop) that have no shape preview.
