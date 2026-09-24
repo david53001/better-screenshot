@@ -35,9 +35,11 @@ public struct EditorDocument {
         let a = annotations.remove(at: i); annotations.insert(a, at: 0)
     }
 
-    /// Topmost (last-drawn) annotation under the point.
+    /// Topmost (last-drawn) annotation under the point. Spotlights draw beneath every other
+    /// object, so they are hit last — a click inside one still picks the arrow drawn in it.
     public func topmostHit(at point: CGPoint) -> UUID? {
-        for a in annotations.reversed() where a.hitTest(point) { return a.id }
+        for a in annotations.reversed() where !(a is SpotlightAnnotation) && a.hitTest(point) { return a.id }
+        for a in annotations.reversed() where a is SpotlightAnnotation && a.hitTest(point) { return a.id }
         return nil
     }
 

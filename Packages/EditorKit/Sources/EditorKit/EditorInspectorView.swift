@@ -186,6 +186,8 @@ final class EditorInspectorView: NSVisualEffectView {
         case .background: return makeBackgroundRows()
         case .redaction: return makeRedactionRows()
         case .strength: return makeStrengthRows()
+        case .spotlightShape: return makeSpotlightShapeRows()
+        case .spotlightDim: return makeSpotlightDimRows()
         case .opacity: return makeOpacityRows()
         case .arrange: return makeArrangeRows()
         case .cropHelp, .selectHelp: return [InspectorStyle.note(section.note ?? "")]
@@ -473,6 +475,43 @@ final class EditorInspectorView: NSVisualEffectView {
             slider.slider.toolTip = pixelate ? "Size of each block, in image pixels" : "Blur radius, in image pixels"
             slider.value = Double(pixelate ? style.pixelSize : style.blurRadius)
         }
+        return [slider]
+    }
+
+    // MARK: Spotlight — Shape, Dim outside
+
+    private func makeSpotlightShapeRows() -> [NSView] {
+        let shapes = SpotlightShape.allCases
+        let seg = NSSegmentedControl(labels: ["Rectangle", "Ellipse"], trackingMode: .selectOne,
+                                     target: self, action: #selector(spotlightShapeChanged(_:)))
+        seg.segmentStyle = .rounded
+        seg.controlSize = .small
+        seg.segmentDistribution = .fillEqually
+        for (i, symbol) in ["rectangle", "circle"].enumerated() {
+            seg.setImage(NSImage(systemSymbolName: symbol, accessibilityDescription: nil), forSegment: i)
+            seg.setImageScaling(.scaleProportionallyDown, forSegment: i)
+        }
+        seg.setToolTip("Rectangle", forSegment: 0)
+        seg.setToolTip("Ellipse — or hold ⌥ while dragging", forSegment: 1)
+        refreshers.append { [unowned self] in seg.selectedSegment = shapes.firstIndex(of: style.spotlightShape) ?? 0 }
+        return [seg]
+    }
+
+    @objc private func spotlightShapeChanged(_ sender: NSSegmentedControl) {
+        let shape = SpotlightShape.allCases[max(0, sender.selectedSegment)]
+        onStyleEdit?({ $0.spotlightShape = shape }, nil)
+    }
+
+    private func makeSpotlightDimRows() -> [NSView] {
+        let r = AnnotationStyle.spotlightDimRange
+        let slider = LabeledSliderRow(label: nil, range: Double(r.lowerBound * 100)...Double(r.upperBound * 100),
+                                      tooltip: "How dark everything outside the spotlights gets") { "\(Int($0.rounded()))%" }
+        slider.onChange = { [unowned self] v, finished in
+            let d = CGFloat(v.rounded()) / 100
+            onStyleEdit?({ $0.spotlightDim = d }, "spotlightDim")
+            if finished { onStyleEditEnded?() }
+        }
+        refreshers.append { [unowned self] in slider.value = Double(style.spotlightDim * 100) }
         return [slider]
     }
 

@@ -38,7 +38,7 @@ public final class EditorWindowController: NSWindowController {
         [.select],
         [.arrow, .line, .rectangle, .filledRectangle, .ellipse],
         [.text, .counter, .highlighter],
-        [.blur, .pixelate],
+        [.blur, .pixelate, .spotlight],
         [.crop],
     ]
 
@@ -416,7 +416,7 @@ public final class EditorWindowController: NSWindowController {
 
     @objc private func toolButtonClicked(_ sender: IconToolButton) { selectTool(sender.tool) }
 
-    /// Single-key tool shortcuts (V A L R F O T N H B P X C). Keys reach the window controller
+    /// Single-key tool shortcuts (V A L R F O T N H B P X S C). Keys reach the window controller
     /// through the responder chain only when nothing else used them — the inline text
     /// editor consumes typing, so shortcuts are off while text is being edited.
     public override func keyDown(with event: NSEvent) {

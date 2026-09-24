@@ -33,6 +33,10 @@ public struct AnnotationStyle: Equatable, Codable {
     public var pixelSize: CGFloat = 12
     /// The Highlighter tool's own sticky colour / width / opacity (HighlighterAnnotation.swift).
     public var highlighterPen: HighlighterPen = .default
+    /// Spotlight hole shape (⌥-drag always draws an ellipse).
+    public var spotlightShape: SpotlightShape = .rectangle
+    /// How dark the area outside the spotlights gets, 0…1 black (`spotlightDimRange`).
+    public var spotlightDim: CGFloat = 0.6
 
     public init(strokeColor: RGBAColor, fillColor: RGBAColor,
                 lineWidth: CGFloat, fontSize: CGFloat, textBackground: Bool = false,
@@ -49,7 +53,7 @@ public struct AnnotationStyle: Equatable, Codable {
     private enum CodingKeys: String, CodingKey {
         case strokeColor, fillColor, lineWidth, fontSize, textBackground
         case fontFamily, fontBold, fontItalic, textAlignment, opacity
-        case redactionMode, blurRadius, pixelSize, highlighterPen
+        case redactionMode, blurRadius, pixelSize, highlighterPen, spotlightShape, spotlightDim
     }
 
     public init(from decoder: Decoder) throws {
@@ -72,6 +76,8 @@ public struct AnnotationStyle: Equatable, Codable {
         blurRadius = Self.clamp(try container.decodeIfPresent(CGFloat.self, forKey: .blurRadius) ?? 12, Self.blurRadiusRange)
         pixelSize = Self.clamp(try container.decodeIfPresent(CGFloat.self, forKey: .pixelSize) ?? 12, Self.pixelSizeRange)
         highlighterPen = ((try? container.decodeIfPresent(HighlighterPen.self, forKey: .highlighterPen)) ?? .default).clamped
+        spotlightShape = (try? container.decodeIfPresent(SpotlightShape.self, forKey: .spotlightShape)) ?? .rectangle
+        spotlightDim = Self.clamp(try container.decodeIfPresent(CGFloat.self, forKey: .spotlightDim) ?? 0.6, Self.spotlightDimRange)
     }
 
     static func clamp(_ v: CGFloat, _ r: ClosedRange<CGFloat>) -> CGFloat { min(max(v, r.lowerBound), r.upperBound) }

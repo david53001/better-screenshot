@@ -62,6 +62,19 @@ let inspectorModelTests: [TestCase] = [
         t.equal(InspectorModel.hint(tool: .select, selection: [.highlighter], editingText: false),
                 "Drag to move it, or press Delete to remove it.")
     },
+    TestCase("spotlightShowsShapeAndDim") { t in
+        let c = InspectorModel.content(tool: .spotlight, selection: [])
+        t.equal(c.title, "Spotlight")
+        t.equal(c.sections, [.spotlightShape, .spotlightDim])
+        t.equal(InspectorSection.spotlightShape.title, "Shape")
+        t.equal(InspectorSection.spotlightDim.title, "Dim outside")
+        t.equal(InspectorModel.content(tool: .select, selection: [.spotlight]).sections,
+                [.spotlightShape, .spotlightDim, .arrange])
+        t.equal(EditorTool.spotlight.tooltip, "Spotlight (S)")
+        t.equal(EditorTool.blackout.tooltip, "Black-out (X)")
+        t.isTrue(InspectorModel.hint(tool: .spotlight, selection: [], editingText: false).contains("⌥"))
+        t.isTrue(InspectorModel.hint(tool: .select, selection: [.spotlight], editingText: false).contains("resize"))
+    },
     TestCase("redactionSelectionsShareStrengthOnlyWithinOneMode") { t in
         t.equal(InspectorModel.content(tool: .select, selection: [.blur, .blur]).sections,
                 [.redaction, .strength, .arrange])

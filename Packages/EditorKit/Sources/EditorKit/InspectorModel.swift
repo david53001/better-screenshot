@@ -4,7 +4,8 @@
 /// `InspectorModel.objectSections(for:)` / `toolSections(for:)` for the tools that show it, and
 /// build its controls in `EditorInspectorView.makeSection(_:)`.
 public enum InspectorSection: String, CaseIterable {
-    case colour, stroke, highlighterStroke, font, background, redaction, strength, opacity, arrange
+    case colour, stroke, highlighterStroke, font, background, redaction, strength
+    case spotlightShape, spotlightDim, opacity, arrange
     /// Explanatory text only — the Crop tool and Select with nothing selected.
     case cropHelp, selectHelp
 
@@ -19,6 +20,8 @@ public enum InspectorSection: String, CaseIterable {
         case .opacity: return "Opacity"
         case .arrange: return "Arrange"
         case .strength: return "Strength"
+        case .spotlightShape: return "Shape"
+        case .spotlightDim: return "Dim outside"
         case .cropHelp, .selectHelp: return nil   // the panel heading already names the tool
         }
     }
@@ -57,6 +60,7 @@ public enum InspectorModel {
         case .blackout: return [.redaction]   // a solid box has no strength
         // Its own Stroke section: marker widths (12–32 px) don't share a scale with lines (2–7).
         case .highlighter: return [.colour, .highlighterStroke, .opacity]
+        case .spotlight: return [.spotlightShape, .spotlightDim]
         case .select, .crop: return []
         }
     }
@@ -98,7 +102,7 @@ public enum InspectorModel {
             switch selection.first {
             case nil: return "Click an object to select it, or drag across empty space to select several."
             case .text?: return "Drag to move it, drag a side handle to set the box width, or double-click to edit the text."
-            case .rectangle?, .filledRectangle?, .ellipse?, .blur?, .pixelate?, .blackout?:
+            case .rectangle?, .filledRectangle?, .ellipse?, .blur?, .pixelate?, .blackout?, .spotlight?:
                 return "Drag to move it, drag a handle to resize it, or press Delete to remove it."
             default: return "Drag to move it, or press Delete to remove it."
             }
@@ -113,6 +117,7 @@ public enum InspectorModel {
         case .pixelate: return "Drag over anything you want to hide — it's pixelated when you let go."
         case .blackout: return "Drag over anything you want to hide — it's covered in solid black when you let go."
         case .highlighter: return "Drag to highlight, like a marker pen — hold ⇧ for a straight line."
+        case .spotlight: return "Drag over what matters — everything else is dimmed. Hold ⌥ for an ellipse."
         case .crop: return "Drag over the area to keep — everything outside is cut away (⌘Z undoes it)."
         }
     }
