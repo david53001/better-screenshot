@@ -255,11 +255,14 @@ final class EditorInspectorView: NSVisualEffectView {
 
     @objc private func eyedropper() {
         NSColorSampler().show { [weak self] picked in
-            guard let self, let picked else { return }
-            let c = RGBAColor(picked)
-            self.wellSessionInRecents = false
-            self.remember(c, replacingFront: false)
-            self.onStyleEdit?(self.colourEdit(c), nil)
+            guard let picked else { return }   // nil = the user pressed Esc
+            DispatchQueue.main.async {
+                guard let self else { return }
+                let c = RGBAColor(picked)
+                self.wellSessionInRecents = false
+                self.remember(c, replacingFront: false)
+                self.onStyleEdit?(self.colourEdit(c), nil)
+            }
         }
     }
 
