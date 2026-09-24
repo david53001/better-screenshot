@@ -403,13 +403,13 @@ final class EditorInspectorView: NSVisualEffectView {
         box.attributedTitle = NSAttributedString(string: "Contrasting box behind the text", attributes: [
             .foregroundColor: InspectorStyle.primaryText, .font: NSFont.systemFont(ofSize: 12)])
         box.toolTip = "A dark or light box, whichever stands out against the text colour"
-        refreshers.append { [unowned self] in box.state = style.textBackground ? .on : .off }
+        refreshers.append { [unowned self] in box.state = style.textBackgroundMode != .none ? .on : .off }
         return [box]
     }
 
     @objc private func textBackgroundChanged(_ sender: NSButton) {
         let on = sender.state == .on
-        onStyleEdit?({ $0.textBackground = on }, nil)
+        onStyleEdit?({ $0.textBackgroundMode = on ? .auto : .none }, nil)
     }
 
     // MARK: Redaction — Blur / Pixelate (Part 3 adds Strength)
