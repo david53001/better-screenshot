@@ -467,7 +467,241 @@ property is missing; clamp in the setter or after load), and an `EditorRecentCol
 
 ## Part 2 — Text v2 (corner scaling, background, outline, presets)
 
-_(pending — filled when Part 2 lands)_
+**What changed, in one paragraph.** A selected text now has **corner handles that scale the whole text**
+(font size, box width, box padding / corner radius, outline width — like scaling an image) besides the side
+handles that set the box width. The old "contrasting box" checkbox became a real **Background** with three modes
+— **None / Solid / Auto** — a box colour, **Padding** and **Corners**. Text also gets **Underline**,
+**Strikethrough**, an **Outline** (colour + width) and a **Shadow**, and six one-click **style presets** (Label,
+Callout, Note, Code, Title, Subtle) at the top of the Text panel. While typing, the box and outline show behind the
+text so it looks like the result. **Prerequisites in the port:** §A.1 (fonts, `wrapWidth` text boxes, the growing
+inline editor) and Part 1 (the side panel) — Part 2 builds on both. macOS code (`Packages/EditorKit/Sources/EditorKit/`):
+`AnnotationStyle.swift`, `TextAnnotation.swift`, `TextChip.swift`, `TextScale.swift`, `TextStylePreset.swift`,
+`EditorCanvasView.swift` (handles, live box), `EditorInspectorView.swift` (sections), `EditorChrome.swift`
+(`TextPresetChip`, `LabeledSliderRow(labelWidth:)`), `InspectorModel.swift`.
+
+Snapshots from the headless probe (synthetic screenshot, Retina): `docs/parity-v3/part2-selected-text.png` (Select
+tool, one text with a Solid box + outline + underline selected — note the 6 handles), `docs/parity-v3/part2-panel-text-tool.png`
+(Text tool, default style — Background None, Outline off), `docs/parity-v3/part2-panel-solid-box.png` (Background
+Solid: box palette, Recent, well, Padding, Corners), `docs/parity-v3/part2-panel-effects.png` (panel scrolled to
+the bottom in a short window: Outline on with its Width row, Shadow on, Opacity, Arrange),
+`docs/parity-v3/part2-rendered-results.png` (exported pixels: every preset, outline on a busy strip, shadow alone and
+under a box, underline, strikethrough, Auto box, a 16 px / 40 px "pill").
+
+### 2.1 Layout (exact, as built)
+
+Text sections, top to bottom: **Styles · Colour · Font · Background · Effects · Opacity** (+ **Arrange** under
+Select). The panel-wide order is now: Styles, Colour, Stroke, Font, Background, Effects, Redaction, Opacity, Arrange.
+Everything else about the panel (264 pt, 232 pt content column, captions, 8 pt row gap, hairlines) is as in §1.1.
+
+```
+┌──────────────────────────────┐
+│ Text                         │ ← heading (tool / selection name, §1.2)
+│ STYLES                       │
+│ [ Label ] [Callout] [ Note ] │ ← 3 chips per row, equal width (72 pt), 28 pt tall, 8 pt apart
+│ [ Code  ] [ Title ] [Subtle] │    each drawn as a preview of its look; active one ringed
+│ ──────────────────────────── │
+│ COLOUR   (unchanged, §1.1)   │
+│ ──────────────────────────── │
+│ FONT                         │
+│ [System                 ⌃⌄]  │
+│ [24 pt ⌃⌄]  [ B | I | U | S ] │ ← size 84 pt + four 30 pt toggles
+│ [  ≡  |  ≡  |  ≡  ]          │
+│ ──────────────────────────── │
+│ BACKGROUND                   │
+│ [  None  | Solid |  Auto  ]  │ ← full width, equal segments
+│ ● ● ● ● ● ● ● ●              │ ← Solid only: box palette (Black = 80 %)
+│ RECENT ● ● ●                 │ ← Solid only, hidden when empty
+│ [▬▬] [⌖ Pick from Screen]    │ ← Solid only: box colour well + eyedropper
+│ Dark or light — whichever …  │ ← Auto only (note)
+│ Padding  ────●────── 6 px    │ ← Solid and Auto
+│ Corners  ──●──────── 4 px    │ ← Solid and Auto
+│ ──────────────────────────── │
+│ EFFECTS                      │
+│ ☑ Outline              [▬▬]  │ ← checkbox left, outline colour well right
+│     Width ──●─────── 3 px    │ ← only while Outline is on; indented 20 pt
+│ ☐ Shadow                     │
+│ ──────────────────────────── │
+│ OPACITY  (unchanged)         │
+└──────────────────────────────┘
+```
+
+| Section (caption) | Rows (exact) |
+|---|---|
+| **Styles** | Two rows of three `TextPresetChip`s, `fillEqually`, 8 pt apart; each 28 pt tall. Chip drawing: rounded rect (radius 6) inset 1.5 pt; fill = the preset's box colour, or white 6 % for presets without a box (Title, Subtle); border 1 px white 16 %; **active** (the current style already has that look, `TextStylePreset.isApplied`) = 2 px accent-colour border; hover = white 10 % overlay. Label = the preset's name, centred, in the preset's font family and weight at 12 pt (Title: 15 pt), in the preset's text colour (Title keeps the user's colour, so its chip label is white 92 %). Tooltips: "Label — bold white text on a black box", "Callout — bold white text on a red box", "Note — black text on a yellow box", "Code — light monospaced text on a dark box", "Title — 48 pt bold, no box (keeps the colour)", "Subtle — 18 pt regular grey, no box". |
+| **Font** | As §1.1, except row ② is now size pop-up (84 pt) · a **four**-segment toggle group (select-any, 30 pt per segment): SF `bold`, `italic`, `underline`, `strikethrough`; tooltips "Bold", "Italic", "Underline", "Strikethrough". |
+| **Background** | ① Segmented **None / Solid / Auto**, full width, equal segments; tooltips "No box behind the text", "A box in the colour you pick below", "A dark or light box, whichever stands out against the text colour". ② *(Solid only)* the Colour section's three rows, but editing the **box** colour: 8 swatches with the same colours and names except the last is **black at 80 % alpha**, tooltip "Black (80%)"; the shared RECENT row; a second colour well 44×24 (tooltip "Custom box colour — opens the colour picker") + "Pick from Screen" (same tooltip as §1.1; the picked colour becomes the box colour — handy for covering old text with the page's own colour). ③ *(Auto only)* note, 12 pt white 62 %: "Dark or light — whichever stands out against the text colour." ④ *(Solid and Auto)* slider row "Padding" (label 56 pt wide), 0…40 whole px, value "6 px", tooltip "Space between the text and the edge of the box". ⑤ *(Solid and Auto)* slider row "Corners" (label 56 pt), 0…40 whole px, value "4 px", tooltip "How rounded the box's corners are". Hidden rows take no space. |
+| **Effects** | ① Checkbox **"Outline"** (12 pt, white 88 %; tooltip "An edge around every letter — keeps text readable on busy screenshots") · flexible space · outline colour well 44×24 (tooltip "Outline colour — picking one turns the outline on"). ② *(only while Outline is on)* slider row indented 20 pt: "Width" (44 pt label), 1…20 whole px, value "3 px", tooltip "Outline thickness in image pixels". ③ Checkbox **"Shadow"** (tooltip "A soft drop shadow under the text (and its box)"). |
+
+**Canvas handles.** A single selected text shows **six** handles: the four corners (**scale**) and middle-left /
+middle-right (**box width**) — top-/bottom-middle are not shown. Handles are the usual 8×8 view-pt white squares with
+a 1 px blue border (screen-sized at any zoom), hit area +2 pt; where handles overlap on a tiny text, corners win.
+All handles and the dashed selection outline sit on the **box** (text + padding) when the text has a background.
+
+**Hint line** (§1.3) — one sentence changed: *Select, one text* → "Drag to move it, drag a corner to resize the
+text, drag a side to change the box width, or double-click to edit."
+
+### 2.2 Behaviour
+
+- **Corner scaling** (`TextScale` + `TextAnnotation.scaled(dragging:by:)`), always computed from the text as it was
+  at mouse-down (never incrementally), with `drag` = pointer − mouse-down point in image px (so grabbing a handle
+  slightly off its centre doesn't jump):
+  1. `box` = the text's bounding box (incl. background padding); `A` = the corner opposite the dragged one (fixed);
+     `C` = the dragged corner; `d = C − A`.
+  2. `factor = ((C + drag − A) · d) / (d · d)` — the drag projected onto the diagonal (moving across the diagonal
+     does nothing; past `A` gives ≤ 0). A zero-size box → factor 1.
+  3. `newSize = clamp(round(fontSize × factor), 8, 400)`; `k = newSize / fontSize` (the factor actually applied).
+  4. `wrapWidth × k` (nil stays nil — a free label stays free, so line breaks stay put), `padding × k` clamped
+     0…40, `cornerRadius × k` clamped 0…40, `outlineWidth × k` clamped 1…20. Nothing else changes.
+  5. Place the result so its new bounding box's corner opposite the dragged one is exactly at `A`
+     (`TextScale.placed(size:anchor:corner:)`), by shifting `origin`.
+  - The panel's size pop-up follows **live** during the drag (it lists the current size, e.g. "37 pt", when it
+    isn't a preset size). The whole drag is **one undo step**. Works at any zoom (all maths in image px). The drag
+    changes only that object, not the sticky default style.
+- **Side handles** set `wrapWidth` = dragged box width − 2 × padding (minimum = the font size in px); the text's
+  x origin = box left + padding. With no background, padding = 0 (exactly §A.1).
+- **Background geometry:** box = the text's layout rect expanded by `padding` left/right and `padding / 2`
+  top/bottom (the line box already includes leading; 6 → 6 × 3 = the pre-v3 chip exactly). Corner radius =
+  `min(radius, boxW / 2, boxH / 2)`. One box around all lines. **Solid** fills `textBackgroundColor`; **Auto** fills
+  `#18181A` behind light text or `#F4F4F6` behind dark text, decided at draw time from the text colour's luminance
+  `0.2126 R + 0.7152 G + 0.0722 B > 0.5` (so it follows colour changes automatically).
+- **Bounding box** (selection outline, handles, hit-testing, marquee, keep-on-canvas while moving) = the box when
+  there is one, else the text's layout rect.
+- **Draw order:** (shadow layer begins) → box → outline pass → letters (→ shadow layer ends); the whole thing then
+  goes through the object's opacity layer (§1.4). *Outline pass* = the same text stroked (not filled) in the outline
+  colour with a pen of **2 × outline width** and **round joins**, then the normal letters on top — so the visible
+  edge is outline-width wide and sits outside the letters. *Underline / strikethrough* are normal single text
+  decorations in the text colour (not outlined).
+- **Shadow** (fixed, no settings): black 45 %, offset **straight down** by `max(1, 0.05 × fontSize)` px, blur
+  `max(2, 0.15 × fontSize)` px (24 pt → 1.2 px down, 3.6 px blur). Box + outline + letters cast **one** shadow as a
+  group, so a boxed text's shadow falls from the box. It scales with the text.
+- **While typing** (inline editor): the canvas draws the box and outline (and their shadow) behind the text field at
+  the field's width; the field draws the letters (with underline/strikethrough, which are text attributes). Known
+  small difference: a shadow on *plain* text (no box, no outline) appears only once the text is committed.
+- **Presets** (`TextStylePreset.apply`) set only these fields, and apply to the selected text(s) and the default style
+  as **one undo step** like any style edit. All presets also switch off italic, underline, strikethrough, outline and
+  shadow. They never touch alignment, opacity, line width or box width.
+
+  | Preset | Text colour (sRGB) | Size | Font / weight | Background |
+  |---|---|---|---|---|
+  | Label | white (1, 1, 1) | kept | System, bold | Solid (0, 0, 0, 0.8), padding 6, corners 4 |
+  | Callout | white | kept | System, bold | Solid (1, 0.27, 0.23, 1), padding 8, corners 6 |
+  | Note | black (0, 0, 0) | kept | System, regular | Solid (1, 0.84, 0.04, 1), padding 8, corners 2 |
+  | Code | (0.90, 0.92, 0.95) | kept | Mono (`System Mono`), regular | Solid (0.12, 0.13, 0.15, 1), padding 6, corners 4 |
+  | Title | **kept** | **48** | System, bold | None |
+  | Subtle | (0.56, 0.56, 0.58) | **18** | System, regular | None |
+
+  Setting a text colour also sets `fillColor` = that colour at alpha 0.25 (same as a colour swatch). Note: the editor
+  has **one** sticky style shared by all tools (Part 1), so a preset's text colour also becomes the next arrow's
+  colour — same as picking a colour while the Text tool is active.
+- **Colour wells:** the box well and the outline well behave like the Colour well (§1.4): each picked colour goes into
+  Recent (one entry per colour-panel session), and a session is one undo step. **Picking an outline colour turns the
+  outline on.** Clicking a box swatch or Recent swatch in the Background section sets only the box colour.
+- **Hidden-row rules:** Background colour rows only in Solid; the Auto note only in Auto; Padding/Corners in Solid
+  and Auto; Outline Width only while Outline is on.
+
+### 2.3 Data
+
+All inside the sticky `AnnotationStyle` JSON (`editorDefaultStyle`); every key is optional when decoding and missing
+keys give today's look.
+
+| JSON key | Type & default | Legacy / decode rule |
+|---|---|---|
+| `textBackgroundMode` | `"none"` \| `"solid"` \| `"auto"`, default `"none"` | Missing or unknown → read the old macOS Bool `textBackground`: `true` → `"auto"`, else `"none"`. The Bool is no longer written. |
+| `textBackgroundColor` | `{"r","g","b","a"}`, default (0, 0, 0, **0.8**) | — |
+| `textBackgroundPadding` | number (image px), default **6** | clamped to 0…40 |
+| `textBackgroundCornerRadius` | number, default **4** | clamped to 0…40 |
+| `textUnderline`, `textStrikethrough` | bool, default false | — |
+| `textOutline` | bool, default false | — |
+| `textOutlineColor` | colour, default white (1, 1, 1, 1) | — |
+| `textOutlineWidth` | number (image px), default **3** | clamped to 1…20 |
+| `textShadow` | bool, default false | — |
+
+**Port mapping for its existing `TextBackground: RGBAColor?`** (`windows/src/BetterScreenshot.Editor/EditorStyle.cs`):
+the port's UI only ever stores its auto chip there (`EditorWindow.xaml.cs` `ToggleTextBackground` / `SetColor` →
+`AutoChip(strokeColor)`), so it means **Auto**. Add the new properties (`TextBackgroundMode`, enum
+`None/Solid/Auto` serialised as the lower-case strings above, `TextBackgroundColor`, `TextBackgroundPadding`,
+`TextBackgroundCornerRadius`, `TextUnderline`, `TextStrikethrough`, `TextOutline`, `TextOutlineColor`,
+`TextOutlineWidth`, `TextShadow`) with the defaults above, and keep `TextBackground` as a **read-only legacy**
+property (`[JsonPropertyName("textBackground")]`, `JsonIgnoreCondition.WhenWritingNull`, never set by new code).
+After deserialising: if `textBackgroundMode` was absent → `TextBackground != null ? Auto : None`; leave
+`TextBackgroundColor` at its default (don't copy the old chip colour — it was an auto colour, not a user choice). Then
+delete `AutoChip` and the chip recompute in `SetColor`: Auto is computed at draw time with the macOS colours and
+luminance formula (§2.2), replacing the port's `(1,1,1,0.92)` / `(0,0,0,0.6)` chips.
+
+### 2.4 Pure logic to port 1:1 (with the macOS tests)
+
+- **`TextScale`** (`TextScale.swift`): `point(of:in:)`, `anchor(of:in:)`, `factor(box:corner:by:)`,
+  `scaled(style, wrapWidth:, by:)`, `placed(size:anchor:corner:)`, and `TextAnnotation.scaled(dragging:by:)`.
+  Tests (`Tests/EditorKitTests/TextScaleTests.swift`): draggingACornerAlongTheDiagonalScalesProportionally (box
+  (100,100,200,50): BR by (200,50) → 2; TR by (200,−50) → 2; BL by (−200,50) → 2; TL by (−200,−50) → 2; TL by
+  (100,25) → 0.5) · dragAcrossTheDiagonalDoesNotScale ((0,0,200,50), BR by (−50,200) → 1; zero box → 1) ·
+  scaledRoundsTheFontAndScalesTheRestByTheSameFactor (24 pt × 1.55 → 37; box 240, padding 6, radius 4, outline 3 all
+  × 37/24; nil width stays nil) · scaledClampsTheFontTo8Through400 (× 100 → 400; × 0.01 → 8 with box 120 → 40;
+  × −3 → 8) · scaledKeepsPaddingRadiusAndOutlineInTheirRanges (10 pt, padding 30, radius 30, outline 2, × 10 → 40, 40,
+  20; outline 1 × 0.8 → 1) · placedKeepsTheOppositeCornerFixed (80×30 at anchor (100,100): BR → (100,100); TL →
+  (20,70); TR → (100,70); BL → (20,100); anchor of TL in (10,20,30,40) = (40,60), of BL = (40,20)) ·
+  cornerDragScalesATextAndKeepsTheOppositeCorner ("Hello world" box width 200 at (100,100): BR by (w,h) → 48 pt, width
+  400, top-left unchanged, same id; TL by (w/2,h/2) → 12 pt, bottom-right unchanged) · cornerDragKeepsLineBreaks
+  (3-line box at width 150, × 2 → height ratio 1.9…2.1) · cornerDragAnchorsTheBoxBehindTheText (Solid box, TL by
+  (−w,−h) → bottom-right of the box unchanged, padding 12).
+- **`TextStylePreset`** (`TextStylePreset.swift`): `displayName`, `tooltip`, `apply(to:)`, `isApplied(to:)` (= applying
+  it changes nothing). **`TextChip`**: `autoColor(forText:)`, `insets(padding:)` = (p, p/2).
+  Tests (`TextStyleTests.swift`): textV2FieldsDefaultToTodaysLook · legacyStyleWithoutTextV2KeysDecodesToTheDefaults ·
+  legacyTextBackgroundBoolMapsToAutoOrNone · backgroundModeWinsOverTheLegacyBool (unknown mode string → falls back to
+  the Bool) · textV2FieldsRoundTrip · decodeClampsPaddingRadiusAndOutlineWidth (−5 → 0, 999 → 40, 0 → 1) ·
+  autoBoxContrastsWithTheTextColour (white text → dark box, black → light; insets(6) = 6×3) · presetsSetTheirLook ·
+  presetsOnlyTouchTheTextLook (alignment, opacity, line width and — for Label — size kept; effects reset; Title keeps
+  the colour) · presetsRoundTripAndAreRecognised (each preset: not active on the default style, active after applying,
+  survives JSON, no other preset active).
+- **Rendering** — tests (`TextRenderTests.swift`, white 300×120 base): solidBackgroundFillsTheBoxWithItsColour (pixel
+  3 px inside the box's left edge is the chosen blue; 3 px outside is white) · autoBackgroundKeepsTheContrastingChip
+  (white text → #18181A ± 3) · noBackgroundDrawsNoBox · boundingBoxIncludesTheBoxPadding (padding 10 → rect inset by
+  (−10, −5), Solid and Auto) · paddingAndCornerRadiusShapeTheBox (padding 20 filled; radius 0 fills the corner pixel,
+  radius 20 leaves it white) · outlineWidensTheInkInItsColour (4 px outline → ink ≥ 3 px wider each side and lower;
+  red pixels at the new edge) · underlineAddsInkBelowTheBaseline ("ace") · strikethroughCrossesTheGapsBetweenLetters
+  ("i  i  i": one ink row spans the whole text) · shadowFallsBelowTheText (48 pt "HH": ink extends further down than
+  up) · canvasShadowFallsDownwardToo (same through the canvas at half size).
+- **`InspectorModel`** updates (§1.6 tests renamed/extended): textShowsStylesColourFontBackgroundEffectsOpacity →
+  `[styles, colour, font, background, effects, opacity]`; Select with one text → those + arrange; the one-text hint
+  contains "corner".
+
+### 2.5 Where it goes in the port
+
+- `windows/src/BetterScreenshot.Editor/EditorStyle.cs` — the new properties + legacy rule (§2.3).
+- `windows/src/BetterScreenshot.Editor/` — new `TextScale.cs`, `TextStylePreset.cs`, `TextChip.cs` (`AutoColor`,
+  `Insets`); `Annotations.cs` `TextAnnotation`: bounding box includes the padded box, `Scaled(corner, drag)`.
+- `windows/src/BetterScreenshot.App/Editor/DocumentRenderer.cs` — the `TextAnnotation` case: box (radius + padding
+  from the style, Auto colour at draw time), outline pass, letters with decorations, shadow group (§2.6). Replace the
+  fixed `TextChipPadX = 6` / `TextChipPadY = 2` with `Insets(padding)`.
+- `windows/src/BetterScreenshot.App/Editor/EditorWindow.xaml.cs` — six handles for a text (hit-test corners first),
+  the scale drag (snapshot the text at mouse-down; one `UndoHistory` entry on mouse-up; refresh the panel's size
+  control during the drag), side handles minus padding; `PlaceTextBox`: wrap the `TextBox` in a `Border` with
+  `CornerRadius` = radius and `Padding` = (p, p/2) filled with the Solid/Auto colour; delete `ToggleTextBackground`,
+  `AutoChip` and the chip recompute in `SetColor`.
+- The Part 1 panel `UserControl` (e.g. `Editor/EditorInspectorPanel.xaml`) — Styles, Background and Effects sections,
+  B I U S toggles; `InspectorModel.cs` — the two new sections.
+- `windows/src/BetterScreenshot.App/Resources/Icons.xaml` — **new icons:** underline, strikethrough (bold / italic
+  were already listed in §1.7).
+- Tests: `windows/tests/BetterScreenshot.Tests/` — recreate §2.4 next to `EditorStyleTests.cs`.
+
+### 2.6 Platform notes (Windows / WPF)
+
+- **Outline:** `FormattedText.BuildGeometry(origin)` gives the letters' geometry; draw it with
+  `dc.DrawGeometry(null, new Pen(outlineBrush, 2 * width) { LineJoin = PenLineJoin.Round }, geometry)`, then draw the
+  text normally on top (`dc.DrawText` or `DrawGeometry(fill, null, geometry)`). Check that the geometry includes the
+  underline/strikethrough decorations; either way draw the normal decorations with the fill pass.
+- **Underline / strikethrough:** `FormattedText.SetTextDecorations(TextDecorations.Underline)` /
+  `TextDecorations.Strikethrough` (in the live `TextBox`: `TextBox.TextDecorations`).
+- **Shadow:** `DrawingContext` has no shadow. Draw box + outline + letters into a `DrawingGroup`/`DrawingVisual`,
+  give that visual a `DropShadowEffect { Color = Black, Opacity = 0.45, Direction = 270 (down), ShadowDepth =
+  max(1, 0.05·size), BlurRadius ≈ 2 × max(2, 0.15·size) }` (WPF's BlurRadius is roughly twice CoreGraphics' blur —
+  compare against `part2-rendered-results.png` and tune), and composite it into the export with
+  `RenderTargetBitmap` (effects render there). The canvas preview can put the same effect on the element. Scale the
+  depth and radius by the canvas magnification so the preview matches the export.
+- **Opacity** stays `PushOpacity` around the whole group (§1.8), so box, outline and letters fade as one.
+- **Size control while scaling:** the port's size control must accept non-preset whole sizes (show "37 pt").
+- **Chips:** a `ToggleButton`/`Button` template with a `Border` (CornerRadius 6, background = the preset's box colour
+  or `#0FFFFFFF`) and a `TextBlock` in the preset's font; active = accent `BorderBrush`, thickness 2.
 
 ---
 
