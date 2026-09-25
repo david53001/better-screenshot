@@ -25,6 +25,8 @@ keep the Mac responsive.
 | 1 | Live pill | Part 5 | **merged** into `main` (`85b214b`) — also fixed a pre-existing A/V drift after pausing on a static screen | `f88cf6c`…`82fc870` |
 | 2 | Text | Part 2 | **merged** into `main` (`4347104`) | `c206a2f`, `0b324b9`, `f275179` |
 | 2 | Redaction + tools | Part 3 | **merged** into `main` (`dc1c11e`) | `9b40dfe`…`fc056b0` |
+| 3 | Tours & help | Part 7 (spec §14: interactive, action-driven first-run + first-use tours, ⓘ on every window; no demo videos) | **approved 2026-09-25, deferred** — owner: "we will build later"; the next step after the UI-fix lane below. Build straight from spec §14 (no plan doc) | — |
+| 4 | UI fixes | Fix the independent UI review's issues (`docs/reviews/2026-09-25-ui-review.md`, overall 5/10): editor · recording strip/pill/countdown · video editor · app shell (Settings, History, Welcome, menu, Quick Access, overlays) | launched 2026-09-25 | — |
 | — | Coordinator | Windows doc §A (`6a1304e`), all merges, CHANGELOG/README/CLAUDE.md, full verification | **done** 2026-09-24 | `main` |
 
 **Known follow-ups** (after all lanes merge):

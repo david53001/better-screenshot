@@ -141,7 +141,9 @@ Cancel restores the card (bug), editor inspector redesign, text v2 (corner-scale
 outline/presets), redaction strength (+ fix: blur/pixelate patches are baked at creation so moving or
 resizing shows stale content), labelled recording strip with device menus, expanded live recording
 pill (mute mic/system audio, switch window), and a cut/split video editor. Built straight from the
-spec (owner: no per-part plan documents); every part must also update `docs/MAC-TO-WINDOWS-PARITY-v3.md` (exact layout/behaviour for the
+spec (owner: no per-part plan documents); **Next:** the UI-review fixes (`docs/reviews/2026-09-25-ui-review.md`, 5/10 — lane "UI fixes" in the
+progress file), then **Part 7** (spec §14 — interactive, action-driven guided tours on the real UI, ⓘ help
+on every window; demo videos considered and dropped) — approved 2026-09-25, deferred by the owner to later. Every part must also update `docs/MAC-TO-WINDOWS-PARITY-v3.md` (exact layout/behaviour for the
 `windows-port` C#/WPF port — spec §12).
 
 (Recording Controls — countdown · window target · pause/resume — shipped as `v2.4.0` on 2026-06-25.)

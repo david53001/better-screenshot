@@ -5,6 +5,8 @@ implementation plans); progress in `docs/PROGRESS-v3.md`. Owner decisions (2026-
 order = **editor first**; extras added = **Highlighter + Spotlight, canvas zoom (pinch / ⌘-scroll) +
 tool shortcuts, per-segment speed/mute, export edit as GIF**; plus a **Windows-port handoff document**
 (§12) is a required deliverable of every part.
+**Part 7 (interactive guided tours + ⓘ help — §14) was added and approved 2026-09-25, deferred to later;
+Parts 0–6 are built.**
 Builds on: `main` at `1c3d4fd` (text fonts/boxes, recording pill, trim window — see
 `docs/PROGRESS-2026-09-24-text-controls-trim.md`)
 
@@ -408,6 +410,157 @@ must let someone port it without reading Swift:
   `DshowAudioDevices.cs`; trimming/cutting/GIF needs ffmpeg commands instead of AVFoundation.
 
 ## 13. Remaining open items
-None blocking — the owner's decisions are recorded at the top and the spec is approved. The owner
+Part 7 (§14) is approved and deferred (build later). For Parts 0–6: none blocking — the owner's decisions are recorded at the top and the spec is approved. The owner
 chose to skip per-part implementation plans; parts are built directly from this spec by sub-agents
 in git worktrees (see `docs/PROGRESS-v3.md`).
+
+## 14. Part 7 — Interactive guided tours and ⓘ help on every window
+
+Added 2026-09-25 · Status: **approved by the owner 2026-09-25 — deferred: "we will build later"**. Build it
+after the UI-review fixes (lane "UI fixes" in `docs/PROGRESS-v3.md`); Parts 0–6 are built.
+
+### 14.1 What the owner asked for
+First message (2026-09-25): "When you open the app for the first time you have a tour — taking photos
+with keybinds, then editing photos — where buttons are highlighted with a tag explaining each thing. The
+person can skip the whole thing, or read and go through. There's always an info icon at the top of all
+windows to replay the tutorial. Since the UI will get more complicated, explanations must be short and
+concise. It must work with the current UI, and cover every part: first time you edit an image, open
+Settings, take your first screenshot, edit a video… With actual examples — using Remotion or HyperFrames
+to make a digital twin of the UI, like a video of someone editing a screenshot."
+
+Follow-up (same day), with a mock — `assets/2026-09-25-tour-tag-mock.png` (next to this spec): the
+editor's Colour row outlined in a red box with a red tag "these are the colors" joined to it by a line.
+"The demo should be **interactive**, based on the actual UI explanations, that you can press skip on,
+**based on what you do**. If you open the editor the first time there's an intro to that; video editing,
+same thing; trying to take a video the first time walks you through **all the choices you can make**."
+
+**Owner decisions (2026-09-25):**
+- Tours are **interactive and action-driven** on the real UI (this replaces the earlier "read-only"
+  choice): steps can wait for the user to *do* the thing (pick a colour, draw an arrow, open the mic
+  menu) and advance on their own; every step can be skipped, and so can the whole tour.
+- Tags look like the owner's mock: an outline box around the real control + a tag with a leader line.
+- **No demo videos** (owner, 2026-09-25): the interactive tour on the real UI *is* the demo. (The
+  earlier idea — HyperFrames-rendered clips built from real UI captures — is dropped; see 14.5.)
+
+### 14.2 Terms
+- **Tour** — an ordered list of **steps** for one surface or feature (e.g. "Editor", "First recording").
+- **Step** — one highlighted control + one short tag. Two kinds:
+  - **Explain** — "this is X"; advances on **Next**.
+  - **Try** — "do X"; advances **by itself when the user does it** (the app reports the action); a
+    **Skip step** link is always there. If the user has already done it, the step is skipped silently.
+- **Anchor** — a stable string id on a real control (e.g. `editor.inspector.colour`), so tours don't
+  depend on coordinates and survive layout changes.
+- **Tour event** — a tiny message the app posts when the user does something tours care about
+  (`toolSelected(.arrow)`, `annotationAdded(.arrow)`, `styleChanged(.strokeColor)`, `menuOpened(anchor)`,
+  `choiceMade(anchor)`, `recordingStarted`, `segmentSplit`, …).
+
+### 14.3 UX
+**The tag (from the owner's mock).** A 2 pt rounded outline box drawn around the anchor (4 pt padding,
+6 pt radius) in the tour colour (**accent red `#FF453A`**, matching the mock), and a tag bubble in the
+same colour — white text, 12 pt corner radius, max 260 pt wide — joined to the box by a 2 pt leader line.
+Inside the tag: **title** (13 pt semibold) · **body** (12 pt, ≤ 2 lines) · footer "2 of 7 ·
+**Next** (Explain) *or* Skip step (Try) · Skip tour". The rest of the window gets only a light 20% dim
+so the highlighted control stands out, and the overlay is **click-through** — the user clicks the real
+control underneath (that's what makes Try steps work); only the tag itself takes clicks. Placement:
+beside the anchor on the side with room (the mock puts it to the left), never off-screen; the box and
+tag follow the window when it moves or resizes. Keys: Return = Next, Esc = Skip tour. The overlay
+never takes keyboard focus from the user's work.
+
+**Copy rules (enforced by a unit test):** title ≤ 4 words; body ≤ 20 words, 1–2 short sentences, verb
+first for Try steps ("Pick a colour"), plain words, shortcuts shown as keycaps built from the user's
+**current** bindings (`HotkeyBindings`); one idea per step. All strings live in one catalog file.
+
+**When tours run (based on what you do).** Each tour starts the first time the user reaches its
+surface or feature, runs once, and can be replayed from the ⓘ. Opening a different surface mid-tour
+pauses the current tour (resumes when they come back) rather than stacking tags.
+
+| Tour | Starts when | Steps — **E** = Explain, **T** = Try (advances when done) |
+|---|---|---|
+| Welcome | first launch, after permission ("Take the tour" / "Skip for now") | E menu-bar icon · E capture shortcuts (keycaps) · T "Take a screenshot now — press ⌘⇧4 and drag" (advances on the first capture; Skip step leaves it for later) → hands over to the Quick Access tour |
+| Quick Access card | first capture | E the card · T "Drag it into any app" (or Skip) · E Copy / Edit / Save · T "Click Edit to annotate" → hands over to the Editor tour |
+| Editor intro | first editor window | E toolbar · T "Choose the Arrow" · T "Drag on the image" · E the side panel · T "Pick a colour" (the mock) · E Stroke & Opacity · E hint line · E zoom · E Copy / Save / Stack |
+| Text tool | first time Text is chosen | T "Click to type" · E "Drag instead for a box" · T "Drag a corner to resize it" · E Styles / Background / Effects |
+| Redaction | first Blur or Pixelate | T "Drag over something private" · T "Change the strength" · E Blur / Pixelate / Black-out |
+| Highlighter · Spotlight | first use of each | 1–2 steps each |
+| First recording | first time the record strip opens | walks through **every choice**: E Full Screen / Area / Window · E MP4 / GIF · E FPS · T "Open the Microphone menu" → E its choices (Off, each mic) + the level meter · T System audio menu → E All apps / All except BetterScreenshot · E Camera + bubble size · E Cursor · E hint line · T "Start recording" → hands over to the pill tour |
+| Recording pill | first recording starts | E timer · T "Mute the mic" · E Sound · E Camera · E Switch window/area · E Restart / Discard · E Pause · T "Press Stop when done" |
+| Video editor | first Edit Video window | E preview · E timeline · T "Press S to split here" · T "Select a part, press ⌫" · E Speed / Mute segment · E Save as Copy / Replace / GIF |
+| Settings | first Settings window | E the cards · E ⓘ tips · E shortcuts |
+| History | first History window | E grid · E multi-select + drag · E actions |
+
+Menus: when a Try step opens a pop-up menu (Microphone, System audio…), the tag stays put while the menu
+is open and the following Explain step describes the choices once the menu closes (a menu can't be
+drawn over).
+
+**If the user wanders off.** A Try step that isn't done is fine — they can use the app normally; the tag
+stays until they do it, press Skip step, or leave the window. If an anchor disappears (panel hidden,
+feature off), that step is skipped. Closing the window pauses the tour; it resumes next time unless the
+user pressed Skip tour.
+
+**First launch.** The Welcome window (`App/MenuBar/OnboardingController.swift`) ends on "You're all set!"
+with **Take the tour** (primary) and **Skip for now**, plus a checkbox **"Show me around the first time I
+use each part"** (on by default; off = no automatic tours, all still replayable).
+
+**ⓘ on every window.** A small ⓘ at the top-right of every window, opening a menu: **Replay tour** ·
+**Keyboard shortcuts** (for that window). Placement:
+title-bar accessory on the Editor, Video editor, Settings and History windows (needs the UI review's
+title-bar fix first — `docs/reviews/2026-09-25-ui-review.md` found the editor's title-bar accessory has
+zero width); next to ✕ on the Record setup strip; the pill and the Quick Access card are too small, so
+their tours replay from the menu bar. **Menu bar:** a **Help & Tours** submenu — Take the welcome tour ·
+one item per tour · Reset all tours. **Settings:** a "Tours & tips" row with the checkbox above and
+**Reset all tours**.
+
+**Accessibility.** VoiceOver reads each tag when it appears and announces when a Try step completes.
+
+### 14.4 Architecture
+- **New local package `Packages/TourKit`** (AppKit + pure logic, TestKit tests):
+  - `TourCatalog` — every tour, step (anchor, kind, advance-on event, strings) as data.
+  - `TourEngine` — pure state machine: start / next / skip step / skip tour / pause / resume; matches
+    incoming **tour events** against the current Try step; skips steps whose anchor is missing or whose
+    action was already done; unit-tested.
+  - `TourEvents` — a tiny event bus (`TourEvents.post(.toolSelected(.arrow))`); surfaces post events and
+    never import tour logic beyond this and anchors.
+  - `TourAnchors` — `NSView.tourAnchor = "…"` (backed by the accessibility identifier) for AppKit views,
+    and a SwiftUI `.tourAnchor("…")` modifier that reports the view's frame (anchor preferences) for
+    Settings/History.
+  - `TagOverlayController` — a borderless, click-through child window over the host window: light dim,
+    outline box, tag + leader line; only the tag takes clicks.
+  - `InfoButton` — the ⓘ control + its menu.
+- **App side:** `TourCoordinator` (in `App/`) owns triggers (first launch, first capture, first editor,
+  first strip, …), hand-overs between tours, persistence, the menu-bar submenu and the Settings row.
+  Persisted in UserDefaults: `toursSeen` (tour id → catalog version seen), `toursPaused` (tour id → step
+  index), `firstUseToursEnabled` (Bool, default true). Bumping a tour's version re-offers it once after a
+  big UI change.
+- **Surfaces** add anchors, post tour events at the points listed in 14.3, and add an ⓘ — no layout
+  changes (works with the current UI).
+
+### 14.5 Demo videos — dropped
+Considered and **dropped by the owner (2026-09-25)**: short clips rendered with HyperFrames (HeyGen's
+open-source HTML-to-MP4 tool) from real UI captures. The interactive tour on the real UI replaces them —
+no video pipeline, no bundle growth, nothing extra to keep in sync. Don't re-propose unless the owner
+asks (e.g. for README/marketing clips).
+
+### 14.6 Testing
+`TourEngine` unit tests (order, Next, Try steps advancing on the right event and ignoring others,
+skip step / skip tour, already-done steps skipped, missing anchors, pause/resume, hand-overs, versions);
+catalog lint tests (word limits, every step's anchor exists in a known-anchor list, every Try step names
+an event); headless probes that open each surface, post the real actions (the probe technique from the
+UI review — synthetic clicks), and snapshot the tag on every step in light and dark; then a manual pass by
+the owner.
+
+### 14.7 Risks / probes (run first)
+1. **Click-through overlay** — the overlay window must pass clicks to the real control under the box while
+   the tag stays clickable, and never take focus (also over the non-activating record strip and pill).
+2. **Anchors in SwiftUI windows** (Settings, History) — fallback: highlight the whole card/section.
+3. **Pop-up menus** — confirm the tag survives a menu opening/closing and that `choiceMade` can be posted
+   from the menu's action.
+4. **Event coverage** — every Try step needs a real event hook; add each hook where the action already
+   happens (tool change, annotation added, style edit, split, recording start…).
+
+### 14.8 Build order and Windows handoff
+Before Part 7: fix the top UI-review issues (`docs/reviews/2026-09-25-ui-review.md` — at minimum the
+editor title-bar accessory, which the ⓘ depends on). Then: TourKit engine + events + catalog + anchors →
+tag overlay → Welcome + Quick Access + Editor tours → Recording strip + pill → Video editor → Text /
+Redaction / Highlighter / Spotlight micro-tours → Settings + History → ⓘ + menu bar + Settings row. Part 7 adds its section to `docs/MAC-TO-WINDOWS-PARITY-v3.md` like every other
+part: exact tag layout and colours, every tour's steps and strings verbatim, triggers, events, and
+persistence keys.

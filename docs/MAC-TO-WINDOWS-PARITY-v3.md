@@ -1911,3 +1911,9 @@ leaves only the original, now 2 s; a failed export leaves the original's bytes u
   muted segments), and step frames with pause + position ± 1/fps. For the edge-drag preview just seek to
   the edge time. Thumbnails: one ffmpeg pass `-vf "fps=<count/duration>,scale=-2:100"` to numbered PNGs
   in a temp folder, or `-ss t -frames:v 1` per tile.
+
+---
+
+## Part 7 — Interactive guided tours and ⓘ help on every window
+
+_(pending — designed 2026-09-25 in the v3 spec §14; filled when Part 7 lands)_
