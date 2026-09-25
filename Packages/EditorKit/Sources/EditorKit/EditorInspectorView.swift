@@ -1,4 +1,5 @@
 import AppKit
+import TourKit
 
 /// One inspector change to a style field (e.g. "line width = 7"). The window applies it to
 /// the selected objects and to the default style for new objects.
@@ -13,6 +14,9 @@ enum ArrangeAction { case front, back, delete }
 ///
 /// To add a section: see `InspectorSection` — add a case to `makeSection(_:)` returning its
 /// rows, and register a closure in `refreshers` that reads `style` back into the controls.
+///
+/// Guided tours: each section's box is anchored `editor.inspector.<section raw value>` (the Arrange
+/// footer `editor.inspector.arrange`), and every edit posts `TourEvent.styleChanged(<field>)`.
 final class EditorInspectorView: NSVisualEffectView {
     static let width: CGFloat = 264
 
@@ -121,6 +125,7 @@ final class EditorInspectorView: NSVisualEffectView {
             v.widthAnchor.constraint(equalToConstant: InspectorStyle.contentWidth).isActive = true
         }
         footer.isHidden = true
+        footer.tourAnchor = "editor.inspector.\(InspectorSection.arrange.rawValue)"
         addSubview(footer)
 
         for (well, tip) in [(colorWell, "Custom colour — opens the colour picker"),
@@ -206,6 +211,7 @@ final class EditorInspectorView: NSVisualEffectView {
             box.alignment = .leading
             box.spacing = 8
             box.edgeInsets = NSEdgeInsets(top: 12, left: 16, bottom: 14, right: 16)
+            box.tourAnchor = "editor.inspector.\(section.rawValue)"
             if let title = section.title, !Self.inlineLabelled.contains(section) {
                 box.addArrangedSubview(InspectorStyle.caption(title))
             }
@@ -310,6 +316,13 @@ final class EditorInspectorView: NSVisualEffectView {
         return l
     }
 
+    /// Guided tours: the user changed this style field from the panel (a slider only when released).
+    private func tourEdited(_ field: String) { TourEvents.post(.styleChanged(field)) }
+
+    private func tourEdited(_ target: ColourTarget) {
+        tourEdited(target == .stroke ? "strokeColor" : "textBackgroundColor")
+    }
+
     private func colourEdit(_ c: RGBAColor, _ target: ColourTarget = .stroke) -> StyleEdit {
         switch target {
         case .stroke:
@@ -329,7 +342,9 @@ final class EditorInspectorView: NSVisualEffectView {
         wellSession = nil
         // A recent colour moves to the front; presets are always on show, so they aren't recorded.
         if recents.colors.contains(where: { RecentColors.same($0, c) }) { remember(c, replacingFront: false) }
-        onStyleEdit?(colourEdit(c, ColourTarget(rawValue: sender.tag) ?? .stroke), nil)
+        let target = ColourTarget(rawValue: sender.tag) ?? .stroke
+        onStyleEdit?(colourEdit(c, target), nil)
+        tourEdited(target)
     }
 
     /// Any of the three wells: every colour it picks is a custom colour, so it goes into Recent
@@ -340,10 +355,13 @@ final class EditorInspectorView: NSVisualEffectView {
         wellSession = sender
         if sender === backgroundWell {
             onStyleEdit?(colourEdit(c, .textBackground), "backgroundWell")
+            tourEdited(.textBackground)
         } else if sender === outlineWell {
             onStyleEdit?({ $0.textOutlineColor = c; $0.textOutline = true }, "outlineWell")
+            tourEdited("textOutlineColor")
         } else {
             onStyleEdit?(colourEdit(c), "colourWell")
+            tourEdited(.stroke)
         }
     }
 
@@ -357,6 +375,7 @@ final class EditorInspectorView: NSVisualEffectView {
                 self.wellSession = nil
                 self.remember(c, replacingFront: false)
                 self.onStyleEdit?(self.colourEdit(c, target), nil)
+                self.tourEdited(target)
             }
         }
     }
@@ -375,7 +394,7 @@ final class EditorInspectorView: NSVisualEffectView {
         slider.onChange = { [unowned self] v, finished in
             let w = CGFloat(v.rounded())
             onStyleEdit?({ $0.lineWidth = w }, "lineWidth")
-            if finished { onStyleEditEnded?() }
+            if finished { onStyleEditEnded?(); tourEdited("lineWidth") }
         }
         let presets = NSSegmentedControl(labels: ["Thin", "Medium", "Thick"], trackingMode: .selectOne,
                                          target: self, action: #selector(strokePresetChosen(_:)))
@@ -396,6 +415,7 @@ final class EditorInspectorView: NSVisualEffectView {
     @objc private func strokePresetChosen(_ sender: NSSegmentedControl) {
         let w = CGFloat(sender.tag(forSegment: max(0, sender.selectedSegment)))
         onStyleEdit?({ $0.lineWidth = w }, nil)
+        tourEdited("lineWidth")
     }
 
     // MARK: Font — family, size, bold/italic, alignment
@@ -487,11 +507,13 @@ final class EditorInspectorView: NSVisualEffectView {
     @objc private func fontFamilyChanged(_ sender: NSPopUpButton) {
         guard let family = sender.selectedItem?.representedObject as? String else { return }
         onStyleEdit?({ $0.fontFamily = family }, nil)
+        tourEdited("fontFamily")
     }
 
     @objc private func fontSizeChanged(_ sender: NSPopUpButton) {
         guard let size = sender.selectedItem?.representedObject as? CGFloat else { return }
         onStyleEdit?({ $0.fontSize = size }, nil)
+        tourEdited("fontSize")
     }
 
     @objc private func emphasisChanged(_ sender: NSSegmentedControl) {
@@ -499,11 +521,13 @@ final class EditorInspectorView: NSVisualEffectView {
         let underline = sender.isSelected(forSegment: 2), strike = sender.isSelected(forSegment: 3)
         onStyleEdit?({ $0.fontBold = bold; $0.fontItalic = italic
                        $0.textUnderline = underline; $0.textStrikethrough = strike }, nil)
+        tourEdited("textEmphasis")   // bold / italic / underline / strikethrough — one control
     }
 
     @objc private func alignmentChanged(_ sender: NSSegmentedControl) {
         let a = TextAlign.allCases[max(0, sender.selectedSegment)]
         onStyleEdit?({ $0.textAlignment = a }, nil)
+        tourEdited("textAlignment")
     }
 
     // MARK: Styles (text) — one-click presets, 3 per row
@@ -526,6 +550,7 @@ final class EditorInspectorView: NSVisualEffectView {
     @objc private func presetChosen(_ sender: TextPresetChip) {
         let preset = sender.preset
         onStyleEdit?({ preset.apply(to: &$0) }, nil)
+        tourEdited("textPreset")
     }
 
     // MARK: Background (text) — None / Solid / Auto; Solid shows the colour rows, both boxes padding + corners
@@ -549,7 +574,7 @@ final class EditorInspectorView: NSVisualEffectView {
         padding.onChange = { [unowned self] v, finished in
             let p = CGFloat(v.rounded())
             onStyleEdit?({ $0.textBackgroundPadding = p }, "textBackgroundPadding")
-            if finished { onStyleEditEnded?() }
+            if finished { onStyleEditEnded?(); tourEdited("textBackgroundPadding") }
         }
         let radii = AnnotationStyle.textBackgroundCornerRadiusRange
         let corners = LabeledSliderRow(label: "Corners",
@@ -558,7 +583,7 @@ final class EditorInspectorView: NSVisualEffectView {
         corners.onChange = { [unowned self] v, finished in
             let r = CGFloat(v.rounded())
             onStyleEdit?({ $0.textBackgroundCornerRadius = r }, "textBackgroundCornerRadius")
-            if finished { onStyleEditEnded?() }
+            if finished { onStyleEditEnded?(); tourEdited("textBackgroundCornerRadius") }
         }
         refreshers.append { [unowned self] in
             let m = style.textBackgroundMode
@@ -576,6 +601,7 @@ final class EditorInspectorView: NSVisualEffectView {
     @objc private func backgroundModeChanged(_ sender: NSSegmentedControl) {
         let m = TextBackgroundMode.allCases[max(0, sender.selectedSegment)]
         onStyleEdit?({ $0.textBackgroundMode = m }, nil)
+        tourEdited("textBackgroundMode")
     }
 
     /// Rows stacked as one panel row (so a group of rows can be shown / hidden together).
@@ -607,7 +633,7 @@ final class EditorInspectorView: NSVisualEffectView {
         width.onChange = { [unowned self] v, finished in
             let w = CGFloat(v.rounded())
             onStyleEdit?({ $0.textOutlineWidth = w }, "textOutlineWidth")
-            if finished { onStyleEditEnded?() }
+            if finished { onStyleEditEnded?(); tourEdited("textOutlineWidth") }
         }
         refreshers.append { [unowned self] in
             outline.state = style.textOutline ? .on : .off
@@ -634,11 +660,13 @@ final class EditorInspectorView: NSVisualEffectView {
             // Default white on white text (Label, Callout) would be an unreadable blob.
             if on { s.textOutlineColor = TextChip.outlineColor(s.textOutlineColor, forText: s.strokeColor) }
         }, nil)
+        tourEdited("textOutline")
     }
 
     @objc private func shadowToggled(_ sender: NSButton) {
         let on = sender.state == .on
         onStyleEdit?({ $0.textShadow = on }, nil)
+        tourEdited("textShadow")
     }
 
     // MARK: Redaction — Blur / Pixelate / Black-out, then Strength
@@ -674,6 +702,7 @@ final class EditorInspectorView: NSVisualEffectView {
         let mode = RedactionMode.allCases[max(0, sender.selectedSegment)]
         onStyleEdit?({ $0.redactionMode = mode }, nil)   // converts the selected redaction(s)
         onRedactTool?(mode.tool)
+        tourEdited("redactionMode")
     }
 
     private func makeStrengthRows() -> [NSView] {
@@ -683,7 +712,7 @@ final class EditorInspectorView: NSVisualEffectView {
         slider.onChange = { [unowned self] v, finished in
             let px = CGFloat(v.rounded()), pixelate = redactionMode == .pixelate
             onStyleEdit?({ if pixelate { $0.pixelSize = px } else { $0.blurRadius = px } }, "redactionStrength")
-            if finished { onStyleEditEnded?() }
+            if finished { onStyleEditEnded?(); tourEdited("strength") }   // blur radius or pixel size
         }
         refreshers.append { [unowned self] in
             // Blur and Pixelate share this section, so the range follows the mode.
@@ -719,6 +748,7 @@ final class EditorInspectorView: NSVisualEffectView {
     @objc private func spotlightShapeChanged(_ sender: NSSegmentedControl) {
         let shape = SpotlightShape.allCases[max(0, sender.selectedSegment)]
         onStyleEdit?({ $0.spotlightShape = shape }, nil)
+        tourEdited("spotlightShape")
     }
 
     private func makeSpotlightDimRows() -> [NSView] {
@@ -728,7 +758,7 @@ final class EditorInspectorView: NSVisualEffectView {
         slider.onChange = { [unowned self] v, finished in
             let d = CGFloat(v.rounded()) / 100
             onStyleEdit?({ $0.spotlightDim = d }, "spotlightDim")
-            if finished { onStyleEditEnded?() }
+            if finished { onStyleEditEnded?(); tourEdited("spotlightDim") }
         }
         refreshers.append { [unowned self] in slider.value = Double(style.spotlightDim * 100) }
         return [slider]
@@ -743,7 +773,7 @@ final class EditorInspectorView: NSVisualEffectView {
         slider.onChange = { [unowned self] v, finished in
             let o = CGFloat(v.rounded()) / 100
             onStyleEdit?({ $0.opacity = o }, "opacity")
-            if finished { onStyleEditEnded?() }
+            if finished { onStyleEditEnded?(); tourEdited("opacity") }
         }
         refreshers.append { [unowned self] in slider.value = Double(style.opacity * 100) }
         return [slider]

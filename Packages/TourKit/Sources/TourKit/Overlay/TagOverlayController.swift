@@ -12,7 +12,8 @@ import AppKit
 /// An anchor in the menu bar (the status item) gets top-level panels instead, with the tag below it.
 ///
 /// Keys (local monitor, only for the host window, never swallowing anything else): Return = Next on
-/// Explain steps, Esc = Skip tour — both ignored while a text view is being edited (`TagKeys`).
+/// Explain steps, Esc = Skip tour — both ignored while a text view is being edited (`TagKeys`); Esc
+/// also while the host window claims it (`TourEscapeClaiming` — the editor's Esc-to-Select).
 /// Call `hide()` before dropping the controller.
 @MainActor
 public final class TagOverlayController: TourTagPresenting {
@@ -222,7 +223,9 @@ public final class TagOverlayController: TourTagPresenting {
         let editing = (event.window?.firstResponder as? NSTextView)?.isEditable == true
         guard let action = TagKeys.action(keyCode: event.keyCode, modifiers: event.modifierFlags,
                                           isRepeat: event.isARepeat, isExplainStep: isExplain,
-                                          isEditingText: editing) else { return false }
+                                          isEditingText: editing,
+                                          hostClaimsEscape: (host as? TourEscapeClaiming)?.claimsEscape == true)
+        else { return false }
         switch action {
         case .next: onNext?()
         case .skipTour: onSkipTour?()

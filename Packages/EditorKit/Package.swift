@@ -12,7 +12,8 @@ let package = Package(
         // Run with: swift run --package-path Packages/EditorKit EditorKitTests
         .executableTarget(
             name: "EditorKitTests",
-            dependencies: ["EditorKit", .product(name: "TestKit", package: "TestKit")],
+            dependencies: ["EditorKit", .product(name: "TestKit", package: "TestKit"),
+                           .product(name: "TourKit", package: "TourKit")],
             path: "Tests/EditorKitTests"
         ),
     ]

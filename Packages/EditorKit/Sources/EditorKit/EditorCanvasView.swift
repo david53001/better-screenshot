@@ -1,4 +1,5 @@
 import AppKit
+import TourKit
 
 public final class EditorCanvasView: NSView {
     public private(set) var document: EditorDocument
@@ -424,6 +425,8 @@ public final class EditorCanvasView: NSView {
         let p = imagePoint(convert(event.locationInWindow, from: nil))
         let start = dragStartImagePoint ?? p
         let r = rect(start, p)
+        // A corner drag that changed a text's size (guided tours wait for it).
+        let scaledText = activeHandleIndex != nil && scaleOriginal != nil && didDragMutate
         if activeHandleIndex != nil {
             // Resize complete — update the stored original frame for next drag.
             if let id = soleSelectedID, let i = document.index(of: id) {
@@ -475,6 +478,7 @@ public final class EditorCanvasView: NSView {
         pendingDragSnapshot = nil; didDragMutate = false
         dragStartImagePoint = nil; regionMarquee = nil; marqueeRect = nil
         onStateChange?(); needsDisplay = true
+        if scaledText { TourEvents.post(.action("editor.textScaled")) }
     }
 
     private func rect(_ a: CGPoint, _ b: CGPoint) -> CGRect {
@@ -538,6 +542,10 @@ public final class EditorCanvasView: NSView {
     public func insert(_ annotation: any Annotation) {
         snapshot(); document.add(annotation); selectedIDs = [annotation.id]
         onStateChange?(); needsDisplay = true
+        // Guided tours: named like the tool that draws it ("arrow", "text", "blur"…); any redaction
+        // also posts one shared event, so a single Try step covers Blur and Pixelate.
+        if let tool = EditorTool.maker(of: annotation) { TourEvents.post(.annotationAdded(tool.rawValue)) }
+        if annotation is RedactionAnnotation { TourEvents.post(.action("editor.redactionAdded")) }
     }
     public func applyCrop(to imageRect: CGRect) {
         guard let cropped = document.cropped(to: imageRect) else { return }
