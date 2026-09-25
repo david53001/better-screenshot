@@ -16,15 +16,15 @@ extension TourCatalog {
                  body: "Settings for the current tool — or for the object you select."),
         TourStep(anchor: "editor.inspector.colour", kind: .tryIt(advanceOn: .styleChanged("strokeColor")),
                  title: "Pick a colour",
-                 body: "Click any swatch — it colours the selected object and everything you draw next."),
+                 body: "Click any swatch. It colours what's selected and what you draw next."),
         TourStep(anchor: "editor.inspector.stroke", kind: .explain, title: "Width and opacity",
-                 body: "Drag for any width, or pick Thin, Medium or Thick. Opacity, just below, makes it see-through."),
+                 body: "Set the line width. Opacity, just below, makes it see-through."),
         TourStep(anchor: "editor.hint", kind: .explain, title: "The hint line",
                  body: "It says what the current tool does and which keys help."),
         TourStep(anchor: "editor.zoom", kind: .explain, title: "Zoom",
                  body: "Pinch or ⌘-scroll to zoom. ⌘0 fits the image, ⌘1 shows it at real size."),
         TourStep(anchor: "editor.actions", kind: .explain, title: "Finish up",
-                 body: "Copy puts it on the clipboard, Save writes a file, Stack keeps it bottom-right. Done closes."),
+                 body: "Copy it, Save it as a file, or Stack it bottom-right. Done closes."),
         TourStep(anchor: "editor.info", kind: .explain, title: "Replay any time",
                  body: "Click ⓘ to see this tour again or list the keyboard shortcuts."),
     ])
@@ -56,7 +56,7 @@ extension TourCatalog {
                  title: "Change the strength",
                  body: "Drag the Strength slider until it can't be read."),
         TourStep(anchor: "editor.inspector.redaction", kind: .explain, title: "Three ways to hide",
-                 body: "Switch between Blur, Pixelate and Black-out. Black-out is the safest — nothing can be recovered."),
+                 body: "Switch any time. Black-out is the safest — nothing can be recovered."),
     ])
 
     /// The first time the Highlighter is chosen.
@@ -66,7 +66,7 @@ extension TourCatalog {
                  title: "Highlight something",
                  body: "Drag across text like a marker pen. Hold ⇧ for a straight line."),
         TourStep(anchor: "editor.inspector.highlighterStroke", kind: .explain, title: "Marker width",
-                 body: "Pick a marker width. The highlighter remembers its own colour and width, apart from other tools."),
+                 body: "The highlighter keeps its own colour and width, apart from other tools."),
     ])
 
     /// The first time the Spotlight is chosen.

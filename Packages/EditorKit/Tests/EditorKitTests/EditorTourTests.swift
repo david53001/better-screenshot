@@ -37,7 +37,31 @@ private let tourTool: [TourID: EditorTool] = [
     .editor: .arrow, .text: .text, .redaction: .blur, .highlighter: .highlighter, .spotlight: .spotlight,
 ]
 
+/// Height of `body` in the tag bubble's body label (same font, width and label type), with at most
+/// `maxLines` lines (0 = unlimited).
+@MainActor private func tagBodyHeight(_ body: String, maxLines: Int) -> CGFloat {
+    let label = NSTextField(wrappingLabelWithString: body)
+    label.font = TagStyle.bodyFont
+    label.maximumNumberOfLines = maxLines
+    label.lineBreakMode = .byWordWrapping
+    let inner = TagStyle.tagMaxWidth - 2 * TagStyle.tagPaddingX
+    label.preferredMaxLayoutWidth = inner
+    return ceil(label.sizeThatFits(NSSize(width: inner, height: 1000)).height)
+}
+
 let editorTourTests: [TestCase] = [
+    TestCase("everyEditorTourBodyFitsTheTagsTwoLines") { t in
+        // The word limit alone doesn't guarantee it: a long 18-word body was cut off with "…".
+        MainActor.assumeIsolated {
+            for tour in TourCatalog.all where tour.surface == .editor {
+                for step in tour.steps {
+                    let full = tagBodyHeight(step.body, maxLines: 0)
+                    let shown = tagBodyHeight(step.body, maxLines: TagStyle.bodyMaxLines)
+                    t.isTrue(full <= shown, "\(tour.id)/\(step.title): body needs \(full) pt, the tag shows \(shown)")
+                }
+            }
+        }
+    },
     TestCase("everyEditorTourStepPointsAtARealControl") { t in
         MainActor.assumeIsolated {
             let controller = EditorWindowController(image: plainImage())
