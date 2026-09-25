@@ -78,18 +78,22 @@ struct SettingsView: View {
         .frame(width: SettingsTheme.Metrics.columnWidth)
     }
 
+    // Recording is split into two cards (what to record | what shows in the video) and
+    // the short cards fill in under them, so the three columns end at about the same
+    // height instead of leaving a tall black gap beside one long Recording card.
     private var columnB: some View {
         VStack(spacing: SettingsTheme.Metrics.cardGap) {
-            historyCard
+            recordingCard
             startupCard
-            saveLocationCard
         }
         .frame(width: SettingsTheme.Metrics.columnWidth)
     }
 
     private var columnC: some View {
         VStack(spacing: SettingsTheme.Metrics.cardGap) {
-            recordingCard
+            inTheVideoCard
+            historyCard
+            saveLocationCard
         }
         .frame(width: SettingsTheme.Metrics.columnWidth)
     }
@@ -166,7 +170,7 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Column B cards
+    // MARK: - History / startup / save location
 
     private var historyCard: some View {
         DarkSection("HISTORY") {
@@ -180,14 +184,13 @@ struct SettingsView: View {
                                           (value: 50, label: "50"),
                                           (value: 100, label: "100")],
                                disabled: !store.settings.historyEnabled)
-                HStack(alignment: .center, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Button("Clear History…") { confirmingClear = true }
+                        .buttonStyle(.pill)
                     Text("Stores full-resolution copies — several MB each.")
                         .font(SettingsTheme.Font.rowSubLabel)
                         .foregroundColor(SettingsTheme.subLabel)
                         .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 8)
-                    Button("Clear History…") { confirmingClear = true }
-                        .buttonStyle(.pill)
                 }
                 .confirmationDialog("Clear all capture history?",
                                     isPresented: $confirmingClear, titleVisibility: .visible) {
@@ -226,8 +229,9 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Column C card
+    // MARK: - Recording cards
 
+    /// What gets recorded: file format, timing and the sources (the record strip's menus).
     private var recordingCard: some View {
         DarkSection("RECORDING") {
             VStack(alignment: .leading, spacing: 14) {
@@ -239,6 +243,12 @@ struct SettingsView: View {
                                selection: bindRec(\.fps),
                                segments: [(value: 30, label: "30"),
                                           (value: 60, label: "60")])
+                segmentedField("Countdown before recording", SettingsHelp.countdown,
+                               selection: bindRec(\.countdownSeconds),
+                               segments: [(value: 0, label: "Off"),
+                                          (value: 3, label: "3s"),
+                                          (value: 5, label: "5s"),
+                                          (value: 10, label: "10s")])
                 Rectangle().fill(SettingsTheme.border).frame(height: 1)
                 sourceMenus
                 segmentedField("Camera size", SettingsHelp.cameraSize,
@@ -246,18 +256,25 @@ struct SettingsView: View {
                                segments: [(value: .small, label: "Small"),
                                           (value: .medium, label: "Medium")],
                                disabled: !store.recording.camera)
-                switchRow("Show mouse cursor", SettingsHelp.showCursor,
-                          isOn: bindRec(\.showsCursor))
+            }
+        }
+    }
+
+    /// What is drawn into the video on top of the screen.
+    private var inTheVideoCard: some View {
+        DarkSection("IN THE VIDEO") {
+            VStack(alignment: .leading, spacing: 14) {
+                // Same name and choices as the record strip's Mouse cursor menu.
+                VStack(alignment: .leading, spacing: 6) {
+                    fieldLabel("Mouse cursor", SettingsHelp.showCursor)
+                    MonoComboField(selection: bindRec(\.showsCursor),
+                                   options: [(value: true, label: "Shown"),
+                                             (value: false, label: "Hidden")])
+                }
                 switchRow("Highlight mouse clicks", SettingsHelp.highlightClicks,
                           isOn: bindRec(\.clickHighlights))
                 keystrokeRow
-                segmentedField("Countdown before recording", SettingsHelp.countdown,
-                               selection: bindRec(\.countdownSeconds),
-                               segments: [(value: 0, label: "Off"),
-                                          (value: 3, label: "3s"),
-                                          (value: 5, label: "5s"),
-                                          (value: 10, label: "10s")])
-                switchRow("Show stop button in recording", SettingsHelp.controlsInRecording,
+                switchRow("Show recording controls in the video", SettingsHelp.controlsInRecording,
                           isOn: bindRec(\.controlsInRecording))
             }
         }
@@ -330,7 +347,7 @@ struct SettingsView: View {
     private var shortcutsCard: some View {
         DarkSection("KEYBOARD SHORTCUTS") {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Click Change, then press the new key combination (Esc cancels). Hover the ⓘ on any row to see what that shortcut does.")
+                Text("Click a shortcut, then press the new key combination (Esc cancels). Hover the ⓘ on any row to see what that shortcut does.")
                     .font(SettingsTheme.Font.rowSubLabel)
                     .foregroundColor(SettingsTheme.subLabel)
                 ForEach(HotkeyAction.allCases, id: \.self) { action in
@@ -368,8 +385,8 @@ struct SettingsView: View {
                     .foregroundColor(SettingsTheme.subLabel)
             }
             Spacer(minLength: 8)
-            // The recorder well doubles as the combo chip + the "Change" affordance
-            // (click to record); it reuses the working live-rebind machinery as-is.
+            // The recorder well is both the combo chip and the control (click to
+            // record; it outlines on hover); it reuses the live-rebind machinery as-is.
             ShortcutRecorderField(
                 combo: store.bindings.combo(for: action),
                 isRecording: Binding(

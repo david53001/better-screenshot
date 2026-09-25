@@ -29,7 +29,7 @@ final class MenuBarController: NSObject {
         }
         add("Capture Area", #selector(area), .captureArea)
         add("Capture Window", #selector(window), .captureWindow)
-        add("Capture Fullscreen", #selector(full), .captureFullscreen)
+        add("Capture Full Screen", #selector(full), .captureFullscreen)
         add("Capture Text", #selector(captureText), .captureText)
         recordItem = menu.addItem(withTitle: "Record Screen…",
                                   action: #selector(toggleRecording), keyEquivalent: "")

@@ -132,10 +132,10 @@ enum SettingsHelp {
     )
 
     static let showCursor = HelpText(
-        "Show mouse cursor",
-        "Draws the mouse pointer into the recording. Turn off for a clean video without "
-            + "the pointer.",
-        example: "Turn off when recording a slideshow or video you won't be clicking through."
+        "Mouse cursor",
+        "Shown draws the mouse pointer into the recording as it moves. Hidden gives a clean "
+            + "video without the pointer.",
+        example: "Choose Hidden when recording a slideshow or video you won't be clicking through."
     )
 
     static let cameraSize = HelpText(
@@ -163,8 +163,8 @@ enum SettingsHelp {
     )
 
     static let controlsInRecording = HelpText(
-        "Show stop button in recording",
-        "While recording, a floating pill with the timer, Pause and Stop is always on screen. Off: it's hidden from the video itself. On: it's recorded like any other window.",
+        "Show recording controls in the video",
+        "While recording, a floating pill with the timer, Pause and Stop is always on screen. Off: it's left out of the video itself. On: it's recorded like any other window.",
         example: "Leave off for clean tutorials; window recordings never include it either way."
     )
 
@@ -173,25 +173,25 @@ enum SettingsHelp {
     static let captureArea = HelpText(
         "Capture Area",
         "Drag to select a rectangular region of the screen to capture.",
-        example: "Default ⌘⇧4 — drag around a dialog box to grab just that part of the screen."
+        example: "Default ⇧⌘4 — drag around a dialog box to grab just that part of the screen."
     )
 
     static let captureWindow = HelpText(
         "Capture Window",
         "Captures a single window you click on, without needing to select its exact bounds.",
-        example: "Default ⌘⇧8 — click a Safari window to capture just that window, edges included."
+        example: "Default ⇧⌘8 — click a Safari window to capture just that window, edges included."
     )
 
     static let captureFullscreen = HelpText(
-        "Capture Fullscreen",
+        "Capture Full Screen",
         "Captures the entire screen in one shot.",
-        example: "Default ⌘⇧6 — grabs everything currently on your display."
+        example: "Default ⇧⌘6 — grabs everything currently on your display."
     )
 
     static let captureText = HelpText(
         "Capture Text",
         "Selects a region and reads any text or QR code in it using on-device OCR, copying the result instead of an image.",
-        example: "Default ⌘⇧7 — grab a paragraph from a PDF and paste it as editable text."
+        example: "Default ⇧⌘7 — grab a paragraph from a PDF and paste it as editable text."
     )
 
     static let pinFromClipboard = HelpText(
@@ -203,7 +203,7 @@ enum SettingsHelp {
     static let record = HelpText(
         "Start/Stop Recording",
         "Starts a new screen recording, or stops the one in progress.",
-        example: "Default ⌘⇧5 — press once to start recording, press again to stop and save."
+        example: "Default ⇧⌘5 — press once to start recording, press again to stop and save."
     )
 
     static let openHistory = HelpText(

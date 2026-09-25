@@ -71,7 +71,7 @@ let hotkeyBindingsTests: [TestCase] = [
     TestCase("titles") { t in
         t.equal(HotkeyAction.captureArea.title, "Capture Area")
         t.equal(HotkeyAction.captureWindow.title, "Capture Window")
-        t.equal(HotkeyAction.captureFullscreen.title, "Capture Fullscreen")
+        t.equal(HotkeyAction.captureFullscreen.title, "Capture Full Screen")
         t.equal(HotkeyAction.captureText.title, "Capture Text")
         t.equal(HotkeyAction.pinFromClipboard.title, "Pin from Clipboard")
         t.equal(HotkeyAction.record.title, "Start/Stop Recording")
