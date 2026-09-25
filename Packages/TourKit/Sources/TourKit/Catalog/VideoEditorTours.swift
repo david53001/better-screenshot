@@ -6,7 +6,7 @@ extension TourCatalog {
         TourStep(anchor: "video.preview", kind: .explain, title: "Preview",
                  body: "Plays only the parts you keep. Click it, or press Space, to play."),
         TourStep(anchor: "video.timeline", kind: .explain, title: "The timeline",
-                 body: "Times along the top, frames below. Click to move the playhead; drag a yellow edge to trim."),
+                 body: "Click to move the playhead. Drag a part’s yellow edge to trim it."),
         TourStep(anchor: "video.split", kind: .tryIt(advanceOn: .action("video.split")), title: "Split the clip",
                  body: "Click the timeline to place the playhead, then press S or click Split."),
         TourStep(anchor: "video.timeline", kind: .tryIt(advanceOn: .action("video.segmentDeleted")),

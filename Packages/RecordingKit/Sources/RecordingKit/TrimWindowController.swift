@@ -82,7 +82,7 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
         gif.target = self
         gif.toolTip = "Save the edit as an animated GIF next to the original (10 fps, up to 960 px wide)"
         menu.addItem(gif)
-        return NSComboButton(title: "Save as Copy", menu: menu, target: self, action: #selector(saveCopy))
+        return AnchoredComboButton(title: "Save as Copy", menu: menu, target: self, action: #selector(saveCopy))
     }()
 
     // Model
@@ -998,6 +998,14 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
                                      v.heightAnchor.constraint(equalToConstant: 18)])
         return v
     }
+}
+
+/// NSComboButton ignores `setAccessibilityIdentifier` (it reads back ""), and that's where a tour
+/// anchor lives (`tourAnchor`) — so this one keeps it itself. Otherwise a plain NSComboButton.
+private final class AnchoredComboButton: NSComboButton {
+    private var anchorID = ""
+    override func accessibilityIdentifier() -> String { anchorID }
+    override func setAccessibilityIdentifier(_ id: String?) { anchorID = id ?? "" }
 }
 
 /// The preview: no AVKit controls; a click toggles play / pause.

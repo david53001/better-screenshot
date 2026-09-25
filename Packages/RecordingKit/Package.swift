@@ -12,7 +12,8 @@ let package = Package(
         // Run with: swift run --package-path Packages/RecordingKit RecordingKitTests
         .executableTarget(
             name: "RecordingKitTests",
-            dependencies: ["RecordingKit", .product(name: "TestKit", package: "TestKit")],
+            dependencies: ["RecordingKit", .product(name: "TestKit", package: "TestKit"),
+                           .product(name: "TourKit", package: "TourKit")],
             path: "Tests/RecordingKitTests"
         ),
     ]
