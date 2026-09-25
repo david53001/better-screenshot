@@ -15,7 +15,18 @@ Status + lanes: `docs/PROGRESS-v3.md` (lane "Tours & help"). Windows-port notes:
   (searches content + title bar, skips hidden views), SwiftUI `.tourAnchor("…")`.
 - `Catalog/` — every tour as data, **one file per area** (`WelcomeTours`, `EditorTours`, `RecordingTours`,
   `VideoEditorTours`, `ShellTours`) so parallel lanes don't collide; `TourCatalog.all` lists them.
-- Engine, audience classifier, overlay, ⓘ button: added by the Part 7 lanes (see the progress file).
+- `TourAudience.swift` — §14.9's pure new/existing classifier (`classify(Signals)`: any non-tour key in the
+  app's own domain, anything in the support folder, Screen Recording already granted, or an unknown bundle
+  id → `.existing`) + `TourPreferenceKey` (the only five keys tours persist).
+- `TourRules.swift` — `shouldAutoStart` (tours on — absent = off — **and** this version unseen),
+  `shouldAskQuestion` / `shouldOpenWelcomeOnLaunch`, `tours(triggeredBy:)`; `TourText` resolves
+  `{shortcut:<action>}` through a caller-supplied lookup.
+- `TourEngine.swift` — one tour's pure state machine: start at a step · Next (Explain only) · Skip step ·
+  Skip tour · Try steps advance only on their exact event · missing anchors and already-done Try steps
+  skipped · pause/resume · `.finished(handsOverTo:)`; `start`/`resume` with nothing presentable →
+  `.nothingToShow` (never burns a tour).
+- `TourNames.swift` — `TourID.menuTitle` / `menuSymbol` for the Help & Tours menu.
+- Tag overlay and ⓘ button: lane 7B. The app side (`App/Tours/TourCoordinator`) drives all of the above.
 
 ## Contracts (keep stable — other packages and lanes build on them)
 - Anchor ids are `"<surface>.<name>"` (e.g. `editor.inspector.colour`, `strip.microphone`). A surface sets
@@ -24,8 +35,13 @@ Status + lanes: `docs/PROGRESS-v3.md` (lane "Tours & help"). Windows-port notes:
   already happens (tool change, annotation added, menu opened…); never add UI just for tours.
 - Surfaces depend on TourKit only for `TourEvents`, anchors and (for the ⓘ) `InfoButton`. Tour logic,
   persistence and triggers live in the app's `TourCoordinator`, never in a surface.
-- Copy rules (enforced by tests): title ≤ 4 words; body ≤ 20 words, 1–2 sentences; Try steps start with
-  a verb; shortcuts written as `{shortcut:<HotkeyAction raw value>}` so they show the user's own keys.
+- Copy rules (enforced by `CatalogLintTests` on `TourCatalog.all`): title ≤ 4 words; body ≤ 20 words,
+  1–2 sentences; Try bodies start with a verb (not "The/This/Your/…"); anchors and `menuOpened`/
+  `choiceMade`/`action` names are `<surface>.<name>`; no two Try steps in a tour wait for the same event;
+  shortcuts written as `{shortcut:<HotkeyAction raw value>}` so they show the user's own keys (the valid
+  names are listed in the test — add one there when `HotkeyAction` gains a case).
+- A tour's steps can be shown only once its surface calls `TourEvents.surfaceShown` and its anchors
+  exist; until then starting it is a no-op (`.nothingToShow`), not "seen".
 
 ## Verify
 `swift run -j 2 --package-path Packages/TourKit TourKitTests` (also run by `scripts/test.sh`).

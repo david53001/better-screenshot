@@ -7,9 +7,11 @@
   **Recent colours** (last 6, newest first) follow the same pattern: `editorRecentColors`, JSON under
   `editorRecentColors`, injected as `recentColors:` and saved from `onRecentColorsChanged`.
 - `SettingsView.swift` — SwiftUI settings UI: a three-column card masonry + a full-width Keyboard
-  Shortcuts card. Columns: Capture · Quick Access Overlay · Pin to Screen | Recording · Startup |
+  Shortcuts card. Columns: Capture · Quick Access Overlay · Startup | Recording · Pin to Screen |
   In the video · History · Save location — chosen so the columns end at about the same height (check
-  with a screenshot after adding a row). The Recording card's `sourceMenus` (Microphone / System audio /
+  with a screenshot after adding a row). Startup holds **Tours & tips** (spec §14.9): a switch "Show me
+  around the first time I use each part" (`firstUseToursEnabled`, via `TourSettingsActions` — the
+  `TourCoordinator` owns the key) and **Reset All Tours** (clears `toursSeen`/`toursPaused` only). The Recording card's `sourceMenus` (Microphone / System audio /
   Camera dropdowns) mirror the record strip's columns and persist the same `RecordingConfig` fields; the
   In the video card's "Mouse cursor" (Shown | Hidden, same words as the strip) is
   `RecordingConfig.showsCursor`.
