@@ -2427,7 +2427,9 @@ gets top-level windows at the menu-bar/topmost level instead of owned ones, and 
   `DispatcherTimer` covers the control moving inside the window. Tray host: `Topmost=True`, no owner.
 - Keep tags out of the user's screenshots/recordings: `SetWindowDisplayAffinity(hwnd,
   WDA_EXCLUDEFROMCAPTURE)` on both windows (Windows 10 2004+). (macOS: screenshots exclude
-  `TagOverlayController.allWindowNumbers` — wired in lane 7S, see §7.4 "Tags never appear in a screenshot".)
+  `TagOverlayController.allWindowNumbers` — see §7.4 "Tags never appear in a screenshot"; recordings leave
+  every tag window out of the stream's filter and keep a new tag transparent until the filter covers it —
+  `TourTagRecordingGate`, see §7.6.)
 
 #### Keys (`TagKeys.action` — pure, port 1:1)
 Handled only for key-downs aimed at the **host window** (any of the app's windows when the host is the

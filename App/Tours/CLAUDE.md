@@ -31,8 +31,8 @@ stream building the tag overlay + ⓘ button in TourKit (status: `docs/PROGRESS-
     a screen) — `AppDelegate` passes the status item's window so the Welcome tour's `menuBar.icon` step works;
     the tag then attaches to that window while pausing still follows the host. Each anchor is scrolled into
     view (`scrollToVisible`) before its tag shows (Settings' Keyboard Shortcuts card is below the fold).
-- `NoOpTourTagPresenter.swift` — shows nothing; stands in for lane 7B's `TagOverlayController` until the
-  merge switches `AppDelegate`'s `makePresenter:` factory to the real overlay.
+- `NoOpTourTagPresenter.swift` — shows nothing. **Unused by the app** since the merge (the app's factory is
+  `RecordingSafeTagPresenter`, `App/Recording/TourTagRecordingGate.swift`); kept only as a stand-in for probes.
 
 Wired in: `App/Lifecycle/AppDelegate.swift` (launch classification, factory, menu/Settings/onboarding
 closures, `openSurface` for Welcome/Settings/History), `App/MenuBar/OnboardingController.swift` (the
