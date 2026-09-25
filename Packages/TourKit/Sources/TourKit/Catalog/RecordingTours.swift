@@ -1,60 +1,46 @@
-// Steps: spec §14.3 table, adapted to the record strip and live pill as built (v3 Parts 4–5).
-// Anchors are set in App/Recording/RecordStripController.swift and RecordingControlsController.swift;
-// events are posted there and in RecordingCoordinator. Windows-port copy: parity doc §7.6.
+// Steps: spec §14.3 table, adapted to the record strip and live pill as built (v3 Parts 4–5), then
+// trimmed after the 2026-09-26 review (R2, P1). Anchors are set in App/Recording/RecordStripController.swift
+// and RecordingControlsController.swift; events are posted there and in RecordingCoordinator.
+// Windows-port copy: parity doc §7.6.
 extension TourCatalog {
-    /// The first time the record strip opens: every choice on it, then "start recording", which hands over
-    /// to the pill tour. The audio steps are skipped in GIF mode (their menus are greyed out and lose
+    /// The first time the record strip opens: every choice on it (the owner: "walks you through all the
+    /// choices you can make"), six steps — Format + FPS share one, each audio menu's choices sit in its Try
+    /// step, and Camera / Mouse cursor are named in the hint-line step — then "start recording", which hands
+    /// over to the pill tour. The audio steps are skipped in GIF mode (their menus are greyed out and lose
     /// their anchors).
     static let firstRecording = Tour(id: .firstRecording, surface: .recordStrip, trigger: .surfaceShown(.recordStrip), steps: [
         TourStep(anchor: "strip.targets", kind: .explain, title: "What to record",
                  body: "Full Screen records this screen, Area a part you drag, Window just one window."),
-        TourStep(anchor: "strip.format", kind: .explain, title: "MP4 or GIF",
-                 body: "MP4 is a video with sound. GIF is a silent, looping animation."),
-        TourStep(anchor: "strip.fps", kind: .explain, title: "Frame rate",
-                 body: "60 frames per second looks smoother; 30 makes smaller files."),
-        TourStep(anchor: "strip.microphone", kind: .tryIt(advanceOn: .menuOpened("strip.microphone")),
-                 title: "Open the Microphone menu",
-                 body: "Click Microphone to see every input you can record from."),
-        TourStep(anchor: "strip.microphoneColumn", kind: .explain, title: "Microphone choices",
-                 body: "Pick a mic, or Off to skip it. The level meter above shows it can hear you."),
+        TourStep(anchor: "strip.output", kind: .explain, title: "Format and frame rate",
+                 body: "MP4 has sound; GIF is a silent loop. 60 FPS is smoother, 30 makes smaller files."),
+        // Mic is Off by default and its level meter needs the permission first, so the meter is promised
+        // only "once it's on" (review R1). The column = caption, meter or "Allow…" link, and the menu.
+        TourStep(anchor: "strip.microphoneColumn", kind: .tryIt(advanceOn: .menuOpened("strip.microphone")),
+                 title: "Pick a microphone",
+                 body: "Click Microphone, then pick a mic or Off. Once it’s on, a meter shows it hears you."),
         TourStep(anchor: "strip.systemAudio", kind: .tryIt(advanceOn: .menuOpened("strip.systemAudio")),
-                 title: "Open System audio",
-                 body: "Click System audio to choose which sounds from your Mac are recorded."),
-        TourStep(anchor: "strip.systemAudio", kind: .explain, title: "Sound choices",
-                 body: "Off, every app’s sound, or every app except BetterScreenshot’s own sounds."),
-        TourStep(anchor: "strip.camera", kind: .explain, title: "Camera bubble",
-                 body: "Adds your webcam in a round bubble. Camera Size sets Small or Medium."),
-        TourStep(anchor: "strip.cursor", kind: .explain, title: "Mouse cursor",
-                 body: "Choose whether your pointer shows in the video."),
-        TourStep(anchor: "strip.hint", kind: .explain, title: "Hints",
-                 body: "Point at any control and this line explains it."),
+                 title: "Record your Mac’s sound",
+                 body: "Click System audio to choose: Off, all apps, or all but BetterScreenshot."),
+        TourStep(anchor: "strip.hint", kind: .explain, title: "Camera, cursor and hints",
+                 body: "Point at any control — Camera, Mouse cursor — and this line explains it."),
         TourStep(anchor: "strip.targets", kind: .tryIt(advanceOn: .choiceMade("strip.targets")),
                  title: "Start recording",
                  body: "Click Full Screen, Area or Window to start. The recording controls come next."),
     ], handsOverTo: .recordingPill)
 
-    /// The first time the live pill appears (the recording is starting). Steps on controls the pill doesn't
-    /// show are skipped: Switch on full-screen recordings, everything but timer · Pause · Stop · chevron
-    /// when collapsed, and "Mute the mic" when there's no mic track.
+    /// The first time the live pill appears. It runs over the user's first real recording, so it's short
+    /// (review P1): time, the mic (an Explain step — a Try step completed on mute and left the mic muted,
+    /// P2), Restart/Discard, Pause, Stop — left to right along the pill. Skipped when their control isn't
+    /// shown: the mic step without a mic track, everything but the timer · Pause · Stop when collapsed.
     static let recordingPill = Tour(id: .recordingPill, surface: .recordingPill, trigger: .surfaceShown(.recordingPill), steps: [
         TourStep(anchor: "pill.timer", kind: .explain, title: "Recording time",
                  body: "How long you’ve been recording. Drag the pill anywhere you like."),
-        TourStep(anchor: "pill.mic", kind: .tryIt(advanceOn: .action("pill.micMuted")), title: "Mute the mic",
-                 body: "Click Mic to mute it — click again to unmute. The video stays in sync."),
-        TourStep(anchor: "pill.systemAudio", kind: .explain, title: "System audio",
-                 body: "Mutes the sound your Mac plays. It’s greyed out when that wasn’t recorded."),
-        TourStep(anchor: "pill.camera", kind: .explain, title: "Camera bubble",
-                 body: "Shows or hides your camera bubble while you record."),
-        TourStep(anchor: "pill.switch", kind: .explain, title: "Record something else",
-                 body: "Move the recording to another window or area without stopping."),
-        TourStep(anchor: "pill.restart", kind: .explain, title: "Restart",
-                 body: "Deletes what’s recorded so far and starts again. Click twice to confirm."),
-        TourStep(anchor: "pill.discard", kind: .explain, title: "Discard",
-                 body: "Stops and deletes this recording. Click twice to confirm."),
+        TourStep(anchor: "pill.mic", kind: .explain, title: "Mute the mic",
+                 body: "Click Mic to mute it, and again to unmute. The video stays in sync."),
+        TourStep(anchor: "pill.restart", kind: .explain, title: "Restart or discard",
+                 body: "Restart starts over; Discard, next to it, deletes it. Both need a second click."),
         TourStep(anchor: "pill.pause", kind: .explain, title: "Pause",
                  body: "Pauses the recording. Press it again to carry on."),
-        TourStep(anchor: "pill.collapse", kind: .explain, title: "Fewer controls",
-                 body: "Collapses the pill to the timer, Pause and Stop. Click again for all."),
         TourStep(anchor: "pill.stop", kind: .tryIt(advanceOn: .action("recording.stopped")), title: "Stop when done",
                  body: "Press Stop when you’re finished. Your video then opens in a card."),
     ])

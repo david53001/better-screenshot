@@ -8,7 +8,8 @@ Quick Access thumbnail (and its stack), and pin-to-screen panels. Imported by th
 - `QuickAccessOverlayController.swift` + `QuickAccessStackController.swift` — the bottom-right
   post-capture floating thumbnail and its stack. Guided tour (TourKit, v3 Part 7): the stack posts
   `TourEvents.surfaceShown(.quickAccess, card)` once a **screenshot** card sits in its slot; anchors
-  `quickAccess.card` / `.actions` (button row) / `.edit`; events `quickAccess.copy` / `.save` / `.edit`
+  `quickAccess.card` / `.actions` (Copy · Edit · Save, grouped in their own stack so ✕ stays outside the
+  outline; same 4 pt spacing) / `.edit`; events `quickAccess.copy` / `.save` / `.edit`
   (before the card closes) / `.dragged` (drop on a target). While a tour tag is attached (a TourKit tag
   panel among the card's child windows) the auto-dismiss countdown restarts instead of closing and a drop
   doesn't close the card. Details: `docs/MAC-TO-WINDOWS-PARITY-v3.md` §7.4.

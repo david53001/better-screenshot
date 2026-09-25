@@ -10,7 +10,8 @@ let hotkeyActionRawValues: Set<String> = [
 ]
 
 /// Copy rules (spec §14.3): title ≤ 4 words; body ≤ 20 words and ≤ 2 sentences; Try bodies start with a
-/// verb; anchors and event names look like "<surface>.<name>"; placeholders name real hotkey actions.
+/// verb; anchors and event names look like "<surface>.<name>"; placeholders name real hotkey actions;
+/// apostrophes are typographic (’); a `requires` names an earlier Try step's event.
 enum CatalogLint {
     static let maxTitleWords = 4
     static let maxBodyWords = 20
@@ -46,6 +47,7 @@ enum CatalogLint {
         if bodyWords == 0 || bodyWords > maxBodyWords { out.append("\(at): body has \(bodyWords) words") }
         if sentenceCount(step.body) > maxSentences { out.append("\(at): body has more than 2 sentences") }
         if !isAnchorShaped(step.anchor) { out.append("\(at): anchor isn't <surface>.<name>") }
+        if (step.title + step.body).contains("'") { out.append("\(at): straight apostrophe — write ’ (review C1)") }
         for name in TourText.shortcutNames(in: step.body) where !hotkeyActionRawValues.contains(name) {
             out.append("\(at): {shortcut:\(name)} isn't a HotkeyAction")
         }
@@ -69,11 +71,15 @@ enum CatalogLint {
     }
 
     /// Step problems, plus: no two Try steps in one tour wait for the same event (the engine would
-    /// skip the second as "already done").
+    /// skip the second as "already done"); a step's `requires` is what an earlier Try step of the same
+    /// tour waits for (the setup step whose Skip step would leave this one a dead end).
     static func problems(_ tour: Tour) -> [String] {
         var out = tour.steps.flatMap { problems($0, in: tour.id) }
         var awaited: Set<TourEvent> = []
         for s in tour.steps {
+            if let needed = s.requires, !awaited.contains(needed) {
+                out.append("\(tour.id.rawValue)/\(s.anchor): requires \(needed), which no earlier Try step waits for")
+            }
             guard case .tryIt(let event) = s.kind else { continue }
             if !awaited.insert(event).inserted { out.append("\(tour.id.rawValue): two Try steps wait for \(event)") }
         }
@@ -140,6 +146,19 @@ let catalogLintTests: [TestCase] = [
         let b = step("Again", "Pick it again.", anchor: "editor.b", kind: .tryIt(advanceOn: .toolSelected("arrow")))
         let tour = Tour(id: .editor, surface: .editor, trigger: .surfaceShown(.editor), steps: [a, b])
         t.equal(CatalogLint.problems(tour).count, 1)
+    },
+    TestCase("lintRejectsStraightApostrophes") { t in
+        t.equal(CatalogLint.problems(step("Title", "It's hidden."), in: .editor).count, 1)
+        t.equal(CatalogLint.problems(step("Title", "It’s hidden."), in: .editor), [])
+    },
+    TestCase("lintRejectsARequirementNoEarlierTryStepWaitsFor") { t in
+        let make = step("Make it", "Make one.", anchor: "editor.a", kind: .tryIt(advanceOn: .annotationAdded("text")))
+        let use = TourStep(anchor: "editor.b", kind: .tryIt(advanceOn: .action("editor.textScaled")),
+                           title: "Resize it", body: "Drag a corner.", requires: .annotationAdded("text"))
+        let good = Tour(id: .text, surface: .editor, trigger: .event(.toolSelected("text")), steps: [make, use])
+        t.equal(CatalogLint.problems(good), [])
+        let backwards = Tour(id: .text, surface: .editor, trigger: .event(.toolSelected("text")), steps: [use, make])
+        t.equal(CatalogLint.problems(backwards).count, 1)
     },
     TestCase("lintRejectsBadEventNames") { t in
         let bad1 = step("Title", "Open it.", kind: .tryIt(advanceOn: .menuOpened("microphone")))

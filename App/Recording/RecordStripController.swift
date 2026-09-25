@@ -192,11 +192,14 @@ final class RecordStripController: NSObject, NSMenuDelegate {
         formatGroup.tourAnchor = Anchor.format
         let fpsGroup = labelled("FPS", fps, .fps)
         fpsGroup.tourAnchor = Anchor.fps
-        let row = NSStackView(views: [targets, spacer, formatGroup, fpsGroup, info, cancel])
+        // Grouped only so the tour can outline Format and FPS together; same 20 pt gap as before.
+        let output = NSStackView(views: [formatGroup, fpsGroup])
+        output.spacing = 20
+        output.tourAnchor = Anchor.output
+        let row = NSStackView(views: [targets, spacer, output, info, cancel])
         row.spacing = 8
         row.distribution = .fill
-        row.setCustomSpacing(20, after: formatGroup)
-        row.setCustomSpacing(16, after: fpsGroup)
+        row.setCustomSpacing(16, after: output)
         row.setCustomSpacing(2, after: info)
         return row
     }
@@ -573,6 +576,8 @@ final class RecordStripController: NSObject, NSMenuDelegate {
         static let targets = "strip.targets"
         static let format = "strip.format"
         static let fps = "strip.fps"
+        /// Format + FPS together (the tour's "Format and frame rate" step).
+        static let output = "strip.output"
         static let microphone = "strip.microphone"
         static let microphoneColumn = "strip.microphoneColumn"
         static let systemAudio = "strip.systemAudio"

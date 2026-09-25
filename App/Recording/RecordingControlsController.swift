@@ -162,10 +162,9 @@ final class RecordingControlsController {
         for b in [mic, sound, camera, switchButton, restart, discard, pause, stop, chevron] {
             b.onHover = { [weak self] button, inside in self?.hoverChanged(button, inside) }
         }
-        // Tour anchors (the recording pill tour, spec §14.3). The mic's is set in render(): only
-        // while there's a mic track to mute.
+        // Tour anchors (the recording pill tour, spec §14.3). The mic's and camera's are set in render():
+        // only while that control can be used (a mic track to mute, a camera to show).
         sound.tourAnchor = "pill.systemAudio"
-        camera.tourAnchor = "pill.camera"
         switchButton.tourAnchor = "pill.switch"
         restart.tourAnchor = "pill.restart"
         discard.tourAnchor = "pill.discard"
@@ -318,6 +317,8 @@ final class RecordingControlsController {
                tipOff: "Unmute system audio")
         render(cameraButton, s.camera, on: "video.fill", off: "video", unavailable: "video.slash.fill",
                offIsWarning: false, tipOn: "Hide camera bubble", tipOff: "Show camera bubble")
+        // No camera (or no access): a tour never points at the greyed button.
+        if case .unavailable = s.camera { cameraButton?.tourAnchor = nil } else { cameraButton?.tourAnchor = "pill.camera" }
 
         if let b = switchButton {
             let window = s.switchKind != .area

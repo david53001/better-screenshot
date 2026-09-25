@@ -1,20 +1,26 @@
 // Steps: spec §14.3 table, adapted to the video editor as built (v3 Part 6). Anchors and events live in
 // Packages/RecordingKit/Sources/RecordingKit/TrimWindowController.swift. Windows-port copy: parity doc §7.7.
 extension TourCatalog {
-    /// The first time a video editor window has loaded its recording.
+    /// The first time a video editor window has loaded its recording. The timeline steps put the tag above
+    /// it, over the preview (below, it hung past the window over the action bar — review V4).
     static let videoEditor = Tour(id: .videoEditor, surface: .videoEditor, trigger: .surfaceShown(.videoEditor), steps: [
         TourStep(anchor: "video.preview", kind: .explain, title: "Preview",
                  body: "Plays only the parts you keep. Click it, or press Space, to play."),
         TourStep(anchor: "video.timeline", kind: .explain, title: "The timeline",
-                 body: "Click to move the playhead. Drag a part’s yellow edge to trim it."),
+                 body: "Click to move the playhead. Drag a part’s yellow edge to trim it.", placement: .above),
         // On the timeline, not the Split button: a tag under the button covered the timeline to click.
         TourStep(anchor: "video.timeline", kind: .tryIt(advanceOn: .action("video.split")), title: "Split the clip",
-                 body: "Click the timeline to place the playhead, then press S or click Split."),
+                 body: "Click the timeline to place the playhead, then press S or click Split.", placement: .above),
+        // Only after a split: the only part can't be deleted, so without one this step is a dead end (V3).
         TourStep(anchor: "video.timeline", kind: .tryIt(advanceOn: .action("video.segmentDeleted")),
                  title: "Delete a part",
-                 body: "Click a part to select it, then press ⌫ to cut it out."),
+                 body: "Click a part to select it, then press ⌫ to cut it out.",
+                 requires: .action("video.split"), placement: .above),
+        // Right of the row, beside the window, when the screen has room; else the automatic side (below,
+        // or above when the window sits on the screen's bottom edge). At the minimum window size "above"
+        // covered the timeline and its Split/Delete buttons (review V2).
         TourStep(anchor: "video.segment", kind: .explain, title: "Selected part",
-                 body: "Change its speed or mute just this part. Right-click a part for the same."),
+                 body: "Change its speed or mute just this part. Right-click a part for the same.", placement: .right),
         TourStep(anchor: "video.saveCopy", kind: .explain, title: "Save a copy",
                  body: "Saves the edit as a new file. The ▾ menu exports a GIF instead."),
         TourStep(anchor: "video.replace", kind: .explain, title: "Replace the original",
