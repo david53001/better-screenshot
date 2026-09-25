@@ -125,17 +125,29 @@ public final class EditorCanvasView: NSView {
         ]
     }
 
-    /// Handle indices the sole selection offers: text has corners (scale) + ML/MR (box width).
-    private var activeHandleIndices: [Int] {
-        guard let id = soleSelectedID, let i = document.index(of: id) else { return [] }
-        return document.annotations[i] is TextAnnotation ? [0, 2, 3, 4, 5, 7] : Array(0..<8)
+    private var soleSelectionIsText: Bool {
+        guard let id = soleSelectedID, let i = document.index(of: id) else { return false }
+        return document.annotations[i] is TextAnnotation
+    }
+
+    /// The sole selection's handles as (index, rect), in hit-test order. A text gets round corners
+    /// (scale) and side bars (box width) outside its box (`TextHandles`) — corners first, so they
+    /// win where handles meet; other shapes get the 8 squares on their frame.
+    private func activeHandles(for viewRect: NSRect) -> [(index: Int, rect: NSRect)] {
+        guard soleSelectedID != nil else { return [] }
+        if soleSelectionIsText {
+            let rects = TextHandles.rects(for: viewRect)
+            return (TextHandles.corners + TextHandles.sides).compactMap { i in rects[i].map { (i, $0) } }
+        }
+        return handleRects(for: viewRect).enumerated().map { ($0.offset, $0.element) }
     }
 
     /// Returns the index (0-7) of the handle hit at viewPoint, or nil.
     private func hitHandle(at viewPoint: NSPoint, viewRect: NSRect) -> Int? {
-        let rects = handleRects(for: viewRect)
-        for i in activeHandleIndices where rects[i].insetBy(dx: -2, dy: -2).contains(viewPoint) {
-            return i
+        for h in activeHandles(for: viewRect) {
+            // At least 10pt wide to grab, so the thin text side bars are easy to hit.
+            let dx = max(2, (10 - h.rect.width) / 2)
+            if h.rect.insetBy(dx: -dx, dy: -2).contains(viewPoint) { return h.index }
         }
         return nil
     }
@@ -278,9 +290,12 @@ public final class EditorCanvasView: NSView {
         if let vr = selectedViewRect() {
             NSColor.white.setFill()
             NSColor.systemBlue.setStroke()
-            let rects = handleRects(for: vr)
-            for r in activeHandleIndices.map({ rects[$0] }) {
-                let path = NSBezierPath(rect: r)
+            let text = soleSelectionIsText
+            for h in activeHandles(for: vr) {
+                let path: NSBezierPath
+                if !text { path = NSBezierPath(rect: h.rect) }
+                else if TextHandles.corners.contains(h.index) { path = NSBezierPath(ovalIn: h.rect) }
+                else { path = NSBezierPath(roundedRect: h.rect, xRadius: h.rect.width / 2, yRadius: h.rect.width / 2) }
                 path.fill(); path.lineWidth = 1; path.stroke()
             }
         }
