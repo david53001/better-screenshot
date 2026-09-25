@@ -1,10 +1,11 @@
 import AppKit
 
-/// The video editor's timeline: a filmstrip of the recording split into kept segments
-/// (sped ones narrower, with a "2×" badge; muted ones with a speaker badge) and the
-/// cuts between them (dimmed, hatched — still visible so an edge can be dragged back
-/// over them). The selected segment has a yellow frame with drag handles; the white
-/// line is the playhead. Draws a `CutList`; all edits go through the callbacks.
+/// The video editor's timeline: a time ruler (output time, laid out by `TimeRuler`)
+/// over a filmstrip of the recording split into kept segments (sped ones narrower,
+/// with a "2×" badge; muted ones with a speaker badge) and the cuts between them
+/// (dimmed, hatched — still visible so an edge can be dragged back over them). The
+/// selected segment has a yellow frame with drag handles; the white line is the
+/// playhead. Draws a `CutList`; all edits go through the callbacks.
 @MainActor
 final class CutTimelineView: NSView {
     enum Edge { case start, end }
@@ -26,7 +27,9 @@ final class CutTimelineView: NSView {
     var menuForSegment: ((Int) -> NSMenu?)?
 
     static let inset: CGFloat = 12
-    private static let trackTop: CGFloat = 10
+    /// The ruler strip above the track (ticks end 1 pt above the track's backdrop).
+    private static let rulerHeight: CGFloat = 14
+    private static let trackTop: CGFloat = 18
     private static let trackBottom: CGFloat = 6
     private static let edgeGrab: CGFloat = 7
 
@@ -45,6 +48,10 @@ final class CutTimelineView: NSView {
     }
 
     func resetThumbnails() { thumbnails = []; needsDisplay = true }
+
+    /// The narrowest filmstrip tile (a cut's, which is drawn 8 pt shorter than the track).
+    var minimumTileWidth: CGFloat { Self.tileWidth(height: trackRect.height - 8, aspect: aspect) }
+    private static func tileWidth(height: CGFloat, aspect: CGFloat) -> CGFloat { max(24, min(160, height * aspect)) }
 
     // MARK: - Geometry
 
@@ -110,6 +117,7 @@ final class CutTimelineView: NSView {
             }
         }
         if let item = items.first(where: { $0.kind == .kept(selected) }) { drawSelection(in: rect(for: item)) }
+        drawRuler(items, in: dirtyRect)
         drawPlayhead()
     }
 
@@ -119,7 +127,7 @@ final class CutTimelineView: NSView {
         guard !thumbnails.isEmpty, let ctx = NSGraphicsContext.current?.cgContext else {
             NSColor(white: 0.22, alpha: 1).setFill(); r.fill(); return
         }
-        let tileW = max(24, min(160, r.height * aspect))
+        let tileW = Self.tileWidth(height: r.height, aspect: aspect)
         var tx = r.minX
         while tx < r.maxX {
             let centre = min(tx + tileW / 2, r.maxX - 0.5)
@@ -260,6 +268,37 @@ final class CutTimelineView: NSView {
         }
     }
 
+    private static let rulerAttributes: [NSAttributedString.Key: Any] = [
+        .font: NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .medium),
+        .foregroundColor: NSColor(white: 1, alpha: 0.55),
+    ]
+
+    /// Round output times above the kept segments: a full-height tick with its label
+    /// beside it, short minor ticks between.
+    private func drawRuler(_ items: [CutList.TimelineItem], in dirtyRect: NSRect) {
+        let spans = items.compactMap { item -> TimeRuler.Span? in
+            guard case .kept(let i) = item.kind else { return nil }
+            return TimeRuler.Span(x: x(item.displayStart), width: CGFloat(item.displayLength) * scale,
+                                  outputStart: cuts.outputStart(of: i))
+        }
+        let ticks = TimeRuler.ticks(spans: spans, pointsPerSecond: scale, maxX: bounds.maxX - 2) {
+            ($0 as NSString).size(withAttributes: Self.rulerAttributes).width
+        }
+        for tick in ticks where tick.x >= dirtyRect.minX - 80 && tick.x <= dirtyRect.maxX + 1 {
+            let x = tick.x.rounded()
+            NSColor(white: 1, alpha: tick.major ? 0.3 : 0.18).setFill()
+            let top: CGFloat = tick.major ? 1 : Self.rulerHeight - 3
+            NSRect(x: x, y: top, width: 1, height: Self.rulerHeight - top).fill()
+            if let label = tick.label {
+                (label as NSString).draw(at: NSPoint(x: x + TimeRuler.labelOffset, y: 0),
+                                         withAttributes: Self.rulerAttributes)
+            }
+        }
+    }
+
+    /// The knob sits just under the ruler's labels, so it never covers one.
+    private static let knobTop: CGFloat = 9.5
+
     private func drawPlayhead() {
         let px = playheadX.rounded() + 0.5
         let shadow = NSShadow()
@@ -268,8 +307,8 @@ final class CutTimelineView: NSView {
         NSGraphicsContext.saveGraphicsState()
         shadow.set()
         NSColor.white.setFill()
-        NSRect(x: px - 1, y: 3, width: 2, height: bounds.height - 4).fill()
-        NSBezierPath(ovalIn: NSRect(x: px - 5, y: 1, width: 10, height: 10)).fill()
+        NSRect(x: px - 1, y: Self.knobTop + 2, width: 2, height: bounds.height - Self.knobTop - 3).fill()
+        NSBezierPath(ovalIn: NSRect(x: px - 4, y: Self.knobTop, width: 8, height: 8)).fill()
         NSGraphicsContext.restoreGraphicsState()
     }
 
