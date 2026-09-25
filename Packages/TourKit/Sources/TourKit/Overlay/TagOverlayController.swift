@@ -31,6 +31,11 @@ public final class TagOverlayController: TourTagPresenting {
         NSApp.windows.compactMap { $0 as? TagPanel }.filter(\.isVisible).map(\.windowNumber)
     }
 
+    /// This overlay's two windows (decor, tag), shown or not — they exist from `init`, but only get a
+    /// window number once first shown. The app's recording gate keeps them transparent until a running
+    /// recording's filter leaves them out.
+    public var windows: [NSWindow] { [decor, tagPanel] }
+
     /// Probes only: parks the overlay's windows at this level (just above the desktop, behind every
     /// real window) so headless probes never cover the owner's screen. Never set by the app.
     static var probeLevel: NSWindow.Level?

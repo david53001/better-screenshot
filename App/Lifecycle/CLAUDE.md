@@ -8,9 +8,11 @@ Bootstrap and lifecycle for the menu-bar agent.
   shortcuts on quit). **Its very first line classifies the tour audience**
   (`TourCoordinator.classifyAudienceIfNeeded`, spec §14.9) — keep it above anything that writes a
   preference (status item, `didRegisterLaunchAtLogin`, window frames…), or every new user would look like
-  an existing one. The `TourCoordinator`'s `makePresenter:` is `NoOpTourTagPresenter` until lane 7B's
-  `TagOverlayController` is merged. `tours.extraAnchorWindows` returns the menu-bar status item's window
-  (`MenuBarController.iconWindow`) so the Welcome tour's first step can point at the icon.
+  an existing one. The `TourCoordinator`'s `makePresenter:` is `RecordingSafeTagPresenter`
+  (`App/Recording/TourTagRecordingGate.swift`): TourKit's `TagOverlayController` with its windows registered
+  so a tour tag never shows up in a screen recording — keep it that way. `tours.extraAnchorWindows` returns
+  the menu-bar status item's window (`MenuBarController.iconWindow`) so the Welcome tour's first step can
+  point at the icon.
 - `WindowPlacer.swift` — every app window goes through `WindowPlacer.place(window, rememberAs:)` right
   before it's shown: exactly centred on the screen under the pointer; resizable windows (keys
   `annotate`, `editVideo`, `history` → UserDefaults `windowPlacement.<key>`) reopen at the last closed

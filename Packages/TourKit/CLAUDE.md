@@ -35,6 +35,9 @@ Status + lanes: `docs/PROGRESS-v3.md` (lane "Tours & help"). Windows-port notes:
   Skip tour via a local monitor (not while typing; Esc also not while the host window's
   `TourEscapeClaiming.claimsEscape` is true — the editor's Esc-to-Select). Pure `TagLayout` (placement) and `TagKeys` are
   unit-tested; all sizes/colours/strings in `TagStyle`; `windowNumbers` is for a capture's exclusion list.
+  `windows` (both panels, shown or not) is what the app's `TourTagRecordingGate` (App/Recording) keeps
+  transparent until a running screen recording leaves them out — **never set the panels' `alphaValue` here**
+  (e.g. a fade-in): the gate owns it, and that's what keeps tags out of recordings.
 - `Help/InfoButton.swift` — the ⓘ: `InfoButton.install(in: window, tour:, shortcuts:)` for titled windows
   (rightmost title-bar accessory, beside any existing one), `InfoButton(tour:shortcuts:)` for panels. Menu:
   Replay Tour (→ `TourEvents.replay`) · Keyboard Shortcuts (popover). Windows-port layout: parity doc §7.3.

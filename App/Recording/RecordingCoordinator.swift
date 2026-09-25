@@ -4,6 +4,7 @@ import ScreenCaptureKit
 import CaptureKit
 import OverlayKit
 import RecordingKit
+import TourKit
 
 /// Orchestrates the recording lifecycle: strip → engine + panels → save/convert.
 @MainActor
@@ -36,6 +37,10 @@ final class RecordingCoordinator {
     private var switching = false
     /// What's being recorded and on which screen — updated by Switch, reused by Restart.
     private var activeTarget: (target: RecordingTarget, screen: NSScreen)?
+    /// Keeps tour tags out of display recordings (`TourTagRecordingGate`).
+    private let tagGate = TourTagRecordingGate.shared
+    /// A running filter update that adds a tour tag that just appeared.
+    private var tagRefresh: Task<Void, Never>?
 
     /// Set by the app delegate; presents the one-button permission setup window.
     var presentSetup: (() -> Void)?
@@ -221,12 +226,13 @@ final class RecordingCoordinator {
         var config = settings.recording
         // GIFs are silent: don't open the mic (or ask for it) for a track that's thrown away.
         if config.format == .gif { config.microphone = false; config.systemAudio = false }
-        // Shown before the content query so the pill is a known SCWindow we can exclude.
+        // Shown before the content query so the pill is a known SCWindow we can exclude. (Its tour
+        // starts here too — its tag windows are then listed and left out of the filter below.)
         controls.show(on: screen)
         notify()
         do {
-            let content = try await shareableContent(containing: config.controlsInRecording
-                                                     ? nil : controls.windowID)
+            await tagRefresh?.value   // a Restart during a tag filter update: let that finish first
+            let content = try await shareableContent(containing: pillWindowIDs + tagGate.windowIDs)
             let scale = screen.backingScaleFactor
             let filter: SCContentFilter
             var sourceRect: CGRect?
@@ -251,7 +257,11 @@ final class RecordingCoordinator {
                 let hidden = config.controlsInRecording ? [] : content.windows.filter {
                     $0.windowID == controls.windowID
                 }
-                filter = SCContentFilter(display: display, excludingWindows: hidden)
+                // Tour tags are never recorded: every tag window is left out too, and one that
+                // appears later stays invisible until the filter is updated (refreshTagExclusion).
+                let (displayFilter, tags) = tagGate.displayFilter(display, content: content, alsoExcluding: hidden)
+                filter = displayFilter
+                tagGate.use(tags)
                 cameraAnchor = globalRect ?? screen.frame
             case .window(let windowID):
                 guard let window = content.windows.first(where: { $0.windowID == windowID })
@@ -315,6 +325,11 @@ final class RecordingCoordinator {
             }
             startTimer()
             notify()
+            if case .display = target {
+                tagGate.onNeedsExclusion = { [weak self] in self?.refreshTagExclusion() }
+                tagGate.sync()   // a tag that first appeared during setup is covered now
+            }
+            TourEvents.post(.action("recording.started"))
         } catch {
             tearDownPanels()
             state.transition(.reset)
@@ -325,6 +340,8 @@ final class RecordingCoordinator {
 
     private func stop() async {
         guard state.transition(.finish) else { return }
+        // Before the pill goes: the pill tour's last step ("Press Stop") completes on it.
+        TourEvents.post(.action("recording.stopped"))
         controls.hide()
         stopTimer()
         notify()
@@ -392,6 +409,7 @@ final class RecordingCoordinator {
         Task { await stop() }
     }
 
+    /// Called once the stream has stopped (or never started).
     private func tearDownPanels() {
         windowPicker.cancel()
         if switching { selection.cancel() }   // a Switch area… selection, not the start one
@@ -399,6 +417,7 @@ final class RecordingCoordinator {
         bubble.hide()
         clicks.stop()
         keystrokes.stop()
+        tagGate.end()
     }
 
     private func startTimer() {
@@ -544,18 +563,20 @@ final class RecordingCoordinator {
             guard let screen = NSScreen.screens.first(where: {
                       $0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")]
                           as? CGDirectDisplayID == result.displayID }) else { throw RecorderError.notRecording }
-            let content = try await shareableContent(containing: config.controlsInRecording
-                                                     ? nil : controls.windowID)
+            await tagRefresh?.value   // one filter change at a time
+            let content = try await shareableContent(containing: pillWindowIDs + tagGate.windowIDs)
             guard let display = content.displays.first(where: { $0.displayID == result.displayID })
             else { throw RecorderError.notRecording }
-            // Same filter shape as begin(): the pill stays out of the video.
+            // Same filter shape as begin(): the pill and every tour tag stay out of the video.
             let hidden = config.controlsInRecording ? [] : content.windows.filter {
                 $0.windowID == controls.windowID
             }
             let local = CaptureGeometry.pixelRect(forGlobalRect: result.globalRect,
                                                   inDisplayFrame: screen.frame, scale: 1)
-            try await recorder.retarget(filter: SCContentFilter(display: display, excludingWindows: hidden),
-                                        sourceRect: local)
+            let (filter, tags) = tagGate.displayFilter(display, content: content, alsoExcluding: hidden)
+            let token = tagGate.willUse(tags)
+            try await recorder.retarget(filter: filter, sourceRect: local)
+            tagGate.didUse(tags, token: token)
             activeTarget = (.display(globalRect: result.globalRect), screen)
         } catch {
             hud.show("Couldn't switch — still recording the previous area", on: activeTarget?.screen)
@@ -594,17 +615,58 @@ final class RecordingCoordinator {
         notify()
     }
 
-    /// On-screen shareable content. A just-ordered-in panel can take a moment to
-    /// reach the window server's list, so when `windowID` must be present (to be
-    /// excluded) retry briefly before giving up and recording without the exclusion.
-    private func shareableContent(containing windowID: CGWindowID?) async throws -> SCShareableContent {
-        var content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        guard let windowID else { return content }
-        for _ in 0..<5 where !content.windows.contains(where: { $0.windowID == windowID }) {
+    /// Shareable content, including windows that aren't on screen right now — a tour tag that's
+    /// hidden at the moment must still be left out of a display filter, or it would be recorded when
+    /// it comes back. A just-ordered-in panel can take a moment to reach the window server's list,
+    /// so when `windowIDs` must be present (to be excluded) retry briefly before giving up and
+    /// recording without the missing exclusions.
+    private func shareableContent(containing windowIDs: [CGWindowID]) async throws -> SCShareableContent {
+        func fetch() async throws -> SCShareableContent {
+            try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+        }
+        let wanted = Set(windowIDs)
+        var content = try await fetch()
+        for _ in 0..<5 where !wanted.isSubset(of: Set(content.windows.map(\.windowID))) {
             try await Task.sleep(nanoseconds: 50_000_000)
-            content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            content = try await fetch()
         }
         return content
+    }
+
+    /// The pill's window, when it's to be left out of the video.
+    private var pillWindowIDs: [CGWindowID] {
+        settings.recording.controlsInRecording ? [] : [controls.windowID].compactMap { $0 }
+    }
+
+    // MARK: - Tour tags (never recorded — TourTagRecordingGate)
+
+    /// A tour tag showed up that the running display filter doesn't leave out yet (the gate keeps it
+    /// fully transparent meanwhile): rebuild the filter with every tag window, then let the gate show
+    /// it. One update at a time; skipped during a Switch (the retarget builds its own filter) — the
+    /// gate asks again a moment later.
+    private func refreshTagExclusion() {
+        guard tagRefresh == nil, !switching, isRecording, let active = activeTarget,
+              case .display = active.target else { return }
+        tagRefresh = Task { [weak self] in
+            await self?.updateTagExclusion(on: active.screen)
+            self?.tagRefresh = nil
+        }
+    }
+
+    private func updateTagExclusion(on screen: NSScreen) async {
+        guard let content = try? await shareableContent(containing: pillWindowIDs + tagGate.windowIDs),
+              isRecording, !switching,
+              let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID,
+              let display = content.displays.first(where: { $0.displayID == displayID }) else { return }
+        let hidden = settings.recording.controlsInRecording ? [] : content.windows.filter {
+            $0.windowID == controls.windowID
+        }
+        let (filter, tags) = tagGate.displayFilter(display, content: content, alsoExcluding: hidden)
+        let token = tagGate.willUse(tags)
+        do { try await recorder.updateFilter(filter) } catch { return }
+        // A frame's worth of margin before the tag may be seen (the probe saw none needed).
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        tagGate.didUse(tags, token: token)
     }
 
     /// Post-save tail for every finished recording: add it to capture history,

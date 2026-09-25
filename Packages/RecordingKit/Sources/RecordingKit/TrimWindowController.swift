@@ -1,5 +1,6 @@
 import AppKit
 import AVKit
+import TourKit
 
 /// The video editor for an MP4 recording (opened from the Quick Access card's ✂ or
 /// History's Trim…): a preview over a cut timeline in a dark HUD card, then an action
@@ -8,6 +9,9 @@ import AVKit
 /// until an export: Save as Copy ("<name> (trimmed).mp4", closes), Export as GIF
 /// ("<name> (edited).gif", stays open) or Replace Original (atomic swap, then reloads
 /// the result for review / more edits).
+/// Guided tour: the "Video editor" tour (TourKit `VideoEditorTours.swift`) starts once the
+/// recording has loaded (`surfaceShown`); anchors `video.*`, events `video.split` /
+/// `video.segmentDeleted`; the title bar's ⓘ replays it and lists the keys below.
 @MainActor
 public final class TrimWindowController: NSWindowController, NSWindowDelegate {
     public private(set) var url: URL
@@ -78,7 +82,7 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
         gif.target = self
         gif.toolTip = "Save the edit as an animated GIF next to the original (10 fps, up to 960 px wide)"
         menu.addItem(gif)
-        return NSComboButton(title: "Save as Copy", menu: menu, target: self, action: #selector(saveCopy))
+        return AnchoredComboButton(title: "Save as Copy", menu: menu, target: self, action: #selector(saveCopy))
     }()
 
     // Model
@@ -97,6 +101,20 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
     private var loadTask: Task<Void, Never>?
     private var rebuildTask: Task<Void, Never>?
     private var thumbnailTask: Task<Void, Never>?
+    /// The tour has been told this window is up (once, after the first successful load).
+    private var announcedToTours = false
+
+    /// The ⓘ's Keyboard Shortcuts list (`handleKey` + the buttons' key equivalents).
+    static let shortcuts: [(keys: String, action: String)] = [
+        ("Space", "Play or pause"),
+        ("← →", "Step one frame"),
+        ("S or ⌘B", "Split at the playhead"),
+        ("⌫", "Delete the selected part"),
+        ("I", "Set the in point (cuts what's before)"),
+        ("O", "Set the out point (cuts what's after)"),
+        ("⌘Z", "Undo"),
+        ("⇧⌘Z", "Redo"),
+    ]
 
     public init(url: URL) {
         self.url = url
@@ -110,6 +128,7 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
         super.init(window: window)
         window.delegate = self
         buildUI()
+        InfoButton.install(in: window, tour: .videoEditor, shortcuts: Self.shortcuts)
         window.initialFirstResponder = timeline
         load()
         window.center()
@@ -125,6 +144,7 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
         playerView.player = player
         playerView.onClick = { [weak self] in self?.togglePlay() }
         playerView.translatesAutoresizingMaskIntoConstraints = false
+        playerView.tourAnchor = "video.preview"
 
         let card = buildCard()
         self.card = card
@@ -208,6 +228,8 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
         timelineScroll.verticalScrollElasticity = .none
         timelineScroll.translatesAutoresizingMaskIntoConstraints = false
         timelineScroll.heightAnchor.constraint(equalToConstant: 74).isActive = true
+        // The visible part of the timeline (the document view is wider when zoomed in).
+        timelineScroll.tourAnchor = "video.timeline"
         timeline.toolTip = "Click to move the playhead and pick a segment · drag a yellow edge to trim · right-click for speed and mute"
         timeline.onScrub = { [weak self] t in self?.scrub(to: t) }
         timeline.onSelect = { [weak self] i in self?.select(i) }
@@ -232,6 +254,7 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
         segmentMuteBox.toolTip = "Silence this segment's audio (the rest keeps its sound)"
         let row2 = Self.row([segmentTitle, segmentRange, Self.gap(14), speedLabel, speedControl, Self.gap(10),
                              segmentMuteBox, Self.flexible()], spacing: 8)
+        row2.tourAnchor = "video.segment"
 
         // Hint line.
         let info = NSImageView(image: NSImage(systemSymbolName: "info.circle", accessibilityDescription: nil)!
@@ -297,6 +320,8 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
         cancelButton.bezelStyle = .rounded
         cancelButton.toolTip = "Close without saving"
         copyButton.toolTip = "Save the edit as a new file next to the original — the ▾ menu exports a GIF"
+        copyButton.tourAnchor = "video.saveCopy"
+        replaceButton.tourAnchor = "video.replace"
         replaceButton.target = self; replaceButton.action = #selector(replaceOriginal)
         replaceButton.bezelStyle = .rounded
         // Accent look without a Return shortcut: replacing the file shouldn't be one
@@ -380,12 +405,26 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
                 self.note = noteAfter.map { "\($0) · \(TrimRange.timestamp(duration))" }
                 self.didChangeCuts(select: 0, playhead: 0)
                 self.loadThumbnails(asset: asset, duration: duration)
+                self.announceToTours()
             } catch {
                 guard let self, !Task.isCancelled else { return }
                 self.loadFailed = true
                 self.refreshChrome()
             }
         }
+    }
+
+    public override func showWindow(_ sender: Any?) {
+        super.showWindow(sender)
+        announceToTours()
+    }
+
+    /// Starts the video editor tour (first use / replay) once the window is up *and* the recording
+    /// has loaded — never over "Loading…" or the can't-open state. Once per window.
+    private func announceToTours() {
+        guard loaded, !announcedToTours, let window, window.isVisible else { return }
+        announcedToTours = true
+        TourEvents.surfaceShown(.videoEditor, in: window)
     }
 
     /// Filmstrip frames (`FilmstripFrames`: dense enough that fully zoomed-in tiles don't
@@ -492,13 +531,16 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
 
     // MARK: - Edits
 
-    /// Applies one undoable edit; `select` / `playhead` are read from the edited list.
+    /// Applies one undoable edit; `select` / `playhead` are read from the edited list. False when
+    /// nothing changed (beeps).
+    @discardableResult
     private func perform(_ edit: (inout CutList) -> Bool, select: (CutList) -> Int,
-                         playhead: (CutList) -> Double) {
-        guard loaded, !isExporting, dragList == nil else { return }
-        guard history.apply(edit) else { NSSound.beep(); return }
+                         playhead: (CutList) -> Double) -> Bool {
+        guard loaded, !isExporting, dragList == nil else { return false }
+        guard history.apply(edit) else { NSSound.beep(); return false }
         note = nil
         didChangeCuts(select: select(cuts), playhead: playhead(cuts))
+        return true
     }
 
     private func didChangeCuts(select: Int, playhead: Double) {
@@ -517,13 +559,17 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
     @objc private func splitAtPlayhead() {
         let s = playheadSource, t = timeline.playhead
         // The left half stays selected, so "split, move, split, ⌫" removes the middle.
-        perform({ $0.split(atSource: s) },
-                select: { ($0.segmentIndex(containingSource: s) ?? 1) - 1 }, playhead: { _ in t })
+        if perform({ $0.split(atSource: s) },
+                   select: { ($0.segmentIndex(containingSource: s) ?? 1) - 1 }, playhead: { _ in t }) {
+            TourEvents.post(.action("video.split"))
+        }
     }
 
     @objc private func deleteSelected() {
         let i = selected, start = cuts.outputStart(of: i)
-        perform({ $0.remove(at: i) }, select: { _ in i }, playhead: { _ in start })
+        if perform({ $0.remove(at: i) }, select: { _ in i }, playhead: { _ in start }) {
+            TourEvents.post(.action("video.segmentDeleted"))
+        }
     }
 
     private func setIn() {
@@ -951,6 +997,14 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
                                      v.heightAnchor.constraint(equalToConstant: 18)])
         return v
     }
+}
+
+/// NSComboButton ignores `setAccessibilityIdentifier` (it reads back ""), and that's where a tour
+/// anchor lives (`tourAnchor`) — so this one keeps it itself. Otherwise a plain NSComboButton.
+private final class AnchoredComboButton: NSComboButton {
+    private var anchorID = ""
+    override func accessibilityIdentifier() -> String { anchorID }
+    override func setAccessibilityIdentifier(_ id: String?) { anchorID = id ?? "" }
 }
 
 /// The preview: no AVKit controls; a click toggles play / pause.
