@@ -2121,4 +2121,29 @@ before each window is shown).
 
 ## Part 7 — Interactive guided tours and ⓘ help on every window
 
-_(pending — designed 2026-09-25 in the v3 spec §14; filled when Part 7 lands)_
+Design: v3 spec §14 + §14.9 (`docs/superpowers/specs/2026-09-24-betterscreenshot-editor-recording-v3-design.md`).
+Code: `Packages/TourKit/` + `App/Tours/`. Each subsection is filled by the lane that builds it.
+
+### 7.1 Who gets tours — new users only, asked first (lane 7A)
+_(pending)_
+
+### 7.2 Engine, catalog format, events, anchors, persistence keys (lane 7A)
+_(pending)_
+
+### 7.3 The tag overlay and the ⓘ button — exact layout (lane 7B)
+_(pending)_
+
+### 7.4 Welcome + Quick Access tours (lane 7S)
+_(pending)_
+
+### 7.5 Editor tours — intro, Text, Redaction, Highlighter, Spotlight (lane 7E)
+_(pending)_
+
+### 7.6 First recording (strip) + recording pill tours (lane 7R)
+_(pending)_
+
+### 7.7 Video editor tour (lane 7R)
+_(pending)_
+
+### 7.8 Settings + History tours, Help & Tours menu, Settings row (lanes 7S + 7A)
+_(pending)_

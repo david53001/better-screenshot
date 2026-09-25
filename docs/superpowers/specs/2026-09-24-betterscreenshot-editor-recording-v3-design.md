@@ -416,8 +416,9 @@ in git worktrees (see `docs/PROGRESS-v3.md`).
 
 ## 14. Part 7 — Interactive guided tours and ⓘ help on every window
 
-Added 2026-09-25 · Status: **approved by the owner 2026-09-25 — deferred: "we will build later"**. Build it
-after the UI-review fixes (lane "UI fixes" in `docs/PROGRESS-v3.md`); Parts 0–6 are built.
+Added 2026-09-25 · Status: **approved by the owner 2026-09-25; building since 2026-09-25** (lane "Tours &
+help" in `docs/PROGRESS-v3.md`). **§14.9 overrides anything below it disagrees with:** tours are only ever
+offered to *new* users, and only after they say yes.
 
 ### 14.1 What the owner asked for
 First message (2026-09-25): "When you open the app for the first time you have a tour — taking photos
@@ -497,9 +498,8 @@ stays until they do it, press Skip step, or leave the window. If an anchor disap
 feature off), that step is skipped. Closing the window pauses the tour; it resumes next time unless the
 user pressed Skip tour.
 
-**First launch.** The Welcome window (`App/MenuBar/OnboardingController.swift`) ends on "You're all set!"
-with **Take the tour** (primary) and **Skip for now**, plus a checkbox **"Show me around the first time I
-use each part"** (on by default; off = no automatic tours, all still replayable).
+**First launch.** *(Replaced by §14.9 — new users only, and they're asked first.)* The Welcome window
+(`App/MenuBar/OnboardingController.swift`) ends on "You're all set!" with the tour question from §14.9.
 
 **ⓘ on every window.** A small ⓘ at the top-right of every window, opening a menu: **Replay tour** ·
 **Keyboard shortcuts** (for that window). Placement:
@@ -564,3 +564,43 @@ tag overlay → Welcome + Quick Access + Editor tours → Recording strip + pill
 Redaction / Highlighter / Spotlight micro-tours → Settings + History → ⓘ + menu bar + Settings row. Part 7 adds its section to `docs/MAC-TO-WINDOWS-PARITY-v3.md` like every other
 part: exact tag layout and colours, every tour's steps and strings verbatim, triggers, events, and
 persistence keys.
+
+### 14.9 New users only — and ask first (owner, 2026-09-25)
+Owner: "Only for new users. If the user has data and they've already been using the app it shouldn't
+prompt them again with this at all — that has to be made sure of, because it can be very annoying for
+people that have already used the app. There should be a 'do you want help / a tour?' and if they press
+yes then it would pop up."
+
+**Who counts as new — decided once, stored, never recomputed.** On the first launch of a build with tours,
+*before the app writes anything*, the app classifies the user and stores UserDefaults `tourAudience` =
+`"new"` or `"existing"`. Later launches only read it. It is **`existing` if any one** of these is true
+(when in doubt → `existing`; a missed new user is harmless, a nagged existing user is not):
+1. Any key the app (or AppKit on its behalf) has ever written is already in its preferences domain
+   `com.betterscreenshot.mac` — e.g. `didRegisterLaunchAtLogin`, `captureSettings`, `hotkeyBindings`,
+   `recordingConfig`, `saveDirectory`, `editorDefaultStyle`, `editorRecentColors`,
+   `RelaunchedAfterPermissionGrant`, `windowPlacement.*`, `NSStatusItem …`, `NSWindow Frame …`. Rule:
+   *any* key other than the tour keys themselves (`tourAudience`, `tourQuestionAnswered`,
+   `firstUseToursEnabled`, `toursSeen`, `toursPaused`) and system-global ones AppKit injects into every
+   domain counts.
+2. `~/Library/Application Support/BetterScreenshot/` exists and contains any file (history, index).
+3. Screen Recording permission is already granted at that launch (a fresh install never has it).
+The classifier is a pure function over these signals (unit-tested); the app only gathers them.
+
+**Existing users:** never see the question, never get an automatic tour — not on this launch, not after
+later updates, not when a tour's version is bumped. The ⓘ buttons and the **Help & Tours** menu stay
+available (they only do something when clicked), and Settings → "Tours & tips" lets them opt in themselves.
+
+**New users are asked once.** The Welcome window's last page ("You're all set!") asks
+**"Want a quick tour?"** — body: "We'll point out each part the first time you use it. You can skip any
+time." — buttons **Show Me Around** (primary) and **No Thanks**.
+- **Show Me Around** → `firstUseToursEnabled = true`; the Welcome tour starts right away, and each first-use
+  tour (§14.3 table) starts the first time they reach that part.
+- **No Thanks**, or closing the window without answering → `firstUseToursEnabled = false`: nothing ever
+  starts by itself; ⓘ / Help & Tours still replay any tour.
+- Either way `tourQuestionAnswered = true`; the question is never shown again.
+- A new user whose permission is somehow already granted (so the permission pages are skipped) gets the
+  Welcome window opened straight on that last page at first launch.
+
+**Settings → "Tours & tips":** checkbox "Show me around the first time I use each part" bound to
+`firstUseToursEnabled` (new users: their answer; existing users: off) + **Reset All Tours** (clears
+`toursSeen`/`toursPaused` only — it never changes `tourAudience`).

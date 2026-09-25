@@ -17,6 +17,7 @@ let package = Package(
         .package(path: "Packages/EditorKit"),
         .package(path: "Packages/RecordingKit"),
         .package(path: "Packages/HistoryKit"),
+        .package(path: "Packages/TourKit"),
     ],
     targets: [
         .executableTarget(
@@ -27,6 +28,7 @@ let package = Package(
                 .product(name: "EditorKit", package: "EditorKit"),
                 .product(name: "RecordingKit", package: "RecordingKit"),
                 .product(name: "HistoryKit", package: "HistoryKit"),
+                .product(name: "TourKit", package: "TourKit"),
             ],
             path: "App",
             exclude: ["Info.plist", "BetterScreenshot.entitlements"]
