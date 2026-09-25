@@ -27,6 +27,10 @@ stream building the tag overlay + ⓘ button in TourKit (status: `docs/PROGRESS-
     not closed). A step whose anchor disappears is skipped. Skip tour / finish → `toursSeen[id] = version`.
   - Persists exactly: `tourAudience`, `tourQuestionAnswered`, `firstUseToursEnabled`, `toursSeen`,
     `toursPaused` (`TourPreferenceKey`).
+  - Anchors are looked up in the tour's host window, then in `extraAnchorWindows()` (only windows visible on
+    a screen) — `AppDelegate` passes the status item's window so the Welcome tour's `menuBar.icon` step works;
+    the tag then attaches to that window while pausing still follows the host. Each anchor is scrolled into
+    view (`scrollToVisible`) before its tag shows (Settings' Keyboard Shortcuts card is below the fold).
 - `NoOpTourTagPresenter.swift` — shows nothing; stands in for lane 7B's `TagOverlayController` until the
   merge switches `AppDelegate`'s `makePresenter:` factory to the real overlay.
 
@@ -34,6 +38,10 @@ Wired in: `App/Lifecycle/AppDelegate.swift` (launch classification, factory, men
 closures, `openSurface` for Welcome/Settings/History), `App/MenuBar/OnboardingController.swift` (the
 question), `App/MenuBar/MenuBarController.swift` (Help & Tours), `App/Settings/SettingsView.swift`
 (Startup → Tours & tips).
+
+Tours wired so far (lane 7S): Welcome (`OnboardingController` grid + status item), Quick Access
+(`OverlayKit` card), Settings, History — steps, anchors, events and the screenshot exclusion in
+`docs/MAC-TO-WINDOWS-PARITY-v3.md` §7.4 / §7.8.
 
 Verify: `swift run -j 2 --package-path Packages/TourKit TourKitTests`; end-to-end, a probe that compiles
 the App sources with a fake presenter and its own `UserDefaults(suiteName:)` (never the real

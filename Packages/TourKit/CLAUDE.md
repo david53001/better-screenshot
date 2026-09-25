@@ -15,6 +15,9 @@ Status + lanes: `docs/PROGRESS-v3.md` (lane "Tours & help"). Windows-port notes:
   (searches content + title bar, skips hidden views), SwiftUI `.tourAnchor("…")`.
 - `Catalog/` — every tour as data, **one file per area** (`WelcomeTours`, `EditorTours`, `RecordingTours`,
   `VideoEditorTours`, `ShellTours`) so parallel lanes don't collide; `TourCatalog.all` lists them.
+  `WelcomeTours` (welcome, quickAccess) and `ShellTours` (settings, history): steps, anchors and where each
+  event is posted are in parity doc §7.4 / §7.8. Welcome's first anchor (`menuBar.icon`) lives in the status
+  item's window, found through `TourCoordinator.extraAnchorWindows`.
 - `TourAudience.swift` — §14.9's pure new/existing classifier (`classify(Signals)`: any non-tour key in the
   app's own domain, anything in the support folder, Screen Recording already granted, or an unknown bundle
   id → `.existing`) + `TourPreferenceKey` (the only five keys tours persist).
@@ -50,6 +53,12 @@ Status + lanes: `docs/PROGRESS-v3.md` (lane "Tours & help"). Windows-port notes:
   names are listed in the test — add one there when `HotkeyAction` gains a case).
 - A tour's steps can be shown only once its surface calls `TourEvents.surfaceShown` and its anchors
   exist; until then starting it is a no-op (`.nothingToShow`), not "seen".
+- Word limits don't guarantee a body fits the tag's **two lines**: measure it in the tag's body label at
+  236 pt (`Tests/TourKitTests/TagFitTests.swift` for Welcome/Quick Access/Settings/History; lane 7E's
+  `EditorKit/Tests/EditorKitTests/EditorTourTests.swift` for the editor tours).
+- `TagOverlayController.allWindowNumbers` must be left out of every screenshot/recording — the app passes it
+  to `CaptureService.capture(_:excludingWindowIDs:)`. Tags are **child windows** of their host, so a
+  single-window capture includes them unless it drops child windows (CaptureKit does, macOS 14.2+).
 
 ## Verify
 `swift run -j 2 --package-path Packages/TourKit TourKitTests` (also run by `scripts/test.sh`).

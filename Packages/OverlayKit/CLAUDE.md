@@ -6,7 +6,12 @@ Quick Access thumbnail (and its stack), and pin-to-screen panels. Imported by th
 ## Key files (`Sources/OverlayKit/`)
 - `SelectionOverlayController.swift` + `SelectionResult.swift` — drag-to-select-area overlay.
 - `QuickAccessOverlayController.swift` + `QuickAccessStackController.swift` — the bottom-right
-  post-capture floating thumbnail and its stack.
+  post-capture floating thumbnail and its stack. Guided tour (TourKit, v3 Part 7): the stack posts
+  `TourEvents.surfaceShown(.quickAccess, card)` once a **screenshot** card sits in its slot; anchors
+  `quickAccess.card` / `.actions` (button row) / `.edit`; events `quickAccess.copy` / `.save` / `.edit`
+  (before the card closes) / `.dragged` (drop on a target). While a tour tag is attached (a TourKit tag
+  panel among the card's child windows) the auto-dismiss countdown restarts instead of closing and a drop
+  doesn't close the card. Details: `docs/MAC-TO-WINDOWS-PARITY-v3.md` §7.4.
 - `PinPanelController.swift`, `PinView.swift`, `PinGeometry.swift`, `DraggableImageView.swift` —
   pin-a-screenshot-to-screen panels (entry points: the menu bar's Pin from Clipboard and the History window;
   the Quick Access card's own Pin button was removed in v2.9.0).

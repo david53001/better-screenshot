@@ -2426,8 +2426,8 @@ gets top-level windows at the menu-bar/topmost level instead of owned ones, and 
   host's `LocationChanged` / `SizeChanged` / `StateChanged` and re-run the layout; a 100 ms
   `DispatcherTimer` covers the control moving inside the window. Tray host: `Topmost=True`, no owner.
 - Keep tags out of the user's screenshots/recordings: `SetWindowDisplayAffinity(hwnd,
-  WDA_EXCLUDEFROMCAPTURE)` on both windows (Windows 10 2004+). (macOS: the controller exposes
-  `windowNumbers` for the capture filter's exclusion list — wiring that into capture is a follow-up.)
+  WDA_EXCLUDEFROMCAPTURE)` on both windows (Windows 10 2004+). (macOS: screenshots exclude
+  `TagOverlayController.allWindowNumbers` — wired in lane 7S, see §7.4 "Tags never appear in a screenshot".)
 
 #### Keys (`TagKeys.action` — pure, port 1:1)
 Handled only for key-downs aimed at the **host window** (any of the app's windows when the host is the
@@ -2477,7 +2477,137 @@ the menu; moving/resizing the host, hiding the control and closing/reopening the
 Return/Esc and every pass-through case in the key table.
 
 ### 7.4 Welcome + Quick Access tours (lane 7S)
-_(pending)_
+
+**What the user sees.** A new user who pressed **Show Me Around** (§7.1) gets the **Welcome** tour over the
+Welcome window at once; it ends by asking for a real screenshot. That screenshot's **Quick Access card**
+(the floating thumbnail in the screen corner) then gets the **Quick Access** tour, which ends by asking the
+user to click **Edit** — and the **Editor** tour (§7.5) takes over in the editor window. Each hand-over is
+the engine's `handsOverTo` (§7.2). Snapshots: `docs/reviews/2026-09-25-tours/shell-welcome.jpg` (step 3),
+`shell-quickaccess.jpg` (step 4).
+
+macOS files: steps in `Packages/TourKit/Sources/TourKit/Catalog/WelcomeTours.swift`; anchors and events
+in `App/MenuBar/OnboardingController.swift` (Welcome window), `App/MenuBar/MenuBarController.swift`
+(status item), `App/Capture/CaptureCoordinator.swift` (`captureTaken`, screenshot exclusion),
+`Packages/OverlayKit/Sources/OverlayKit/QuickAccessOverlayController.swift` +
+`QuickAccessStackController.swift` (the card), `Packages/CaptureKit/Sources/CaptureKit/CaptureService.swift`
+(exclusion); two small additions to `App/Tours/TourCoordinator.swift` (below).
+
+In the tables, **E** = Explain (the tag's button says **Next**, or **Done** on the last step), **T** = Try
+(advances by itself on the event; the tag's button says **Skip step**). `{shortcut:x}` is replaced with the
+user's current combo for `HotkeyAction` `x` (§7.2 "Shortcut placeholders"); with the default bindings the
+Welcome bodies read "⇧⌘4 area, ⇧⌘8 window, ⇧⌘6 full screen" (Windows: "Ctrl+Shift+4 …" per the port's own
+display strings). Strings are verbatim — copy them exactly.
+
+**Welcome tour** — id `welcome`, version 1, surface `welcome`, trigger `startedByApp` (Show Me Around,
+Help & Tours → Take the Welcome Tour, or a replay), hands over to `quickAccess`.
+
+| # | | Anchor → the control it outlines | Title | Body | Advances on |
+|---|---|---|---|---|---|
+| 1 | E | `menuBar.icon` → the menu-bar status item's button (Windows: the tray icon) | Your menu bar icon | Everything lives here: captures, recordings, History and Settings. | Next |
+| 2 | E | `welcome.shortcuts` → the shortcut grid on the "You're all set!" page | Capture shortcuts | These work in any app: {shortcut:captureArea} area, {shortcut:captureWindow} window, {shortcut:captureFullscreen} full screen. | Next |
+| 3 | T | `welcome.captureArea` → the keys label of the grid's Capture Area row ("⇧⌘4") | Take a screenshot | Press {shortcut:captureArea} now and drag across anything on screen. | `captureTaken` |
+
+- `welcome.shortcuts` is the grid view itself; `welcome.captureArea` is set on the keys label of the row
+  whose keys equal Capture Area's current combo. Capture Area unbound → no such row → step 3 is skipped
+  and the tour ends after step 2 (still handing over to Quick Access).
+- Step 1's anchor is **not** in the Welcome window — see "The menu-bar step" below. When the status item
+  isn't on screen the step is skipped and the tour starts at 2 of 3.
+- The Welcome page's own "Start Capturing" button (Return) closes the window; the tag's Return = Next
+  wins on Explain steps because the tag's key handler runs first (§7.3 Keys). Closing the window pauses the
+  tour (§7.2); the first screenshot card then finishes it anyway if it was on step 3 (the "last step
+  hands over" rule), else it simply stays paused and the Quick Access tour starts by itself.
+
+**Quick Access tour** — id `quickAccess`, version 1, surface `quickAccess`, trigger
+`surfaceShown(quickAccess)` (the first screenshot card, or a hand-over/replay), hands over to `editor`.
+
+| # | | Anchor → the control it outlines | Title | Body | Advances on |
+|---|---|---|---|---|---|
+| 1 | E | `quickAccess.card` → the whole card | Your screenshot | Each capture waits here as a card until you use it or close it. | Next |
+| 2 | T | `quickAccess.card` | Drag it anywhere | Drag the card into any app — a chat, an email, a folder. | `action("quickAccess.dragged")` |
+| 3 | E | `quickAccess.actions` → the overlaid button row (Copy · Edit · Save · ✕) | Copy, Edit, Save | Copy to the clipboard, Edit, or Save to your Screenshots folder. | Next |
+| 4 | T | `quickAccess.edit` → the Edit (pencil) button | Mark it up | Click Edit to draw arrows, add text or blur things out. | `action("quickAccess.edit")` |
+
+**Where each event is posted** (post at the moment the action already happens; no UI was added):
+
+| Event | Posted by | When |
+|---|---|---|
+| `captureTaken` | `CaptureCoordinator.run` | right after a screenshot's pixels are captured (Capture Area, Capture Window, Capture Full Screen) and **before** the card appears |
+| `captureTaken` | `CaptureCoordinator.runCaptureText` | right after Capture Text's pixels are captured (no card follows; the Quick Access tour then waits for the next card) |
+| `action("quickAccess.dragged")` | the card's drag source (`DraggableImageView.onDragEnded`) | a drag out of the card ended **on a drop target** (a cancelled drag doesn't count) |
+| `action("quickAccess.edit")` | the card's Edit button | on click, **before** the card closes and the editor opens — so the tour finishes and queues the editor tour before the editor window reports itself |
+| `action("quickAccess.copy")`, `action("quickAccess.save")` | Copy / Save buttons | on click (no step waits for these yet) |
+| `surfaceShown(quickAccess, card)` | `QuickAccessStackController.present` | after the card has moved into its final stack slot — **screenshot cards only** (a recording's card has no Edit button, so it never runs this tour) |
+
+Not new captures, so no `captureTaken`: the editor's **Stack** button and **Restore Recently Closed** (their
+cards still report `surfaceShown`, so a queued Quick Access tour can run on them).
+
+**The card stays up while its tour runs.** The card normally closes after a drop, and optionally after an
+auto-dismiss countdown (Settings → Quick Access Overlay → Auto-dismiss after; default Never). While a tour
+tag is attached to the card: (1) when the countdown runs out it simply restarts (exactly like hovering the
+card), and (2) a drop does **not** close the card — step 2 asks for that drop and the tour carries on over
+the same card. Once the tour ends (finished, skipped, or moved on), the normal rules apply again — the
+next countdown closes it. macOS detects "a tag is attached" as: the card's child windows include one of
+`TagOverlayController.allWindowNumbers`. **WPF:** ask the tour coordinator whether its running tour's host
+window is this card (or check whether a tag window's `Owner` chain leads to the card).
+
+**The menu-bar step (status item / tray icon).** The coordinator looks a step's anchor up only in the
+tour's host window, but the status item's button lives in the status bar's own window. Added to
+`TourCoordinator` (source-compatible, default empty): `var extraAnchorWindows: () -> [NSWindow]`. The
+coordinator searches the host first, then each extra window **that is visible and intersects a screen**;
+when the anchor is found there, the tag is attached to *that* window (the overlay treats a status-bar window
+as a menu-bar host: top-level panels at status-bar level, tag **below** the icon, **no dim**), while pausing
+and resuming still follow the tour's real host (the Welcome window). `AppDelegate` sets it to
+`[menuBar.iconWindow]` (`statusItem.button?.window`); `MenuBarController` sets
+`statusItem.button?.tourAnchor = "menuBar.icon"`. An icon hidden by a menu-bar manager, or never placed by
+macOS, counts as missing → step skipped. **WPF:** the tray icon has no WPF element. Get its rectangle with
+`Shell_NotifyIconGetRect` (Windows 7+); if that fails, or the icon sits in the overflow flyout (the
+rectangle is the flyout chevron's or off the taskbar), treat the anchor as missing and skip the step.
+Otherwise give the overlay that rectangle as the anchor with a tray host: tag above the taskbar icon when the
+taskbar is at the bottom (use the §7.3 placement with the working area), `Topmost=True`, no owner, no dim.
+
+**Tags never appear in a screenshot.** The Welcome tour asks for a screenshot *while its tag is on screen*,
+so every screenshot path leaves the tag windows out:
+- `CaptureCoordinator.tourTagWindowIDs` = `TagOverlayController.allWindowNumbers` (every visible tag
+  window — the decor with the dim/box/leader line and the tag bubble — from any overlay), read at capture
+  time, is passed to `CaptureService.capture(target, excludingWindowIDs:)` by **every** screenshot call
+  (Capture Area, Capture Window, Capture Full Screen, Capture Text). CaptureKit doesn't depend on TourKit, so
+  the app passes plain window numbers.
+- `CaptureService` maps them to ScreenCaptureKit (SCK — Apple's screen-capture framework) windows from the
+  same `SCShareableContent` snapshot. **Full screen and area** (Capture Text is an area capture):
+  `SCContentFilter(display:excludingWindows:)` with those windows.
+- **Window capture** uses `SCContentFilter(desktopIndependentWindow:)`, which records the window **together
+  with its child windows** — and a tag is a child window of the window it explains, so Capture Window on the
+  Welcome window (or a tagged editor) included the tag. When any excluded window belongs to the captured
+  window's app, the capture sets `SCStreamConfiguration.includeChildWindows = false` (macOS 14.2+; on
+  14.0/14.1 that one case can still include the tag). Other apps' windows are captured exactly as before.
+- **WPF:** set `SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)` on both tag windows (Windows 10
+  2004+). The system then leaves them out of every capture API (GDI `BitBlt`/`CopyFromScreen`, DXGI Desktop
+  Duplication, `Windows.Graphics.Capture`), including the port's own area/full-screen/window captures — no
+  list to pass around. A window capture via `PrintWindow` never includes owned windows anyway. On older
+  Windows, `WDA_MONITOR` would show black instead; there, hide both tag windows (`Opacity = 0`) for the
+  duration of a capture and restore them after.
+
+**Tag copy must fit.** The 20-word limit doesn't guarantee a body fits the tag's two lines.
+`Packages/TourKit/Tests/TourKitTests/TagFitTests.swift` measures every Welcome / Quick Access / Settings /
+History body in the tag's body label at its widest inner width (260 − 2 × 12 = 236 pt, 12 pt system font),
+with placeholders resolved to "⇧⌘4" and to a long "⌃⌥⇧⌘4". Port it: measure with the WPF `TextBlock`
+the tag uses (`TextWrapping=Wrap`, same font/width) and require ≤ 2 lines.
+
+**How it was verified on macOS (probe, 2026-09-25, 78/78 checks).** A headless probe compiled the real App
+sources with the real `TourCoordinator` and `TagOverlayController` (own `UserDefaults` suite; every window
+parked behind the owner's). New user → Welcome page asks → Show Me Around (the real button action) → tag
+1/3 below a stand-in status-bar window, no dim → Next (the tag's real button) → 2/3 with "⇧⌘4 area, ⇧⌘8
+window, ⇧⌘6 full screen" → 3/3 → a **real** `CaptureCoordinator.captureFullscreen()` posted `captureTaken`
+→ done state → Quick Access 1/4 on the new card (Welcome marked seen) → Next → the card's real drag-end
+callback with a drop → 3/4, **card still up** → Next → a synthetic mouse-down/up on the real Edit button →
+editor tour started in the editor window (a one-step stand-in; lane 7E owns the real one), Quick Access
+marked seen, card gone. Menu replay with no card → HUD note "Quick Access Tour starts the next time you use
+it", starts on the next card. A 1 s auto-dismiss card outlived 2.5 s of tour and closed within a second of
+Skip tour (a card without a tour closed after 1 s). Exclusion, with the Welcome tour's step-3 tag up: a
+control capture (other apps' windows left out so the parked windows show, tag windows kept) had 91 120
+tour-red (#FF453A) pixels; the same full-screen and area captures with the tag windows excluded had **0**
+at the tag's position and in the whole image, with the Welcome window intact; a window capture of the
+Welcome window had 44 671 red pixels before the child-window fix and **0** after.
 
 ### 7.5 Editor tours — intro, Text, Redaction, Highlighter, Spotlight (lane 7E)
 _(pending)_
@@ -2490,7 +2620,67 @@ _(pending)_
 
 ### 7.8 Settings + History tours, Help & Tours menu, Settings row (lanes 7S + 7A)
 
-**Settings + History tours (lane 7S):** _(pending)_
+**Settings + History tours (lane 7S).** Both windows are SwiftUI on macOS; anchors are `.tourAnchor("…")`
+(a transparent view behind the element, same frame — WPF: `AutomationProperties.AutomationId` on the
+element). Steps in `Packages/TourKit/Sources/TourKit/Catalog/ShellTours.swift`; wiring in
+`App/Settings/SettingsWindowController.swift` + `SettingsView.swift` and
+`App/History/HistoryWindowController.swift`. Snapshots: `docs/reviews/2026-09-25-tours/shell-settings.jpg`
+(step 3), `shell-history.jpg` (step 3). E/T and verbatim-string conventions as in §7.4.
+
+Both windows report themselves with `surfaceShown(settings|history, window)` at the end of their `show()`,
+**every** time they're shown (the coordinator decides: first time for a user with tours on, a queued
+replay, or a paused tour). Their anchors already exist in that same run-loop turn (checked by the probe).
+
+**Scrolling.** Before showing any step's tag, the coordinator scrolls the anchor into view
+(`NSView.scrollToVisible(bounds)`; a no-op when it's visible or not in a scroll view) — added to
+`TourCoordinator.present`. Needed here: the Settings content is 1246 pt tall in a window capped at 98 % of
+the screen (847 pt on a 956 pt screen), and the Keyboard Shortcuts card is below the fold. **WPF:**
+`element.BringIntoView()` before placing the tag.
+
+**Settings tour** — id `settings`, version 1, surface `settings`, trigger `surfaceShown(settings)`, no hand-over.
+
+| # | | Anchor → the element it outlines | Title | Body | Advances on |
+|---|---|---|---|---|---|
+| 1 | E | `settings.cards` → the three-column card grid (everything between the header and Keyboard Shortcuts) | Your settings | Related settings share a card. Changes apply right away. | Next |
+| 2 | E | `settings.tip` → the ⓘ help icon next to "After a capture" (first row of the Capture card) | Tips on every row | Hover any ⓘ for a plain explanation of that setting and an example. | Next |
+| 3 | E | `settings.shortcuts` → the full-width Keyboard Shortcuts card (scrolled into view) | Keyboard shortcuts | Click any shortcut, then press new keys to change it. Esc cancels. | Done |
+
+On a 1470 × 956 screen the 960 pt window leaves no room beside it, so step 1's tag sits inside the box's
+top-left corner (the §7.3 "over" fallback) and step 3's tag sits above the card.
+
+**History tour** — id `history`, version 1, surface `history`, trigger `surfaceShown(history)`, no hand-over.
+
+| # | | Anchor → the element it outlines | Title | Body | Advances on |
+|---|---|---|---|---|---|
+| 1 | E | `history.grid` → the grid's scroll area (or, when History is empty, the empty-state view) | Your capture history | Every screenshot and recording you take is kept here, newest first. | Next |
+| 2 | T | `history.item` → the first (newest) capture's cell | Select a capture | Click any capture to select it. Double-click opens it instead. | `action("history.selected")` |
+| 3 | E | `history.item` | Several at once | ⌘-click or ⇧-click to add more, then drag them into any app together. | Next |
+| 4 | E | `history.actions` → the bottom action bar (count · Copy · Annotate · Pin · Edit Video… · Show in Finder · Delete · ⋯) | Actions | Copy, annotate, pin or delete the selection. Right-click does the same. | Done |
+
+- `history.item` exists only while History has entries, so with an empty History the tour is steps 1 and 4.
+- Events (`HistoryView` in `HistoryWindowController.swift`): `action("history.selected")` after any single
+  click on a cell (plain, ⌘ or ⇧ — the selection has already changed; a double-click's first click posts it
+  too); `action("history.dragged")` when a drag of one or more captures out of the grid starts (no step waits
+  for it yet). **WPF:** Ctrl-click / Shift-click and write "Ctrl-click or Shift-click" in step 3's body.
+
+**The ⓘ on both windows** (§7.3 look and menu): `InfoButton.install(in: window, tour:, shortcuts:)` when the
+window is built (`makeWindow()`), the rightmost title-bar accessory. **Replay Tour** runs that window's tour
+from step 1 now (for every user — existing users included). **Keyboard Shortcuts** lists:
+- **Settings:** every *bound* global shortcut in `HotkeyAction` order as (keys, action title), then
+  (**Esc**, **Cancel changing a shortcut**) — with the defaults: ⇧⌘4 Capture Area · ⇧⌘8 Capture Window ·
+  ⇧⌘6 Capture Full Screen · ⇧⌘7 Capture Text · ⇧⌘5 Start/Stop Recording · Esc Cancel changing a shortcut.
+  The list follows rebinds made while the window is open (it observes the bindings).
+- **History:** ⌘-click — Add to or remove from the selection · ⇧-click — Select everything in between ·
+  Double-click — Open (screenshots open in the editor) · Right-click — More actions (WPF: Ctrl-click /
+  Shift-click).
+
+**Verified (same probe as §7.4).** Settings: all three anchors present on first show; 1/3 → 2/3 (anchor
+16 × 16, the ⓘ) → 3/3 with the Keyboard Shortcuts card scrolled fully into the window → Done → marked seen;
+the ⓘ lists the defaults above plus Esc and updates after a rebind to ⌥⌘4; Replay Tour restarts at 1/3.
+History (three synthetic captures in a scratch History folder): 1/4 → 2/4 → a synthetic click on the first
+cell's click layer posted `history.selected` → 3/4 (cell selected) → 4/4 → Done → seen; the ⓘ lists 4
+gestures; Replay Tour restarts. An **existing** user got no question, and Settings, History and a new card
+started nothing — but both ⓘ Replay Tours worked. A new user who pressed **No Thanks** got nothing either.
 
 **Help & Tours menu (lane 7A).** A submenu in the menu-bar menu (Windows: the tray menu), placed right
 above **Settings…**, after the History group's separator. Every item has an icon (SF Symbol name given —
