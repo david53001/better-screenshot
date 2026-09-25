@@ -36,6 +36,13 @@ final class EditorInspectorView: NSVisualEffectView {
     private let sectionStack = NSStackView()
     /// Scrolls the sections when the window is too short for them (overlay scroller).
     private let scroll = NSScrollView()
+    /// Arrange (Front / Back / Delete) sits below the scroll area: right under the sections
+    /// when they fit, pinned to the panel's bottom when they scroll — so Delete never scrolls away.
+    private let footer = NSStackView()
+    private var withFooter: [NSLayoutConstraint] = []
+    private var withoutFooter: [NSLayoutConstraint] = []
+    /// Single-slider sections: no caption, the slider row carries the name in its label column.
+    private static let inlineLabelled: Set<InspectorSection> = [.opacity, .strength, .spotlightDim]
     /// Re-read `style` / `tool` / `recents` into the current sections' controls.
     private var refreshers: [() -> Void] = []
     /// Views of the previous build, kept alive until the next run-loop turn: a rebuild can be
@@ -104,6 +111,18 @@ final class EditorInspectorView: NSVisualEffectView {
         scroll.documentView = doc
         addSubview(scroll)
 
+        footer.orientation = .vertical
+        footer.alignment = .centerX
+        footer.spacing = 10
+        footer.edgeInsets = NSEdgeInsets(top: 0, left: 16, bottom: 12, right: 16)
+        footer.translatesAutoresizingMaskIntoConstraints = false
+        for v in [InspectorStyle.hairline(), makeArrangeRow()] {
+            footer.addArrangedSubview(v)
+            v.widthAnchor.constraint(equalToConstant: InspectorStyle.contentWidth).isActive = true
+        }
+        footer.isHidden = true
+        addSubview(footer)
+
         for (well, tip) in [(colorWell, "Custom colour — opens the colour picker"),
                             (backgroundWell, "Custom box colour — opens the colour picker"),
                             (outlineWell, "Outline colour — picking one turns the outline on")] {
@@ -112,7 +131,7 @@ final class EditorInspectorView: NSVisualEffectView {
             well.toolTip = tip
             well.translatesAutoresizingMaskIntoConstraints = false
             NSLayoutConstraint.activate([
-                well.widthAnchor.constraint(equalToConstant: 44),
+                well.widthAnchor.constraint(equalToConstant: 40),
                 well.heightAnchor.constraint(equalToConstant: 24),
             ])
         }
@@ -125,7 +144,8 @@ final class EditorInspectorView: NSVisualEffectView {
             scroll.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 10),
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
-            scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
+            footer.leadingAnchor.constraint(equalTo: leadingAnchor),
+            footer.trailingAnchor.constraint(equalTo: trailingAnchor),
             doc.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
             doc.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
             doc.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
@@ -134,6 +154,15 @@ final class EditorInspectorView: NSVisualEffectView {
             sectionStack.trailingAnchor.constraint(equalTo: doc.trailingAnchor),
             sectionStack.bottomAnchor.constraint(equalTo: doc.bottomAnchor),
         ])
+        // The scroll area is as tall as its sections unless the panel is too short for them.
+        // Below `windowSizeStayPut`, or a long Text panel would grow the window instead of scrolling.
+        let fitsContent = scroll.heightAnchor.constraint(equalTo: doc.heightAnchor)
+        fitsContent.priority = NSLayoutConstraint.Priority(NSLayoutConstraint.Priority.windowSizeStayPut.rawValue - 10)
+        fitsContent.isActive = true
+        withFooter = [footer.topAnchor.constraint(equalTo: scroll.bottomAnchor),
+                      footer.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor)]
+        withoutFooter = [scroll.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor)]
+        NSLayoutConstraint.activate(withoutFooter)
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -142,7 +171,14 @@ final class EditorInspectorView: NSVisualEffectView {
         self.tool = tool
         self.style = style
         titleLabel.stringValue = content.title
-        if content.sections != self.content.sections { rebuild(content.sections) }
+        let scrolled = content.sections.filter { $0 != .arrange }
+        if scrolled != self.content.sections.filter({ $0 != .arrange }) { rebuild(scrolled) }
+        let arrange = content.sections.contains(.arrange)
+        if footer.isHidden == arrange {
+            footer.isHidden = !arrange
+            NSLayoutConstraint.deactivate(arrange ? withoutFooter : withFooter)
+            NSLayoutConstraint.activate(arrange ? withFooter : withoutFooter)
+        }
         self.content = content
         refreshers.forEach { $0() }
     }
@@ -170,7 +206,9 @@ final class EditorInspectorView: NSVisualEffectView {
             box.alignment = .leading
             box.spacing = 8
             box.edgeInsets = NSEdgeInsets(top: 12, left: 16, bottom: 14, right: 16)
-            if let title = section.title { box.addArrangedSubview(InspectorStyle.caption(title)) }
+            if let title = section.title, !Self.inlineLabelled.contains(section) {
+                box.addArrangedSubview(InspectorStyle.caption(title))
+            }
             for row in makeSection(section) {
                 box.addArrangedSubview(row)
                 row.widthAnchor.constraint(equalToConstant: InspectorStyle.contentWidth).isActive = true
@@ -201,7 +239,7 @@ final class EditorInspectorView: NSVisualEffectView {
         case .spotlightShape: return makeSpotlightShapeRows()
         case .spotlightDim: return makeSpotlightDimRows()
         case .opacity: return makeOpacityRows()
-        case .arrange: return makeArrangeRows()
+        case .arrange: return []   // the footer below the scroll area (`makeArrangeRow`)
         case .cropHelp, .selectHelp: return [InspectorStyle.note(section.note ?? "")]
         }
     }
@@ -221,17 +259,18 @@ final class EditorInspectorView: NSVisualEffectView {
             return b
         }
         let presetRow = InspectorStyle.row(presets)
-        presetRow.distribution = .equalSpacing
+        presetRow.distribution = .equalSpacing   // = the 8pt swatch grid across the 232pt column
 
-        let recentButtons = (0..<RecentColors.capacity).map { _ -> SwatchButton in
+        // Recent colours sit on the preset grid (columns 3–8) after a two-column caption. Only
+        // the text colour shows them: the box colour keeps to one short block (presets + custom).
+        let recentButtons = target == .stroke ? (0..<RecentColors.capacity).map { _ -> SwatchButton in
             let b = SwatchButton(color: .clear, target: self, action: #selector(swatchClicked(_:)))
             b.tag = target.rawValue
             return b
-        }
-        let recentLabel = InspectorStyle.caption("Recent")
-        recentLabel.translatesAutoresizingMaskIntoConstraints = false
-        recentLabel.widthAnchor.constraint(equalToConstant: 48).isActive = true
-        let recentRow = InspectorStyle.row([recentLabel] + recentButtons, spacing: 6, fill: true)
+        } : []
+        let recentRow = InspectorStyle.row([Self.gridCaption("Recent")] + recentButtons,
+                                           spacing: InspectorStyle.swatchGap, fill: true)
+        if let last = recentButtons.last { recentRow.setCustomSpacing(0, after: last) }
 
         let pick = NSButton(title: "Pick from Screen", target: self, action: #selector(eyedropper(_:)))
         pick.image = NSImage(systemSymbolName: "eyedropper", accessibilityDescription: "Eyedropper")
@@ -241,7 +280,10 @@ final class EditorInspectorView: NSVisualEffectView {
         pick.tag = target.rawValue
         pick.toolTip = "Eyedropper — click anywhere on screen to use that colour"
         let well = target == .stroke ? colorWell : backgroundWell
-        let customRow = InspectorStyle.row([well, pick], fill: true)
+        let customRow = InspectorStyle.row([Self.gridCaption("Custom"), well, pick],
+                                           spacing: InspectorStyle.swatchGap, fill: true)
+        customRow.setCustomSpacing(6, after: well)
+        customRow.setCustomSpacing(0, after: pick)
 
         refreshers.append { [unowned self] in
             let current = target == .stroke ? style.strokeColor : style.textBackgroundColor
@@ -257,7 +299,15 @@ final class EditorInspectorView: NSVisualEffectView {
             }
             if !RecentColors.same(RGBAColor(well.color), current) { well.color = current.nsColor }
         }
-        return [presetRow, recentRow, customRow]
+        return target == .stroke ? [presetRow, recentRow, customRow] : [presetRow, customRow]
+    }
+
+    /// "RECENT" / "CUSTOM": an in-row caption two swatch columns wide.
+    private static func gridCaption(_ text: String) -> NSTextField {
+        let l = InspectorStyle.caption(text)
+        l.translatesAutoresizingMaskIntoConstraints = false
+        l.widthAnchor.constraint(equalToConstant: InspectorStyle.swatchCaptionWidth).isActive = true
+        return l
     }
 
     private func colourEdit(_ c: RGBAColor, _ target: ColourTarget = .stroke) -> StyleEdit {
@@ -266,6 +316,8 @@ final class EditorInspectorView: NSVisualEffectView {
             return { s in
                 s.strokeColor = c
                 s.fillColor = RGBAColor(r: c.r, g: c.g, b: c.b, a: 0.25)
+                // A text's outline must stay visible against its new letter colour.
+                if s.textOutline { s.textOutlineColor = TextChip.outlineColor(s.textOutlineColor, forText: c) }
             }
         case .textBackground:
             return { $0.textBackgroundColor = c }
@@ -388,7 +440,7 @@ final class EditorInspectorView: NSVisualEffectView {
         emphasis.controlSize = .small
         for (i, tip) in ["Bold", "Italic", "Underline", "Strikethrough"].enumerated() {
             emphasis.setToolTip(tip, forSegment: i)
-            emphasis.setWidth(30, forSegment: i)
+            emphasis.setWidth(28, forSegment: i)
         }
 
         let align = NSSegmentedControl(images: [
@@ -398,10 +450,10 @@ final class EditorInspectorView: NSVisualEffectView {
         ], trackingMode: .selectOne, target: self, action: #selector(alignmentChanged(_:)))
         align.segmentStyle = .rounded
         align.controlSize = .small
-        align.segmentDistribution = .fillEqually
-        align.setToolTip("Align left", forSegment: 0)
-        align.setToolTip("Align centre", forSegment: 1)
-        align.setToolTip("Align right", forSegment: 2)
+        for (i, tip) in ["Align left", "Align centre", "Align right"].enumerated() {
+            align.setToolTip(tip, forSegment: i)
+            align.setWidth(28, forSegment: i)
+        }
 
         refreshers.append { [unowned self] in
             if let item = menu.items.first(where: { ($0.representedObject as? String) == style.fontFamily }) {
@@ -425,7 +477,11 @@ final class EditorInspectorView: NSVisualEffectView {
             emphasis.setSelected(style.textStrikethrough, forSegment: 3)
             align.selectedSegment = TextAlign.allCases.firstIndex(of: style.textAlignment) ?? 0
         }
-        return [family, InspectorStyle.row([size, emphasis], fill: true), align]
+        // Two rows: typeface (family · size), then emphasis · alignment.
+        family.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let styleRow = InspectorStyle.row([emphasis, align])
+        styleRow.distribution = .equalSpacing
+        return [InspectorStyle.row([family, size]), styleRow]
     }
 
     @objc private func fontFamilyChanged(_ sender: NSPopUpButton) {
@@ -487,7 +543,7 @@ final class EditorInspectorView: NSVisualEffectView {
         let colours = Self.column(makeColourRows(.textBackground))
         let autoNote = InspectorStyle.note("Dark or light — whichever stands out against the text colour.")
         let range = AnnotationStyle.textBackgroundPaddingRange
-        let padding = LabeledSliderRow(label: "Padding", labelWidth: 56,
+        let padding = LabeledSliderRow(label: "Padding",
                                        range: Double(range.lowerBound)...Double(range.upperBound),
                                        tooltip: "Space between the text and the edge of the box") { "\(Int($0.rounded())) px" }
         padding.onChange = { [unowned self] v, finished in
@@ -496,7 +552,7 @@ final class EditorInspectorView: NSVisualEffectView {
             if finished { onStyleEditEnded?() }
         }
         let radii = AnnotationStyle.textBackgroundCornerRadiusRange
-        let corners = LabeledSliderRow(label: "Corners", labelWidth: 56,
+        let corners = LabeledSliderRow(label: "Corners",
                                        range: Double(radii.lowerBound)...Double(radii.upperBound),
                                        tooltip: "How rounded the box's corners are") { "\(Int($0.rounded())) px" }
         corners.onChange = { [unowned self] v, finished in
@@ -532,26 +588,27 @@ final class EditorInspectorView: NSVisualEffectView {
         return c
     }
 
-    // MARK: Effects (text) — Outline (colour + width), Shadow
+    // MARK: Effects (text) — Outline + its colour well, Shadow; then the outline width
 
     private func makeEffectsRows() -> [NSView] {
         let outline = checkbox("Outline", #selector(outlineToggled(_:)),
                                tooltip: "An edge around every letter — keeps text readable on busy screenshots")
+        let shadow = checkbox("Shadow", #selector(shadowToggled(_:)),
+                              tooltip: "A soft drop shadow under the text (and its box)")
         let spacer = NSView()
         spacer.setContentHuggingPriority(.init(1), for: .horizontal)
-        let outlineRow = InspectorStyle.row([outline, spacer, outlineWell])
+        // The outline's colour well sits right after its checkbox, so it reads as its colour.
+        let row = InspectorStyle.row([outline, outlineWell, spacer, shadow])
+        row.setCustomSpacing(6, after: outline)
 
         let range = AnnotationStyle.textOutlineWidthRange
         let width = LabeledSliderRow(label: "Width", range: Double(range.lowerBound)...Double(range.upperBound),
                                      tooltip: "Outline thickness in image pixels") { "\(Int($0.rounded())) px" }
-        width.edgeInsets = NSEdgeInsets(top: 0, left: 20, bottom: 0, right: 0)   // belongs to Outline
         width.onChange = { [unowned self] v, finished in
             let w = CGFloat(v.rounded())
             onStyleEdit?({ $0.textOutlineWidth = w }, "textOutlineWidth")
             if finished { onStyleEditEnded?() }
         }
-        let shadow = checkbox("Shadow", #selector(shadowToggled(_:)),
-                              tooltip: "A soft drop shadow under the text (and its box)")
         refreshers.append { [unowned self] in
             outline.state = style.textOutline ? .on : .off
             width.isHidden = !style.textOutline
@@ -561,20 +618,22 @@ final class EditorInspectorView: NSVisualEffectView {
             }
             shadow.state = style.textShadow ? .on : .off
         }
-        return [outlineRow, width, shadow]
+        return [row, width]
     }
 
     private func checkbox(_ title: String, _ action: Selector, tooltip: String) -> NSButton {
-        let b = NSButton(checkboxWithTitle: "", target: self, action: action)
-        b.attributedTitle = NSAttributedString(string: title, attributes: [
-            .foregroundColor: InspectorStyle.primaryText, .font: NSFont.systemFont(ofSize: 12)])
+        let b = InspectorCheckbox(title: title, target: self, action: action)
         b.toolTip = tooltip
         return b
     }
 
     @objc private func outlineToggled(_ sender: NSButton) {
         let on = sender.state == .on
-        onStyleEdit?({ $0.textOutline = on }, nil)
+        onStyleEdit?({ s in
+            s.textOutline = on
+            // Default white on white text (Label, Callout) would be an unreadable blob.
+            if on { s.textOutlineColor = TextChip.outlineColor(s.textOutlineColor, forText: s.strokeColor) }
+        }, nil)
     }
 
     @objc private func shadowToggled(_ sender: NSButton) {
@@ -619,8 +678,8 @@ final class EditorInspectorView: NSVisualEffectView {
 
     private func makeStrengthRows() -> [NSView] {
         let range = AnnotationStyle.blurRadiusRange
-        let slider = LabeledSliderRow(label: nil, range: Double(range.lowerBound)...Double(range.upperBound),
-                                      tooltip: "") { "\(Int($0.rounded())) px" }
+        let slider = LabeledSliderRow(label: "Strength", range: Double(range.lowerBound)...Double(range.upperBound),
+                                      tooltip: "How strongly it hides what's underneath") { "\(Int($0.rounded())) px" }
         slider.onChange = { [unowned self] v, finished in
             let px = CGFloat(v.rounded()), pixelate = redactionMode == .pixelate
             onStyleEdit?({ if pixelate { $0.pixelSize = px } else { $0.blurRadius = px } }, "redactionStrength")
@@ -664,7 +723,7 @@ final class EditorInspectorView: NSVisualEffectView {
 
     private func makeSpotlightDimRows() -> [NSView] {
         let r = AnnotationStyle.spotlightDimRange
-        let slider = LabeledSliderRow(label: nil, range: Double(r.lowerBound * 100)...Double(r.upperBound * 100),
+        let slider = LabeledSliderRow(label: "Dim", range: Double(r.lowerBound * 100)...Double(r.upperBound * 100),
                                       tooltip: "How dark everything outside the spotlights gets") { "\(Int($0.rounded()))%" }
         slider.onChange = { [unowned self] v, finished in
             let d = CGFloat(v.rounded()) / 100
@@ -679,7 +738,7 @@ final class EditorInspectorView: NSVisualEffectView {
 
     private func makeOpacityRows() -> [NSView] {
         let range = AnnotationStyle.opacityRange
-        let slider = LabeledSliderRow(label: nil, range: Double(range.lowerBound * 100)...Double(range.upperBound * 100),
+        let slider = LabeledSliderRow(label: "Opacity", range: Double(range.lowerBound * 100)...Double(range.upperBound * 100),
                                       tooltip: "How see-through the object is") { "\(Int($0.rounded()))%" }
         slider.onChange = { [unowned self] v, finished in
             let o = CGFloat(v.rounded()) / 100
@@ -690,9 +749,9 @@ final class EditorInspectorView: NSVisualEffectView {
         return [slider]
     }
 
-    // MARK: Arrange — Front / Back / Delete
+    // MARK: Arrange — Front / Back / Delete (the footer; built once)
 
-    private func makeArrangeRows() -> [NSView] {
+    private func makeArrangeRow() -> NSView {
         func button(_ title: String, _ symbol: String, _ tip: String, _ action: Selector) -> NSButton {
             let b = NSButton(title: title, target: self, action: action)
             b.bezelStyle = .rounded
@@ -702,13 +761,14 @@ final class EditorInspectorView: NSVisualEffectView {
             b.toolTip = tip
             return b
         }
+        // Opposite arrows: the stacked-layers symbols were near-identical at this size.
         let row = InspectorStyle.row([
-            button("Front", "square.3.layers.3d.top.filled", "Bring to front ( ] )", #selector(front)),
-            button("Back", "square.3.layers.3d.bottom.filled", "Send to back ( [ )", #selector(back)),
+            button("Front", "arrow.up.to.line", "Bring to front ( ] )", #selector(front)),
+            button("Back", "arrow.down.to.line", "Send to back ( [ )", #selector(back)),
             button("Delete", "trash", "Delete (⌫)", #selector(delete)),
         ], spacing: 6)
         row.distribution = .fillEqually
-        return [row]
+        return row
     }
 
     @objc private func front() { onArrange?(.front) }

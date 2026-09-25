@@ -87,8 +87,10 @@ public struct AnnotationStyle: Equatable, Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        strokeColor = try container.decode(RGBAColor.self, forKey: .strokeColor)
-        fillColor = try container.decode(RGBAColor.self, forKey: .fillColor)
+        // The old default red wasn't one of the preset swatches; a style still carrying it (the
+        // untouched sticky default) moves to the preset red so its swatch shows as selected.
+        strokeColor = Self.migratingOldDefaultRed(try container.decode(RGBAColor.self, forKey: .strokeColor))
+        fillColor = Self.migratingOldDefaultRed(try container.decode(RGBAColor.self, forKey: .fillColor))
         lineWidth = try container.decode(CGFloat.self, forKey: .lineWidth)
         fontSize = try container.decode(CGFloat.self, forKey: .fontSize)
         // Text-font fields arrived later; a style persisted before them keeps today's look.
@@ -132,10 +134,19 @@ public struct AnnotationStyle: Equatable, Codable {
 
     static func clamp(_ v: CGFloat, _ r: ClosedRange<CGFloat>) -> CGFloat { min(max(v, r.lowerBound), r.upperBound) }
 
+    /// The default colour: exactly the panel's Red preset swatch (and the Callout box).
+    public static let defaultRed = RGBAColor(r: 1, g: 0.27, b: 0.23, a: 1)
+
     public static let `default` = AnnotationStyle(
-        strokeColor: RGBAColor(r: 1, g: 0.23, b: 0.19, a: 1),
-        fillColor: RGBAColor(r: 1, g: 0.23, b: 0.19, a: 0.25),
+        strokeColor: defaultRed,
+        fillColor: RGBAColor(r: defaultRed.r, g: defaultRed.g, b: defaultRed.b, a: 0.25),
         lineWidth: 4, fontSize: 24)
+
+    /// The old default red (1, 0.23, 0.19), at any alpha → `defaultRed` at that alpha.
+    static func migratingOldDefaultRed(_ c: RGBAColor) -> RGBAColor {
+        guard RecentColors.same(c, RGBAColor(r: 1, g: 0.23, b: 0.19, a: c.a)) else { return c }
+        return RGBAColor(r: defaultRed.r, g: defaultRed.g, b: defaultRed.b, a: c.a)
+    }
 }
 
 fileprivate extension CGFloat {

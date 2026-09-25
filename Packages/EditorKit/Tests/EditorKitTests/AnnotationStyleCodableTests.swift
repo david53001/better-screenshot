@@ -3,6 +3,25 @@ import Foundation
 @testable import EditorKit
 
 let annotationStyleCodableTests: [TestCase] = [
+    TestCase("defaultRedIsThePresetRedSwatch") { t in
+        // So the Red swatch shows as selected on first use.
+        let preset = RGBAColor(EditorInspectorView.presetColors[0])
+        t.isTrue(RecentColors.same(AnnotationStyle.default.strokeColor, preset))
+        t.isTrue(RecentColors.same(AnnotationStyle.default.fillColor, RGBAColor(r: preset.r, g: preset.g, b: preset.b, a: 0.25)))
+    },
+    TestCase("oldDefaultRedDecodesAsThePresetRed") { t in
+        let old = #"{"strokeColor":{"r":1,"g":0.23,"b":0.19,"a":1},"fillColor":{"r":1,"g":0.23,"b":0.19,"a":0.25},"lineWidth":4,"fontSize":24}"#
+        let blue = #"{"strokeColor":{"r":0.04,"g":0.52,"b":1,"a":1},"fillColor":{"r":0.04,"g":0.52,"b":1,"a":0.25},"lineWidth":4,"fontSize":24}"#
+        do {
+            let s = try JSONDecoder().decode(AnnotationStyle.self, from: Data(old.utf8))
+            t.isTrue(s.strokeColor == AnnotationStyle.default.strokeColor, "stroke migrated")
+            t.isTrue(s.fillColor == AnnotationStyle.default.fillColor, "fill migrated, alpha kept")
+            let b = try JSONDecoder().decode(AnnotationStyle.self, from: Data(blue.utf8))
+            t.approxEqual(Double(b.strokeColor.r), 0.04, tol: 1e-9)   // other colours untouched
+        } catch {
+            t.fail("decode threw: \(error)")
+        }
+    },
     TestCase("annotationStyleRoundTripsThroughJSON") { t in
         let original = AnnotationStyle(
             strokeColor: RGBAColor(r: 0.04, g: 0.52, b: 1.0, a: 1.0),

@@ -107,6 +107,15 @@ final class SwatchButton: NSButton {
 enum InspectorStyle {
     /// Width of the panel's content column (panel width minus 16pt padding each side).
     static let contentWidth: CGFloat = EditorInspectorView.width - 32
+    /// The one label column every labelled row uses ("Width", "Padding", "Opacity"…), so all
+    /// slider tracks start at the same x.
+    static let labelWidth: CGFloat = 56
+    /// Colour swatches: 22pt hit areas on an 8-column grid 8pt apart (8 × 22 + 7 × 8 = 232).
+    static let swatchSize: CGFloat = 22
+    static let swatchGap: CGFloat = 8
+    /// In-row captions of the colour rows ("RECENT", "CUSTOM") span two swatch columns, so what
+    /// follows them starts on the third column.
+    static let swatchCaptionWidth: CGFloat = 2 * swatchSize + swatchGap
     static let primaryText = NSColor(white: 1, alpha: 0.88)
     static let secondaryText = NSColor(white: 1, alpha: 0.55)
 
@@ -159,16 +168,17 @@ enum InspectorStyle {
     }
 }
 
-/// "Label  ———●———  value" — a slider with an optional leading label and a live value
-/// readout. `onChange(value, finished)`: `finished` is false while the knob is dragged.
+/// "Label  ———●———  value" — a slider with an optional leading label (in the shared
+/// `InspectorStyle.labelWidth` column) and a live value readout.
+/// `onChange(value, finished)`: `finished` is false while the knob is dragged.
 final class LabeledSliderRow: NSStackView {
     let slider: NSSlider
     private let valueLabel = NSTextField(labelWithString: "")
     private let format: (Double) -> String
     var onChange: ((Double, Bool) -> Void)?
 
-    init(label: String?, labelWidth: CGFloat = 44, range: ClosedRange<Double>, tooltip: String,
-         format: @escaping (Double) -> String) {
+    init(label: String?, labelWidth: CGFloat = InspectorStyle.labelWidth, range: ClosedRange<Double>,
+         tooltip: String, format: @escaping (Double) -> String) {
         slider = NSSlider(value: range.lowerBound, minValue: range.lowerBound,
                           maxValue: range.upperBound, target: nil, action: nil)
         self.format = format
@@ -188,6 +198,7 @@ final class LabeledSliderRow: NSStackView {
         valueLabel.widthAnchor.constraint(equalToConstant: 40).isActive = true
         if let label {
             let l = InspectorStyle.rowLabel(label)
+            l.toolTip = tooltip
             l.translatesAutoresizingMaskIntoConstraints = false
             l.widthAnchor.constraint(equalToConstant: labelWidth).isActive = true
             addArrangedSubview(l)
@@ -208,6 +219,57 @@ final class LabeledSliderRow: NSStackView {
         let type = NSApp.currentEvent?.type
         let tracking = type == .leftMouseDown || type == .leftMouseDragged
         onChange?(sender.doubleValue, !tracking)
+    }
+}
+
+/// A checkbox drawn for the dark panel: the system one's unchecked box is a near-black square on
+/// the near-black HUD (≈ #3a3a3a on #232323), so this one has a visible outline. Behaves like an
+/// ordinary switch button (state, action, accessibility).
+final class InspectorCheckbox: NSButton {
+    private static let box: CGFloat = 14, gap: CGFloat = 6
+    private var titleText: NSAttributedString {
+        NSAttributedString(string: title, attributes: [.foregroundColor: InspectorStyle.primaryText,
+                                                       .font: NSFont.systemFont(ofSize: 12)])
+    }
+
+    init(title: String, target: AnyObject?, action: Selector) {
+        super.init(frame: .zero)
+        setButtonType(.switch)
+        self.title = title
+        self.target = target
+        self.action = action
+        focusRingType = .none
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    override var state: NSControl.StateValue { didSet { needsDisplay = true } }
+
+    override var intrinsicContentSize: NSSize {
+        let t = titleText.size()
+        return NSSize(width: ceil(Self.box + Self.gap + t.width) + 2, height: max(18, ceil(t.height)))
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let b = Self.box
+        let r = NSRect(x: 1, y: (bounds.height - b) / 2, width: b, height: b)
+        let path = NSBezierPath(roundedRect: r.insetBy(dx: 0.5, dy: 0.5), xRadius: 3.5, yRadius: 3.5)
+        if state == .on {
+            NSColor.controlAccentColor.setFill(); path.fill()
+            // Checkmark, in unit coordinates of the box (y up), mapped for either flip.
+            let tick = NSBezierPath()
+            func p(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
+                NSPoint(x: r.minX + x * b, y: isFlipped ? r.maxY - y * b : r.minY + y * b)
+            }
+            tick.move(to: p(0.25, 0.52)); tick.line(to: p(0.43, 0.32)); tick.line(to: p(0.76, 0.70))
+            tick.lineWidth = 1.8; tick.lineCapStyle = .round; tick.lineJoinStyle = .round
+            NSColor.white.setStroke(); tick.stroke()
+        } else {
+            NSColor(white: 1, alpha: 0.06).setFill(); path.fill()
+            NSColor(white: 1, alpha: 0.55).setStroke(); path.lineWidth = 1; path.stroke()
+        }
+        if isHighlighted { NSColor(white: 1, alpha: 0.15).setFill(); path.fill() }
+        let t = titleText
+        t.draw(at: NSPoint(x: r.maxX + Self.gap, y: (bounds.height - t.size().height) / 2))
     }
 }
 

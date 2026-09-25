@@ -32,7 +32,7 @@ public final class EditorWindowController: NSWindowController {
     /// 12 margin) and hidden.
     private static let minWidthWithPanel: CGFloat = 884
     private static let minWidthBare: CGFloat = 600
-    private static let bottomBarHeight: CGFloat = 84
+    private static let bottomBarHeight: CGFloat = 64
 
     private let toolGroups: [[EditorTool]] = [
         [.select],
@@ -42,10 +42,8 @@ public final class EditorWindowController: NSWindowController {
         [.crop],
     ]
 
-    private lazy var backdrop = NSColor(name: nil) { ap in
-        ap.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            ? NSColor(white: 0.12, alpha: 1) : NSColor(white: 0.90, alpha: 1)
-    }
+    /// The neutral backdrop around the canvas. The window is always dark (see `init`).
+    private let backdrop = NSColor(white: 0.12, alpha: 1)
 
     /// `recentColors`: the persisted Recent colours (newest first); changes come back
     /// through `onRecentColorsChanged`.
@@ -54,15 +52,19 @@ public final class EditorWindowController: NSWindowController {
         inspector = EditorInspectorView(recentColors: recentColors)
         zoom = CanvasZoomController(canvas: canvas, scrollView: scrollView)
 
-        // Room for the image at up to 1200pt wide (the old display cap) plus the panel, within
-        // the screen; Fit then scales the image into whatever room the window has.
-        let displayW = min(CGFloat(image.width), 1200)
-        let displayH = displayW * CGFloat(image.height) / CGFloat(image.width)
-        let screen = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame.size
-            ?? CGSize(width: 1440, height: 900)
+        // Room for the image at its real on-screen size (points, not pixels — 100%), up to
+        // 1200pt wide, plus the panel, within the screen; Fit then scales the image into
+        // whatever room the window has, never past 100%.
+        let mainScreen = NSScreen.main ?? NSScreen.screens.first
+        let real = ZoomMath.pointSize(pixels: CGSize(width: image.width, height: image.height),
+                                      backingScale: mainScreen?.backingScaleFactor ?? 2)
+        let displayW = min(real.width, 1200)
+        let displayH = displayW * real.height / max(real.width, 1)
+        let screen = mainScreen?.visibleFrame.size ?? CGSize(width: 1440, height: 900)
         let contentW = min(max(displayW + 48, Self.minWidthBare) + EditorInspectorView.width + 20,
                            screen.width - 40)
-        let contentH = min(max(displayH + 112 /*top band + insets*/ + Self.bottomBarHeight, 520),
+        // At least 660pt tall: room for the whole Text panel (the longest one) without scrolling.
+        let contentH = min(max(displayH + 112 /*top band + insets*/ + Self.bottomBarHeight, 660),
                            screen.height - 60)
         let window = EditorWindow(
             contentRect: NSRect(x: 0, y: 0, width: contentW, height: contentH),
@@ -70,6 +72,9 @@ public final class EditorWindowController: NSWindowController {
             backing: .buffered, defer: false)
         window.title = "Annotate"
         window.titlebarAppearsTransparent = true
+        // Always dark, like the video editor: the dark HUD panels are vibrant and blend with
+        // the window behind them, so in Light mode they washed out to mid-grey.
+        window.appearance = NSAppearance(named: .darkAqua)
         window.minSize = NSSize(width: Self.minWidthWithPanel, height: 440)
         super.init(window: window)
 
@@ -198,7 +203,8 @@ public final class EditorWindowController: NSWindowController {
         return v
     }
 
-    /// Hint line (what the active tool / selection does) above the dims · zoom · actions row.
+    /// Hint line (what the active tool / selection does, the full width) above one row:
+    /// zoom · image size on the left, Done · Stack · Save · Copy on the right.
     private func buildBottomBar() -> NSView {
         let bar = NSVisualEffectView()
         bar.translatesAutoresizingMaskIntoConstraints = false
@@ -226,16 +232,20 @@ public final class EditorWindowController: NSWindowController {
         hintRow.translatesAutoresizingMaskIntoConstraints = false
         bar.addSubview(hintRow)
 
-        dimsLabel.font = .monospacedSystemFont(ofSize: 11.5, weight: .regular)
+        dimsLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
         dimsLabel.textColor = .secondaryLabelColor
-        dimsLabel.translatesAutoresizingMaskIntoConstraints = false
-        bar.addSubview(dimsLabel)
+        dimsLabel.toolTip = "Image size"
+        dimsLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let viewInfo = NSStackView(views: [zoom.popup, dimsLabel])
+        viewInfo.orientation = .horizontal
+        viewInfo.alignment = .centerY
+        viewInfo.spacing = 12
+        viewInfo.translatesAutoresizingMaskIntoConstraints = false
+        bar.addSubview(viewInfo)
 
         let doneBtn = NSButton(title: "Done", target: self, action: #selector(doneAction))
-        doneBtn.isBordered = false
-        doneBtn.attributedTitle = NSAttributedString(string: "Done",
-            attributes: [.foregroundColor: NSColor.secondaryLabelColor,
-                         .font: NSFont.systemFont(ofSize: 13)])
+        doneBtn.bezelStyle = .rounded
+        doneBtn.toolTip = "Close the editor (⌘W)"
         doneBtn.keyEquivalent = "w"; doneBtn.keyEquivalentModifierMask = [.command]
 
         let saveBtn = NSButton(title: "Save", target: self, action: #selector(saveAction))
@@ -261,17 +271,11 @@ public final class EditorWindowController: NSWindowController {
         stackBtn.imagePosition = .imageLeading
         stackBtn.toolTip = "Keep in the bottom-right stack"
 
-        // Zoom sits just left of the actions so Copy stays the rightmost, primary button.
-        let divider = NSBox()
-        divider.boxType = .separator
-        divider.translatesAutoresizingMaskIntoConstraints = false
-        divider.heightAnchor.constraint(equalToConstant: 18).isActive = true
-        let actions = NSStackView(views: [zoom.popup, divider, doneBtn, stackBtn, saveBtn, copyBtn])
+        // Copy stays the rightmost, primary button.
+        let actions = NSStackView(views: [doneBtn, stackBtn, saveBtn, copyBtn])
         actions.orientation = .horizontal
         actions.alignment = .centerY
         actions.spacing = 8
-        actions.setCustomSpacing(12, after: zoom.popup)
-        actions.setCustomSpacing(10, after: divider)
         actions.translatesAutoresizingMaskIntoConstraints = false
         bar.addSubview(actions)
 
@@ -281,15 +285,16 @@ public final class EditorWindowController: NSWindowController {
             hairline.trailingAnchor.constraint(equalTo: bar.trailingAnchor),
             hairline.heightAnchor.constraint(equalToConstant: 1),
 
-            hintRow.topAnchor.constraint(equalTo: bar.topAnchor, constant: 10),
+            hintRow.topAnchor.constraint(equalTo: bar.topAnchor, constant: 9),
             hintRow.leadingAnchor.constraint(equalTo: bar.leadingAnchor, constant: 16),
             hintRow.trailingAnchor.constraint(lessThanOrEqualTo: bar.trailingAnchor, constant: -16),
 
-            dimsLabel.leadingAnchor.constraint(equalTo: bar.leadingAnchor, constant: 18),
-            dimsLabel.centerYAnchor.constraint(equalTo: actions.centerYAnchor),
+            viewInfo.leadingAnchor.constraint(equalTo: bar.leadingAnchor, constant: 16),
+            viewInfo.centerYAnchor.constraint(equalTo: actions.centerYAnchor),
+            viewInfo.trailingAnchor.constraint(lessThanOrEqualTo: actions.leadingAnchor, constant: -12),
 
             actions.trailingAnchor.constraint(equalTo: bar.trailingAnchor, constant: -16),
-            actions.bottomAnchor.constraint(equalTo: bar.bottomAnchor, constant: -12),
+            actions.bottomAnchor.constraint(equalTo: bar.bottomAnchor, constant: -10),
         ])
         return bar
     }
@@ -308,6 +313,9 @@ public final class EditorWindowController: NSWindowController {
         stack.spacing = 2
         stack.setCustomSpacing(10, after: redoButton)
         stack.edgeInsets = NSEdgeInsets(top: 0, left: 6, bottom: 0, right: 10)
+        // A trailing accessory takes its width from the view's frame, which is zero until set —
+        // without this the buttons sit past the window's right edge, clipped away.
+        stack.frame = NSRect(origin: .zero, size: stack.fittingSize)
 
         let accessory = NSTitlebarAccessoryViewController()
         accessory.layoutAttribute = .trailing
@@ -484,6 +492,7 @@ public final class EditorWindowController: NSWindowController {
                          tool: canvas.tool, style: canvas.selectionStyle ?? defaultStyle(for: canvas.tool))
         hintLabel.stringValue = InspectorModel.hint(tool: canvas.tool, selection: selection,
                                                     editingText: canvas.isEditingText)
+        hintLabel.toolTip = hintLabel.stringValue   // the whole sentence, if a narrow window truncates it
         zoom.refresh()   // crop / undo may have changed the image size
     }
 }
