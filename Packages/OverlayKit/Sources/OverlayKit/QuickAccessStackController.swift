@@ -21,6 +21,7 @@ public final class QuickAccessStackController {
     public func present(image: NSImage, kind: QuickAccessKind = .screenshot,
                         actions: QuickAccessActions, autoDismissSeconds: Int,
                         corner: OverlayCorner, screenFrame: CGRect, margin: CGFloat = 24,
+                        badge: String? = nil,
                         onDismissed: ((DismissReason) -> Void)? = nil) {
         self.corner = corner
         self.screenFrame = screenFrame
@@ -40,7 +41,8 @@ public final class QuickAccessStackController {
         // Provisional origin: present() computes the card's real contentSize
         // from the image's aspect ratio, then restack() repositions precisely.
         controller.present(image: image, at: CGPoint(x: screenFrame.maxX, y: screenFrame.minY),
-                           kind: kind, actions: actions, autoDismissSeconds: autoDismissSeconds)
+                           kind: kind, actions: actions, autoDismissSeconds: autoDismissSeconds,
+                           badge: badge)
         restack()
     }
 

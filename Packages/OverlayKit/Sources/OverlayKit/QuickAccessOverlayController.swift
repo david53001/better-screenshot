@@ -68,9 +68,10 @@ public final class QuickAccessOverlayController: NSObject {
     public override init() { super.init() }
 
     /// Presents the overlay at the given screen origin (Cocoa bottom-left coords).
+    /// `badge` is a short caption for the top-left corner ("0:42 · MP4" on a recording).
     public func present(image: NSImage, at origin: CGPoint,
                         kind: QuickAccessKind = .screenshot, actions: QuickAccessActions,
-                        autoDismissSeconds: Int = 0) {
+                        autoDismissSeconds: Int = 0, badge: String? = nil) {
         dismiss(reason: .evicted)
         self.actions = actions
         self.autoDismissSeconds = autoDismissSeconds
@@ -100,11 +101,11 @@ public final class QuickAccessOverlayController: NSObject {
         container.layer?.cornerRadius = 14
         container.layer?.masksToBounds = true
 
-        // Full-bleed image. The DraggableImageView still owns the drag-to-export
-        // gesture (a >4pt move starts the drag); an aspect-fill sublayer covers
-        // its aspect-fit self-drawing so the picture reaches every card edge.
+        // Full-bleed image. The DraggableImageView owns the drag-to-export gesture
+        // (a >4pt move starts the drag) but draws nothing itself: the picture is
+        // the aspect-fill sublayer below, so the scrim and buttons stay on top of it.
         let thumb = DraggableImageView(frame: container.bounds)
-        thumb.image = image                       // drag-preview source
+        thumb.image = image                       // drag-preview source only
         thumb.wantsLayer = true
         thumb.layer?.masksToBounds = true
         thumb.fileURLProvider = actions.fileURLForDrag
@@ -210,6 +211,12 @@ public final class QuickAccessOverlayController: NSObject {
                      pressed: Self.nsColor(argb: palette.pressedARGB))
         }
         container.addSubview(stack)
+
+        // Recording badge ("0:42 · MP4") in the top-left corner, clear of the button
+        // row. Click-through, so the drag gesture still works over it.
+        if let badge, !badge.isEmpty {
+            container.addSubview(Self.badgeView(badge, cardSize: size))
+        }
 
         // Full-size, click-through hover layer on top of everything so mouse
         // enter/exit pause/restart the auto-dismiss countdown for the whole
@@ -330,6 +337,27 @@ public final class QuickAccessOverlayController: NSObject {
         return BandLuminance.extremes(rgba: rgba, pixelCount: pixelCount)
     }
 
+    /// A shared-HUD-style chip holding `text`, pinned 8pt in from the top-left corner.
+    private static func badgeView(_ text: String, cardSize: CGSize) -> NSView {
+        let label = NSTextField(labelWithString: text)
+        label.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+        label.textColor = HUDStyle.primaryText
+        label.sizeToFit()
+        let chipSize = NSSize(width: ceil(label.frame.width) + 14, height: 20)
+        let holder = ClickThroughView(frame: NSRect(x: 8, y: cardSize.height - 8 - chipSize.height,
+                                                    width: chipSize.width, height: chipSize.height))
+        // Blends with the card's own image layer, which is drawn in this window.
+        let chip = HUDStyle.makeBackground(frame: holder.bounds, cornerRadius: 6,
+                                           blending: .withinWindow)
+        label.frame.origin = NSPoint(x: 7, y: ((chipSize.height - label.frame.height) / 2).rounded())
+        chip.addSubview(label)
+        holder.addSubview(chip)
+        holder.setAccessibilityElement(true)
+        holder.setAccessibilityRole(.staticText)
+        holder.setAccessibilityLabel(text)
+        return holder
+    }
+
     private static func nsColor(argb: UInt32) -> NSColor {
         let a = CGFloat((argb >> 24) & 0xFF) / 255.0
         let r = CGFloat((argb >> 16) & 0xFF) / 255.0
@@ -438,6 +466,12 @@ private final class QuickAccessIconButton: NSView {
         if inside { onClick() }
     }
     override func accessibilityPerformPress() -> Bool { onClick(); return true }
+}
+
+/// Never the target of a click, so the drag-to-export gesture passes through
+/// whatever it contains (the badge).
+private final class ClickThroughView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 /// A transparent, click-through view that exists solely to own a tracking area
