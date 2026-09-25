@@ -33,6 +33,12 @@ keep the Mac responsive.
 - Mid-recording microphone device switch from the live pill (needs Part 4's device catalog + Part 5's
   pill) — spec §8.
 - History thumbnail isn't regenerated after the video editor's Replace Original (pre-existing).
+- Tours review (2026-09-26): `docs/reviews/2026-09-26-tours-review.md` — **6/10**, 0 High · 17 Medium · 24
+  Low. Fixing all of them in two parallel lanes from `21613cb` (which added `TourStep.requires` and
+  `TourStep.placement`): engine/tag/keys (branch `worktree-agent-a75dc49b138318f9a`: T1–T8, S3, W4, I1,
+  requires/placement) · content/copy/anchors (branch `worktree-agent-a72e97f56f750295a`: E2, R1–R3, P1–P4,
+  X2–X4, V2–V4, S1–S2, W1–W3, Q1–Q3, H1–H2, C1, E3). After merge: full tests, release build, CHANGELOG,
+  optionally re-run the reviewer.
 - Part 7 leftovers (2026-09-26): (a) **manual checks in the real app** — a real click on an outlined
   button in a titled window (synthetic clicks can't prove it), and the Welcome tour's menu-bar-icon step
   with the real status item (only tested with a stand-in); (b) the tag body can be cut off if it exceeds 2
