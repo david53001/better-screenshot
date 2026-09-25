@@ -1,15 +1,20 @@
 import AppKit
+import CaptureKit
 
 /// First-run setup window. The app needs exactly one permission — Screen
 /// Recording — and a grant only takes effect after a relaunch. This window
 /// collapses that dance into a single button: request → System Settings opens
 /// at the right pane → poll until the switch flips → relaunch automatically →
-/// confirm with a hotkey cheat-sheet.
+/// confirm with a hotkey cheat-sheet (read from the live bindings).
 @MainActor
 final class OnboardingController: NSWindowController {
     enum State { case needsPermission, waiting, allSet }
 
     private static let relaunchFlagKey = "RelaunchedAfterPermissionGrant"
+    /// Every state uses the same content height, so the window doesn't jump
+    /// between steps; a state that needs more (many bound shortcuts) grows it.
+    private static let contentHeight: CGFloat = 380
+    private let bindings: () -> HotkeyBindings
 
     /// True exactly once: on the launch right after the permission relaunch.
     static func consumeRelaunchFlag() -> Bool {
@@ -21,7 +26,8 @@ final class OnboardingController: NSWindowController {
 
     private var pollTimer: Timer?
 
-    init() {
+    init(bindings: @escaping () -> HotkeyBindings = { .defaults }) {
+        self.bindings = bindings
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 440, height: 100),
             styleMask: [.titled, .closable, .fullSizeContentView],
@@ -91,26 +97,28 @@ final class OnboardingController: NSWindowController {
             stack.addArrangedSubview(bodyLabel(
                 "BetterScreenshot lives in your menu bar. Capture any time with:"))
             stack.setCustomSpacing(14, after: stack.arrangedSubviews.last!)
-            stack.addArrangedSubview(hotkeyRow("⌘⇧4", "Capture an area"))
-            stack.addArrangedSubview(hotkeyRow("⌘⇧5", "Record the screen"))
-            stack.addArrangedSubview(hotkeyRow("⌘⇧6", "Capture the full screen"))
-            stack.addArrangedSubview(hotkeyRow("⌘⇧8", "Capture a window"))
-            stack.setCustomSpacing(18, after: stack.arrangedSubviews.last!)
+            let rows = HotkeyCheatSheet.rows(for: bindings())
+            if !rows.isEmpty {
+                stack.addArrangedSubview(shortcutGrid(rows))
+                stack.setCustomSpacing(18, after: stack.arrangedSubviews.last!)
+            }
             stack.addArrangedSubview(primaryButton("Start Capturing",
                                                    action: #selector(startCapturing)))
         }
 
         let content = NSView()
         content.addSubview(stack)
+        let height = max(Self.contentHeight, stack.fittingSize.height)
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: content.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            stack.centerYAnchor.constraint(equalTo: content.centerYAnchor),
+            stack.topAnchor.constraint(greaterThanOrEqualTo: content.topAnchor),
             stack.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             content.widthAnchor.constraint(equalToConstant: 440),
+            content.heightAnchor.constraint(equalToConstant: height),
         ])
         window?.contentView = content
-        window?.setContentSize(content.fittingSize)
+        window?.setContentSize(NSSize(width: 440, height: height))
     }
 
     // MARK: - Pieces
@@ -151,18 +159,21 @@ final class OnboardingController: NSWindowController {
         return b
     }
 
-    private func hotkeyRow(_ keys: String, _ name: String) -> NSStackView {
-        let keyLabel = NSTextField(labelWithString: keys)
-        keyLabel.font = .monospacedSystemFont(ofSize: 13, weight: .semibold)
-        keyLabel.translatesAutoresizingMaskIntoConstraints = false
-        keyLabel.widthAnchor.constraint(equalToConstant: 52).isActive = true
-        let nameLabel = NSTextField(labelWithString: name)
-        nameLabel.font = .systemFont(ofSize: 13)
-        nameLabel.textColor = .secondaryLabelColor
-        let row = NSStackView(views: [keyLabel, nameLabel])
-        row.orientation = .horizontal
-        row.spacing = 10
-        return row
+    /// Two aligned columns: shortcuts right-aligned against descriptions left-aligned.
+    private func shortcutGrid(_ rows: [HotkeyCheatSheet.Row]) -> NSGridView {
+        let grid = NSGridView(views: rows.map { row -> [NSView] in
+            let keys = NSTextField(labelWithString: row.keys)
+            keys.font = .systemFont(ofSize: 13, weight: .semibold)
+            let name = NSTextField(labelWithString: row.description)
+            name.font = .systemFont(ofSize: 13)
+            name.textColor = .secondaryLabelColor
+            return [keys, name]
+        })
+        grid.column(at: 0).xPlacement = .trailing
+        grid.column(at: 1).xPlacement = .leading
+        grid.columnSpacing = 14
+        grid.rowSpacing = 7
+        return grid
     }
 
     // MARK: - Actions
