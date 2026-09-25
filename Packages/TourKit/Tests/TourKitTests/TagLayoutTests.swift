@@ -173,6 +173,13 @@ let tagKeysTests: [TestCase] = [
             t.equal(TagKeys.action(keyCode: TagKeys.escape, modifiers: [], isRepeat: false, isExplainStep: explain, isEditingText: false), .skipTour)
         }
     },
+    TestCase("escapeIsLeftToAHostThatClaimsIt") { t in
+        // The editor while it's on a drawing tool or has a selection: Esc goes back to Select first.
+        t.isNil(TagKeys.action(keyCode: TagKeys.escape, modifiers: [], isRepeat: false, isExplainStep: true,
+                               isEditingText: false, hostClaimsEscape: true))
+        t.equal(TagKeys.action(keyCode: TagKeys.returnKey, modifiers: [], isRepeat: false, isExplainStep: true,
+                               isEditingText: false, hostClaimsEscape: true), .next)
+    },
     TestCase("typingInATextViewPassesThrough") { t in
         t.isNil(TagKeys.action(keyCode: TagKeys.returnKey, modifiers: [], isRepeat: false, isExplainStep: true, isEditingText: true))
         t.isNil(TagKeys.action(keyCode: TagKeys.escape, modifiers: [], isRepeat: false, isExplainStep: true, isEditingText: true))

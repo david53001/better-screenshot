@@ -1,8 +1,13 @@
 import AppKit
+import TourKit
 
 /// The annotation editor window: a floating frosted-glass tool pill over a centred canvas,
 /// a collapsible side panel (`EditorInspectorView`) on the right, a hint line + action bar at
-/// the bottom, and undo/redo + the panel toggle in the title bar.
+/// the bottom, and undo/redo + the panel toggle + the ⓘ in the title bar.
+///
+/// Guided tours (v3 Part 7): controls carry `tourAnchor`s (`editor.toolbar`, `editor.tool.<tool>`,
+/// `editor.canvas`, `editor.inspector…`, `editor.hint`, `editor.zoom`, `editor.actions`, `editor.info`…)
+/// and tool changes post `TourEvents` — see `Packages/EditorKit/CLAUDE.md`.
 public final class EditorWindowController: NSWindowController {
     private let canvas: EditorCanvasView
     /// The default style for new objects — the sticky default the host persists.
@@ -27,6 +32,8 @@ public final class EditorWindowController: NSWindowController {
     private let inspectorButton = NSButton()
     private var canvasBesidePanel: NSLayoutConstraint!
     private var canvasToEdge: NSLayoutConstraint!
+    /// Off while `init` picks the starting tool, so tours only hear the user's own tool changes.
+    private var postsTourEvents = false
 
     /// Minimum window width with the panel shown (600 canvas column + 8 gap + 264 panel +
     /// 12 margin) and hidden.
@@ -87,6 +94,12 @@ public final class EditorWindowController: NSWindowController {
         window.initialFirstResponder = canvas
         window.keyEquivalentHandler = { [weak self] in self?.handleKeyEquivalent($0) ?? false }
         window.escapeHandler = { [weak self] in self?.escape() }
+        // While a tour tag is up, Esc still goes back to Select / clears the selection first; only
+        // when it has nothing left to do here does it skip the tour.
+        window.escapeInUse = { [weak self] in
+            guard let canvas = self?.canvas else { return false }
+            return canvas.tool != .select || canvas.hasSelection
+        }
         canvas.onStateChange = { [weak self] in self?.refreshChrome() }
         canvas.onEditText = { [weak self] textStyle in
             // Show the edited text's own style; not persisted until the user changes it.
@@ -99,6 +112,7 @@ public final class EditorWindowController: NSWindowController {
         window.contentView?.layoutSubtreeIfNeeded()
         zoom.fit()
         selectTool(.arrow)
+        postsTourEvents = true
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -125,6 +139,8 @@ public final class EditorWindowController: NSWindowController {
         let toolbar = buildToolbar()
         let bottomBar = buildBottomBar()
         buildTitlebarButtons()
+        scrollView.tourAnchor = "editor.canvas"
+        inspector.tourAnchor = "editor.inspector"
 
         content.addSubview(scrollView)
         content.addSubview(bottomBar)
@@ -165,6 +181,7 @@ public final class EditorWindowController: NSWindowController {
         pill.layer?.masksToBounds = true
         pill.layer?.borderWidth = 1
         pill.layer?.borderColor = NSColor(white: 1, alpha: 0.10).cgColor
+        pill.tourAnchor = "editor.toolbar"
 
         let row = NSStackView()
         row.orientation = .horizontal
@@ -176,6 +193,7 @@ public final class EditorWindowController: NSWindowController {
             for tool in group {
                 let b = IconToolButton(tool: tool, symbol: tool.symbolName, tip: tool.tooltip,
                                        target: self, action: #selector(toolButtonClicked(_:)))
+                b.tourAnchor = "editor.tool.\(tool.rawValue)"
                 toolButtons[tool] = b
                 row.addArrangedSubview(b)
             }
@@ -230,12 +248,15 @@ public final class EditorWindowController: NSWindowController {
         hintRow.orientation = .horizontal
         hintRow.spacing = 6
         hintRow.translatesAutoresizingMaskIntoConstraints = false
+        hintRow.tourAnchor = "editor.hint"
         bar.addSubview(hintRow)
 
         dimsLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
         dimsLabel.textColor = .secondaryLabelColor
         dimsLabel.toolTip = "Image size"
         dimsLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        dimsLabel.tourAnchor = "editor.imageSize"
+        zoom.popup.tourAnchor = "editor.zoom"
         let viewInfo = NSStackView(views: [zoom.popup, dimsLabel])
         viewInfo.orientation = .horizontal
         viewInfo.alignment = .centerY
@@ -277,6 +298,10 @@ public final class EditorWindowController: NSWindowController {
         actions.alignment = .centerY
         actions.spacing = 8
         actions.translatesAutoresizingMaskIntoConstraints = false
+        actions.tourAnchor = "editor.actions"
+        for (b, name) in [(doneBtn, "done"), (stackBtn, "stack"), (saveBtn, "save"), (copyBtn, "copy")] {
+            b.tourAnchor = "editor.\(name)"
+        }
         bar.addSubview(actions)
 
         NSLayoutConstraint.activate([
@@ -308,6 +333,9 @@ public final class EditorWindowController: NSWindowController {
                                 tip: "Hide Inspector (⌥⌘I)", action: #selector(toggleInspector))
         inspectorButton.setButtonType(.pushOnPushOff)
         inspectorButton.state = .on
+        undoButton.tourAnchor = "editor.undo"
+        redoButton.tourAnchor = "editor.redo"
+        inspectorButton.tourAnchor = "editor.panelToggle"
         let stack = NSStackView(views: [undoButton, redoButton, inspectorButton])
         stack.orientation = .horizontal
         stack.spacing = 2
@@ -321,6 +349,32 @@ public final class EditorWindowController: NSWindowController {
         accessory.layoutAttribute = .trailing
         accessory.view = stack
         window?.addTitlebarAccessoryViewController(accessory)
+
+        // The ⓘ (Replay Tour · Keyboard Shortcuts): its own accessory, rightmost.
+        if let window {
+            InfoButton.install(in: window, tour: .editor, shortcuts: keyboardShortcuts).tourAnchor = "editor.info"
+        }
+    }
+
+    /// The ⓘ's Keyboard Shortcuts list — every key this window handles (tool keys in toolbar order).
+    private var keyboardShortcuts: [(keys: String, action: String)] {
+        var tools = toolGroups.flatMap { $0 }
+        if let i = tools.firstIndex(of: .pixelate) { tools.insert(.blackout, at: i + 1) }   // no button, a key
+        return tools.map { (keys: $0.shortcutKey.uppercased(), action: $0.displayName) } + [
+            (keys: "Esc", action: "Back to Select, then clear the selection"),
+            (keys: "⌫", action: "Delete the selection"),
+            (keys: "] / [", action: "Bring to front / Send to back"),
+            (keys: "⌘Z", action: "Undo"),
+            (keys: "⇧⌘Z", action: "Redo"),
+            (keys: "⌘+ / ⌘−", action: "Zoom in / out"),
+            (keys: "⌘0", action: "Zoom to fit"),
+            (keys: "⌘1", action: "Actual size (100%)"),
+            (keys: "⌥⌘I", action: "Show or hide the side panel"),
+            (keys: "↩ / ⇧↩", action: "Finish text / New line"),
+            (keys: "⇧⌘C", action: "Copy"),
+            (keys: "⌘S", action: "Save"),
+            (keys: "⌘W", action: "Done — close the editor"),
+        ]
     }
 
     private func configureTitlebarButton(_ b: NSButton, symbol: String, tip: String, action: Selector) {
@@ -420,6 +474,11 @@ public final class EditorWindowController: NSWindowController {
         canvas.style = defaultStyle(for: tool)
         for (t, b) in toolButtons { b.isSelectedTool = (t == tool) }
         refreshChrome()
+        // After the panel is rebuilt, so a tour this starts finds the new tool's sections.
+        guard postsTourEvents else { return }
+        TourEvents.post(.toolSelected(tool.rawValue))
+        // One event for Blur *or* Pixelate — the Redaction tour's trigger.
+        if tool == .blur || tool == .pixelate { TourEvents.post(.action("editor.redactionToolChosen")) }
     }
 
     @objc private func toolButtonClicked(_ sender: IconToolButton) { selectTool(sender.tool) }
@@ -500,9 +559,14 @@ public final class EditorWindowController: NSWindowController {
 /// Routes the zoom and panel key equivalents to the controller — the app is a menu-bar
 /// agent with no main menu to carry them — and Esc, which NSWindow turns into its own
 /// `cancelOperation(_:)` instead of passing it on to the window controller.
-private final class EditorWindow: NSWindow {
+private final class EditorWindow: NSWindow, TourEscapeClaiming {
     var keyEquivalentHandler: ((NSEvent) -> Bool)?
     var escapeHandler: (() -> Void)?
+    /// True while Esc does something here (not on Select, or something is selected).
+    var escapeInUse: (() -> Bool)?
+
+    /// A tour tag leaves Esc to the editor while it's in use (`TourEscapeClaiming`).
+    var claimsEscape: Bool { escapeInUse?() ?? false }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if keyEquivalentHandler?(event) == true { return true }

@@ -29,7 +29,8 @@ Status + lanes: `docs/PROGRESS-v3.md` (lane "Tours & help"). Windows-port notes:
 - `Overlay/` — the tag (spec §14.3): `TagOverlayController()` is the real `TourTagPresenting` — a
   click-through decor panel (20% dim, red box, leader line) + a clickable tag panel, both child windows of
   the host that never become key; follows the host/anchor, hides with the anchor; Return = Next / Esc =
-  Skip tour via a local monitor (not while typing). Pure `TagLayout` (placement) and `TagKeys` are
+  Skip tour via a local monitor (not while typing; Esc also not while the host window's
+  `TourEscapeClaiming.claimsEscape` is true — the editor's Esc-to-Select). Pure `TagLayout` (placement) and `TagKeys` are
   unit-tested; all sizes/colours/strings in `TagStyle`; `windowNumbers` is for a capture's exclusion list.
 - `Help/InfoButton.swift` — the ⓘ: `InfoButton.install(in: window, tour:, shortcuts:)` for titled windows
   (rightmost title-bar accessory, beside any existing one), `InfoButton(tour:shortcuts:)` for panels. Menu:

@@ -2437,6 +2437,8 @@ menu-bar/tray icon), and only while a tag is showing and not in the done state:
 - Everything passes through untouched when: any modifier is held (⌘ ⌥ ⌃ ⇧ / Ctrl Alt Shift Win), the key
   is an auto-repeat, or the focused control is an **editable text field** (typing a label in the editor,
   a search box…). Caps Lock / numpad flags don't count as modifiers.
+- **Esc is left to the host while it claims it** (the editor: while it's on a drawing tool or has a
+  selection, Esc goes back to Select / clears it first — details §7.5; macOS `TourEscapeClaiming`).
 - A key is swallowed only when it did something. macOS: a local key-down monitor (sees the app's events
   without being focused). **WPF:** a `PreviewKeyDown` handler on the host window (`e.Handled = true` only
   when acted on); editable = focused element is a `TextBox`/`RichTextBox`/`PasswordBox` with
@@ -2480,7 +2482,226 @@ Return/Esc and every pass-through case in the key table.
 _(pending)_
 
 ### 7.5 Editor tours — intro, Text, Redaction, Highlighter, Spotlight (lane 7E)
-_(pending)_
+
+**What it is.** Five tours run on the annotation editor window (tour surface `editor`). The **Editor** tour
+walks a new user through the window the first time an editor opens; four short tours explain a tool the
+first time it's chosen. Words used below: a **tour** is a list of **steps**; each step outlines one real
+control (its **anchor**, a stable id string) with a red tag. **Explain** steps advance when the user presses
+**Next** (or Return/Enter); **Try** steps advance by themselves when the user does the thing — the app
+reports it as a **tour event** — or on **Skip step**. How the engine, coordinator, tag and ⓘ work: §7.1–§7.3.
+macOS files: catalog `Packages/TourKit/Sources/TourKit/Catalog/EditorTours.swift`; anchors + events in
+`Packages/EditorKit/Sources/EditorKit/` (`EditorWindowController.swift`, `EditorInspectorView.swift`,
+`EditorCanvasView.swift`); the editor reports itself in `App/Capture/CaptureCoordinator.swift` →
+`presentEditor`. Snapshots (headless probe, 2026-09-25): `docs/reviews/2026-09-25-tours/editor-01-intro-colour.jpg`
+(Editor tour step 4 — the owner's mock), `editor-02-text-resize.jpg`, `editor-03-redaction-strength.jpg`,
+`editor-04-highlighter-width.jpg`, `editor-05-spotlight-dim.jpg`.
+
+**Adapted to the editor as built** (vs the spec §14.3 table): the editor always opens with the **Arrow**
+already chosen, so the table's "T Choose the Arrow" would wait for something already done — the intro starts
+by drawing one instead; a last step points at the ⓘ so users know how to replay. "E Stroke & Opacity" is one
+step outlining the Stroke section. The Text tour's "E Styles / Background / Effects" is three steps (one idea
+each).
+
+#### Triggers (all `version` 1, all on surface `editor`)
+
+| Tour id (persisted) | Starts by itself when (only with first-use tours on, §7.1) | Menu title |
+|---|---|---|
+| `editor` | the editor window is shown (`surfaceShown(editor)`), or handed over from the Quick Access tour | Editor Tour |
+| `text` | event `toolSelected("text")` | Text Tool Tour |
+| `redaction` | event `action("editor.redactionToolChosen")` — posted when **Blur or Pixelate** is chosen (one event, so one trigger covers both) | Blur & Pixelate Tour |
+| `highlighter` | event `toolSelected("highlighter")` | Highlighter Tour |
+| `spotlight` | event `toolSelected("spotlight")` | Spotlight Tour |
+
+Event-triggered tours never interrupt a running tour (§7.2): choosing Text during the Editor tour does
+nothing, and the Text tour starts the next time Text is chosen after that.
+
+#### Steps — verbatim (E = Explain, T = Try)
+
+On Windows replace the macOS key names in bodies: `⌘-scroll` → `Ctrl+scroll`, `⌘0` → `Ctrl+0`, `⌘1` → `Ctrl+1`,
+`⇧` → `Shift`, `⌥` → `Alt`, `Return` → `Enter` (the port's own key names, as its editor shows them). The ⓘ
+glyph stays `ⓘ`. **Every body must fit the tag's 2 lines** (236 pt of text at 12 pt system font — 260 tag
+width minus 2 × 12 padding); the 20-word lint limit alone doesn't guarantee it (an 18-word body was cut off
+with "…"). After translating, re-check with the port's font (Segoe UI 12) — see the test below.
+
+**Editor** (`editor`, 9 steps):
+
+| # | Kind | Anchor | Title | Body | Advances on |
+|---|---|---|---|---|---|
+| 1 | E | `editor.toolbar` | Your tools | Every tool is here. Hover one to see its key — A is Arrow, T is Text. | Next |
+| 2 | T | `editor.canvas` | Draw an arrow | Drag on the image. The arrow points to where you let go. | `annotationAdded("arrow")` |
+| 3 | E | `editor.inspector` | The side panel | Settings for the current tool — or for the object you select. | Next |
+| 4 | T | `editor.inspector.colour` | Pick a colour | Click any swatch. It colours what's selected and what you draw next. | `styleChanged("strokeColor")` |
+| 5 | E | `editor.inspector.stroke` | Width and opacity | Set the line width. Opacity, just below, makes it see-through. | Next |
+| 6 | E | `editor.hint` | The hint line | It says what the current tool does and which keys help. | Next |
+| 7 | E | `editor.zoom` | Zoom | Pinch or ⌘-scroll to zoom. ⌘0 fits the image, ⌘1 shows it at real size. | Next |
+| 8 | E | `editor.actions` | Finish up | Copy it, Save it as a file, or Stack it bottom-right. Done closes. | Next |
+| 9 | E | `editor.info` | Replay any time | Click ⓘ to see this tour again or list the keyboard shortcuts. | Next ("Done") |
+
+**Text** (`text`, 6 steps):
+
+| # | Kind | Anchor | Title | Body | Advances on |
+|---|---|---|---|---|---|
+| 1 | T | `editor.canvas` | Click to type | Click anywhere on the image, type, then press Return. | `annotationAdded("text")` (the text is committed) |
+| 2 | E | `editor.canvas` | Or drag a box | Drag instead of clicking to make a text box — the words wrap inside it. | Next |
+| 3 | T | `editor.canvas` | Resize your text | Drag a round corner of the text to make it bigger or smaller. | `action("editor.textScaled")` |
+| 4 | E | `editor.inspector.styles` | Styles | One click gives your text a ready-made look. | Next |
+| 5 | E | `editor.inspector.background` | Background | Put a box behind the text: Solid in any colour, or Auto for contrast. | Next |
+| 6 | E | `editor.inspector.effects` | Effects | An outline or shadow keeps text readable on busy images. | Next ("Done") |
+
+**Redaction** (`redaction`, 3 steps):
+
+| # | Kind | Anchor | Title | Body | Advances on |
+|---|---|---|---|---|---|
+| 1 | T | `editor.canvas` | Hide something | Drag over anything private — it's hidden when you let go. | `action("editor.redactionAdded")` |
+| 2 | T | `editor.inspector.strength` | Change the strength | Drag the Strength slider until it can't be read. | `styleChanged("strength")` |
+| 3 | E | `editor.inspector.redaction` | Three ways to hide | Switch any time. Black-out is the safest — nothing can be recovered. | Next ("Done") |
+
+**Highlighter** (`highlighter`, 2 steps):
+
+| # | Kind | Anchor | Title | Body | Advances on |
+|---|---|---|---|---|---|
+| 1 | T | `editor.canvas` | Highlight something | Drag across text like a marker pen. Hold ⇧ for a straight line. | `annotationAdded("highlighter")` |
+| 2 | E | `editor.inspector.highlighterStroke` | Marker width | The highlighter keeps its own colour and width, apart from other tools. | Next ("Done") |
+
+**Spotlight** (`spotlight`, 2 steps):
+
+| # | Kind | Anchor | Title | Body | Advances on |
+|---|---|---|---|---|---|
+| 1 | T | `editor.canvas` | Spotlight something | Drag over what matters — everything else dims. Hold ⌥ for an ellipse. | `annotationAdded("spotlight")` |
+| 2 | E | `editor.inspector.spotlightDim` | Dim outside | Set how dark everything outside your spotlights gets. | Next ("Done") |
+
+A step whose anchor isn't on screen is skipped (§7.2) — e.g. "Pick a colour" if the user switched to Blur
+first (Blur has no Colour section), or "Change the strength" after switching to Black-out.
+
+#### Anchors — which control carries which id
+
+macOS sets `view.tourAnchor = "…"`; **WPF: `AutomationProperties.AutomationId` on the same element** (§7.2).
+The anchor must sit on the element whose bounds should be outlined.
+
+| Anchor | The control (macOS) | Notes |
+|---|---|---|
+| `editor.toolbar` | the floating tool pill (the frosted bar holding every tool button) | |
+| `editor.tool.<tool>` | each tool button; `<tool>` = the tool's id: `select arrow line rectangle filledRectangle ellipse text counter highlighter blur pixelate spotlight crop` | no step uses them yet; set anyway |
+| `editor.canvas` | the **scroll view** around the canvas (the whole image area), not the canvas itself | the canvas grows past the window when zoomed in; the scroll view never does |
+| `editor.inspector` | the right-side panel | |
+| `editor.inspector.<section>` | each section's box (caption + rows) inside the panel; `<section>` = the section id from Part 1: `styles colour stroke highlighterStroke font background effects redaction strength spotlightShape spotlightDim opacity cropHelp selectHelp` | set in the panel's rebuild, so a rebuilt section is anchored again |
+| `editor.inspector.arrange` | the Arrange footer (Front / Back / Delete) | |
+| `editor.hint` | the hint line (icon + sentence) above the bottom bar | |
+| `editor.zoom` | the "Fit · 100% ▾" zoom pull-down | |
+| `editor.imageSize` | the "1600 × 1000 px" label | |
+| `editor.actions` | the Done · Stack · Save · Copy group | |
+| `editor.done` `editor.stack` `editor.save` `editor.copy` | each of those buttons | |
+| `editor.undo` `editor.redo` `editor.panelToggle` | the title-bar Undo, Redo and side-panel toggle | |
+| `editor.info` | the ⓘ | |
+
+#### Events — what the editor posts, and where
+
+Post at the point the action already happens (§7.2 event bus). Nothing is posted while the editor window is
+being built (the starting Arrow is not the user's choice).
+
+| Event | Posted when | macOS place |
+|---|---|---|
+| `surfaceShown(editor, window)` | right after the editor window is shown | `CaptureCoordinator.presentEditor` (after `makeKeyAndOrderFront` / activate) |
+| `toolSelected(<tool id>)` | every tool change the user makes (toolbar click, tool key, Esc → Select, the Redaction switch changing tool, double-clicking a text → Text) — after the side panel was rebuilt for the new tool | `EditorWindowController.selectTool` |
+| `action("editor.redactionToolChosen")` | right after `toolSelected` when the tool is **Blur or Pixelate** | same |
+| `annotationAdded(<tool id>)` | an object is committed to the document — named like the tool that draws it (`arrow line rectangle filledRectangle ellipse text counter blur pixelate blackout highlighter spotlight`; a redaction by its mode) | `EditorCanvasView.insert` (every new object goes through it; a text when its editing is committed) |
+| `action("editor.redactionAdded")` | also for any new redaction (Blur, Pixelate or Black-out) | same |
+| `action("editor.textScaled")` | a drag on a text's round **corner** handle that changed it ended | `EditorCanvasView.mouseUp` |
+| `styleChanged(<field>)` | a side-panel edit; sliders only when **released** (a click on the track counts), so a drag is one event | `EditorInspectorView` handlers |
+
+`styleChanged` field names: `strokeColor` (colour swatches, Recent, Custom well, Pick from Screen) ·
+`textBackgroundColor` (the box colour swatches/well/eyedropper) · `textOutlineColor` · `lineWidth` (slider or
+Thin/Medium/Thick) · `fontFamily` · `fontSize` · `textEmphasis` (the B I U S control) · `textAlignment` ·
+`textPreset` (a Styles chip) · `textBackgroundMode` · `textBackgroundPadding` · `textBackgroundCornerRadius` ·
+`textOutline` · `textShadow` · `textOutlineWidth` · `redactionMode` (Blur/Pixelate/Black-out switch) ·
+`strength` (blur radius or pixel size) · `spotlightShape` · `spotlightDim` · `opacity`.
+
+#### Keys while a tag is up (editor-specific)
+
+The tag's keys (§7.3): Return/Enter = Next on Explain steps, Esc = Skip tour, both ignored while typing in a
+text box. The editor adds one rule so its own Esc keeps working: **while Esc has a job in the editor — a
+tool other than Select is active, or something is selected — Esc goes to the editor** (back to Select, then
+clear the selection) and the tour stays. Only when the editor is on Select with nothing selected does Esc skip
+the tour. So from the Arrow tool with an object selected: Esc → Select · Esc → nothing selected · Esc → Skip
+tour. Typing a label (Return/Esc finish it), Delete (removes the selection) and the tool letter keys all pass
+through untouched. macOS: the editor window adopts `TourEscapeClaiming` (TourKit, `Overlay/TagKeys.swift`) and
+returns `tool != select || hasSelection`; `TagKeys.action(…, hostClaimsEscape:)` then returns nothing for Esc.
+**WPF:** in the tag's `PreviewKeyDown` handler (§7.3), check the host editor's same condition before treating
+Esc as Skip tour; if it's true, leave `e.Handled = false`.
+
+#### The ⓘ in the editor
+
+Installed by the editor itself (`InfoButton.install(in: window, tour: editor, shortcuts: …)` in
+`EditorWindowController.buildTitlebarButtons`), as the **rightmost** title-bar item: Undo · Redo · panel toggle
+stay to its left (layout §7.3; Windows: immediately left of the caption buttons). **Replay Tour** replays the
+**Editor** tour in this window (the tool tours replay from the menu bar's Help & Tours). Its **Keyboard
+Shortcuts** list, in this order (keys · action) — on Windows write ⌘ as Ctrl, ⇧ as Shift, ⌥ as Alt, ↩ as
+Enter, ⌫ as Delete (`Ctrl+Z`, `Ctrl+Shift+Z`…):
+
+| Keys | Action |
+|---|---|
+| V | Select |
+| A | Arrow |
+| L | Line |
+| R | Rectangle |
+| F | Filled Rectangle |
+| O | Ellipse |
+| T | Text |
+| N | Counter |
+| H | Highlighter |
+| B | Blur |
+| P | Pixelate |
+| X | Black-out |
+| S | Spotlight |
+| C | Crop |
+| Esc | Back to Select, then clear the selection |
+| ⌫ | Delete the selection |
+| ] / [ | Bring to front / Send to back |
+| ⌘Z | Undo |
+| ⇧⌘Z | Redo |
+| ⌘+ / ⌘− | Zoom in / out |
+| ⌘0 | Zoom to fit |
+| ⌘1 | Actual size (100%) |
+| ⌥⌘I | Show or hide the side panel |
+| ↩ / ⇧↩ | Finish text / New line |
+| ⇧⌘C | Copy |
+| ⌘S | Save |
+| ⌘W | Done — close the editor |
+
+(The tool rows are generated from the tools' own names and keys in toolbar order, with Black-out — which has a
+key but no button — after Pixelate.)
+
+#### Tests to port (`Packages/EditorKit/Tests/EditorKitTests/EditorTourTests.swift`)
+- every editor-tour body fits the tag's 2 lines (a wrapping label with the tag's body font at 236 pt: unlimited
+  height ≤ 2-line height);
+- every step's anchor exists on a real editor window, with the tour's tool chosen (Editor → Arrow, Text → Text,
+  Redaction → Blur, Highlighter → Highlighter, Spotlight → Spotlight);
+- every tool button and bottom-bar/title-bar control carries its anchor;
+- the ⓘ is rightmost, replays `editor`, and lists every tool's key plus Undo/Redo/panel/zoom keys;
+- opening the editor posts nothing; choosing Text posts `toolSelected("text")`; Blur and Pixelate each post
+  `toolSelected(…)` then `action("editor.redactionToolChosen")`;
+- inserting an arrow / text posts `annotationAdded("arrow"/"text")`; a Pixelate redaction posts
+  `annotationAdded("pixelate")` then `action("editor.redactionAdded")`;
+- a colour swatch posts `styleChanged("strokeColor")`; releasing the Strength slider posts `styleChanged("strength")`;
+- the window claims Esc on Arrow, and not on Select with nothing selected.
+
+#### How it was verified on macOS (probe, 2026-09-25)
+A headless probe (a throwaway Swift package outside the repo that compiled the real `TourCoordinator` from
+`App/Tours/` with the real tag overlay and a real editor window, all parked behind the owner's windows, using
+its own preferences domain — never the app's) ran as a **new user who said yes**: the editor's `surfaceShown` started the Editor tour;
+all 9 steps were shown in order with the right control outlined and no body cut off; each Try step advanced
+only on the real action (a synthetic drag drew the arrow; a swatch click; a click, typing and Return/Esc
+committed a text; a drag on the text's corner scaled it 24 → 49 pt; a blur drag; releasing the Strength
+slider; a highlighter stroke; a spotlight drag). Choosing the Highlighter mid-Editor-tour didn't start its tour,
+which then started when it was chosen afterwards. Text, Redaction, Highlighter and Spotlight each started on
+their trigger and showed every step; each tour was marked seen once and never started again. While tags were
+up: Return = Next on Explain steps and passed through on Try steps and while typing; Esc while typing finished
+the text; Esc on Blur went back to Select and kept the tour; Delete removed the selected stroke and kept the
+tour; from a spotlight with a selection it took 3 Escs (Select, clear, Skip tour). **Replay Tour** in the ⓘ
+restarted the Editor tour; Help & Tours with no editor open showed "Editor Tour starts the next time you use it"
+and started it in the next editor. An **existing user** got nothing by itself (surface shown, every tool
+chosen, an object drawn — no tag, nothing marked seen), while the ⓘ still replayed the tour. 142 checks, all
+passing.
 
 ### 7.6 First recording (strip) + recording pill tours (lane 7R)
 _(pending)_

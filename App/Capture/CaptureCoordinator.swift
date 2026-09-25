@@ -3,6 +3,7 @@ import ScreenCaptureKit
 import CaptureKit
 import OverlayKit
 import EditorKit
+import TourKit
 
 @MainActor
 final class CaptureCoordinator {
@@ -50,6 +51,8 @@ final class CaptureCoordinator {
         controller.showWindow(nil)
         controller.window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        // Guided tours: the Editor tour (first editor window, or handed over from Quick Access).
+        if let window = controller.window { TourEvents.surfaceShown(.editor, in: window) }
     }
 
     /// Drops an edited image into the bottom-right Quick Access stack, treating
