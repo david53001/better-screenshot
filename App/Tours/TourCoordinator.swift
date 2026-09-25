@@ -286,8 +286,7 @@ final class TourCoordinator {
             if let next { queue(next) }
             let end = { [weak self] in
                 guard let self else { return }
-                self.stopRunning()
-                self.onFinished?(tour.id)
+                self.stopRunning()   // reports `onFinished`
                 if let next { self.handOver(to: next) }
                 self.resumeSuspended()
             }
@@ -347,7 +346,10 @@ final class TourCoordinator {
         }
     }
 
+    /// Takes the running tour off screen. One that had finished (its last Try step done, maybe still
+    /// showing "Done" when the next tour replaces it) is reported through `onFinished`.
     private func stopRunning() {
+        let finished = running.flatMap { $0.engine.status == .finished ? $0.engine.tour.id : nil }
         generation += 1
         showingCompleted = false
         shownProgress = nil
@@ -357,6 +359,7 @@ final class TourCoordinator {
         closeObserver = nil
         watchdog?.invalidate()
         watchdog = nil
+        if let finished { onFinished?(finished) }
     }
 
     /// Starts `id` (already queued) after the tour that handed over to it: now if its surface is on
