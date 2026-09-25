@@ -230,8 +230,11 @@ public final class TagOverlayController: TourTagPresenting {
         var rects: [CGRect] = []
         func walk(_ v: NSView) {
             if v.isHidden || v === anchor { return }
-            if let c = v as? NSControl, !anchor.isDescendant(of: c), !c.visibleRect.isEmpty {
-                rects.append(window.convertToScreen(c.convert(c.visibleRect, to: nil)))
+            // visibleRect alone can run past the control's bounds (views don't clip by default on
+            // macOS 14+), so it's clipped to them.
+            let shown = v.visibleRect.intersection(v.bounds)
+            if let c = v as? NSControl, !anchor.isDescendant(of: c), !shown.isEmpty {
+                rects.append(window.convertToScreen(c.convert(shown, to: nil)))
             }
             v.subviews.forEach(walk)
         }
