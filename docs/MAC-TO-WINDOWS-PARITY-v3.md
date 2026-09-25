@@ -2500,20 +2500,33 @@ In the tables, **E** = Explain (the tag's button says **Next**, or **Done** on t
 (advances by itself on the event; the tag's button says **Skip step**). `{shortcut:x}` is replaced with the
 user's current combo for `HotkeyAction` `x` (§7.2 "Shortcut placeholders"); with the default bindings the
 Welcome bodies read "⇧⌘4 area, ⇧⌘8 window, ⇧⌘6 full screen" (Windows: "Ctrl+Shift+4 …" per the port's own
-display strings). Strings are verbatim — copy them exactly.
+display strings). Strings are verbatim — copy them exactly. **Requires** = the step's `TourStep.requires`
+event (the step shows only if that event was seen during this run of the tour, else it's skipped like a
+missing anchor; "—" = none). **Placement** = the step's `TourStep.placement` (tried first, dropped for the
+automatic side when it doesn't fit on screen — §7.3 Placement; "automatic" = none).
 
 **Welcome tour** — id `welcome`, version 1, surface `welcome`, trigger `startedByApp` (Show Me Around,
 Help & Tours → Take the Welcome Tour, or a replay), hands over to `quickAccess`.
 
-| # | | Anchor → the control it outlines | Title | Body | Advances on |
-|---|---|---|---|---|---|
-| 1 | E | `menuBar.icon` → the menu-bar status item's button (Windows: the tray icon) | Your menu bar icon | Everything lives here: captures, recordings, History and Settings. | Next |
-| 2 | E | `welcome.shortcuts` → the shortcut grid on the "You're all set!" page | Capture shortcuts | These work in any app: {shortcut:captureArea} area, {shortcut:captureWindow} window, {shortcut:captureFullscreen} full screen. | Next |
-| 3 | T | `welcome.captureArea` → the keys label of the grid's Capture Area row ("⇧⌘4") | Take a screenshot | Press {shortcut:captureArea} now and drag across anything on screen. | `captureTaken` |
+| # | | Anchor → the control it outlines | Title | Body | Advances on | Requires | Placement |
+|---|---|---|---|---|---|---|---|
+| 1 | E | `menuBar.icon` → the menu-bar status item's button (Windows: the tray icon) | Your menu bar icon | Everything lives here: captures, recordings, History and Settings. | Next | — | automatic |
+| 2 | E | `welcome.shortcuts` → only the grid's Capture Area, Capture Window and Capture Full Screen rows (keys + descriptions) on the "You're all set!" page | Capture shortcuts | {shortcut:captureArea} area, {shortcut:captureWindow} window, {shortcut:captureFullscreen} full screen — in any app. | Next | — | automatic |
+| 3 | T | `welcome.captureArea` → the keys label of the grid's Capture Area row ("⇧⌘4") | Take a screenshot | Press {shortcut:captureArea} now and drag across anything on screen. | `captureTaken` | — | automatic |
 
-- `welcome.shortcuts` is the grid view itself; `welcome.captureArea` is set on the keys label of the row
-  whose keys equal Capture Area's current combo. Capture Area unbound → no such row → step 3 is skipped
-  and the tour ends after step 2 (still handing over to Quick Access).
+- **Step 2's non-breaking spaces.** In step 2's body the space after each placeholder, and the one inside
+  "full screen", is a **non-breaking space (U+00A0)** — in the source:
+  `"{shortcut:captureArea}\u{00A0}area, {shortcut:captureWindow}\u{00A0}window, {shortcut:captureFullscreen}\u{00A0}full\u{00A0}screen — in any app."`
+  (WPF: `\u00A0` in the C# string). So a line never ends on a bare combo: with the defaults it wraps
+  "⇧⌘4 area, ⇧⌘8 window, / ⇧⌘6 full screen — in any app." It fits the tag's two lines even with three
+  "⌃⌥⇧⌘F12"-long combos (the older wording, "These work in any app: …", needed three lines then).
+- `welcome.shortcuts` is an **empty view** added to the grid (`OnboardingController.shortcutGrid`), pinned to
+  the grid's leading and trailing edges, to the top of the first capture row and to the bottom of the last
+  (Capture Area / Window / Full Screen — whichever are bound; Capture Text and Record stay outside the outline).
+  None bound → no anchor → step 2 is skipped. **WPF:** a transparent `Border` in the grid spanning those rows
+  (`Grid.Row` + `Grid.RowSpan`, `Grid.ColumnSpan="2"`) carrying the AutomationId. `welcome.captureArea` is set
+  on the keys label of the row whose keys equal Capture Area's current combo. Capture Area unbound → no such
+  row → step 3 is skipped and the tour ends after step 2 (still handing over to Quick Access).
 - Step 1's anchor is **not** in the Welcome window — see "The menu-bar step" below. When the status item
   isn't on screen the step is skipped and the tour starts at 2 of 3.
 - The Welcome page's own "Start Capturing" button (Return) closes the window; the tag's Return = Next
@@ -2524,12 +2537,23 @@ Help & Tours → Take the Welcome Tour, or a replay), hands over to `quickAccess
 **Quick Access tour** — id `quickAccess`, version 1, surface `quickAccess`, trigger
 `surfaceShown(quickAccess)` (the first screenshot card, or a hand-over/replay), hands over to `editor`.
 
-| # | | Anchor → the control it outlines | Title | Body | Advances on |
-|---|---|---|---|---|---|
-| 1 | E | `quickAccess.card` → the whole card | Your screenshot | Each capture waits here as a card until you use it or close it. | Next |
-| 2 | T | `quickAccess.card` | Drag it anywhere | Drag the card into any app — a chat, an email, a folder. | `action("quickAccess.dragged")` |
-| 3 | E | `quickAccess.actions` → the overlaid button row (Copy · Edit · Save · ✕) | Copy, Edit, Save | Copy to the clipboard, Edit, or Save to your Screenshots folder. | Next |
-| 4 | T | `quickAccess.edit` → the Edit (pencil) button | Mark it up | Click Edit to draw arrows, add text or blur things out. | `action("quickAccess.edit")` |
+| # | | Anchor → the control it outlines | Title | Body | Advances on | Requires | Placement |
+|---|---|---|---|---|---|---|---|
+| 1 | E | `quickAccess.card` → the whole card | Your screenshot | Each capture waits here as a card until you use it or close it. | Next | — | automatic |
+| 2 | T | `quickAccess.card` | Drag it anywhere | Drag the card into any app — a chat, an email, a folder. | `action("quickAccess.dragged")` | — | automatic |
+| 3 | E | `quickAccess.actions` → Copy · Edit · Save (not ✕ Close) | Copy, Edit, Save | Copy it, Edit it, or Save it where macOS keeps screenshots, usually the Desktop. | Next | — | `left` |
+| 4 | T | `quickAccess.edit` → the Edit (pencil) button | Mark it up | Click Edit to draw arrows, add text or blur things out. | `action("quickAccess.edit")` | — | `left` |
+
+- `quickAccess.actions` is a horizontal stack view holding just Copy, Edit and Save (spacing 4 pt = the row's),
+  placed inside the card's button row before ✕ — the buttons don't move. **WPF:** a `StackPanel` around the
+  three buttons, with the AutomationId on it.
+- Steps 3–4 are `left`, like steps 1–2 automatically are: automatically they'd go **above** the card (the
+  buttons sit in a wide, short row, which prefers above/below), and step 4's leader then crossed the whole
+  screenshot.
+- Save writes to the macOS screenshot location (`com.apple.screencapture` `location`, else ~/Desktop —
+  `SettingsStore.systemScreenshotLocation`), not Settings' Save location. **Windows:** name the folder the
+  port's Save button really writes to (e.g. "…or Save it to your Screenshots folder" if it's
+  Pictures\Screenshots).
 
 **Where each event is posted** (post at the moment the action already happens; no UI was added):
 
@@ -2594,8 +2618,22 @@ so every screenshot path leaves the tag windows out:
 **Tag copy must fit.** The 20-word limit doesn't guarantee a body fits the tag's two lines.
 `Packages/TourKit/Tests/TourKitTests/TagFitTests.swift` measures every Welcome / Quick Access / Settings /
 History body in the tag's body label at its widest inner width (260 − 2 × 12 = 236 pt, 12 pt system font),
-with placeholders resolved to "⇧⌘4" and to a long "⌃⌥⇧⌘4". Port it: measure with the WPF `TextBlock`
-the tag uses (`TextWrapping=Wrap`, same font/width) and require ≤ 2 lines.
+with placeholders resolved to "⇧⌘4", "⌃⌥⇧⌘4" and the longest bindable "⌃⌥⇧⌘F12" (every modifier + a
+three-character key). Port it: measure with the WPF `TextBlock` the tag uses (`TextWrapping=Wrap`, same
+font/width) and require ≤ 2 lines, with the port's longest combo string (e.g. "Ctrl+Alt+Shift+Win+F12") —
+shorten the copy if it doesn't fit. Known gap: an **unbound** action resolves to its title ("Capture Area"),
+and step 2 with three unbound titles needs 3 lines (with all three unbound the step has no anchor and is
+skipped; one or two unbound can still overflow).
+
+**Review fixes (2026-09-26, `docs/reviews/2026-09-26-tours-review.md`) — verified by probe.** The same kind of
+probe (real `TourCoordinator`, real Welcome window, status-item stand-in, real card, windows parked behind
+the owner's) confirmed: `welcome.shortcuts` spans exactly the three capture rows (top of Capture Area to
+bottom of Capture Full Screen; the Capture Text row below it is outside); step 2 renders "⇧⌘4 area, ⇧⌘8
+window, / ⇧⌘6 full screen — in any app."; `quickAccess.actions` contains Copy, Edit and Save and not ✕,
+with the four buttons still 4 pt apart on one line; built together with the engine lane's placement code,
+Quick Access 1–4 all sit left of the card and Edit hands over to Editor 1 of 5. Snapshots:
+`docs/reviews/2026-09-26-tours-fixes/content-01-welcome-shortcuts-light.jpg`,
+`content-02-quickaccess-actions-left-light.jpg`.
 
 **How it was verified on macOS (probe, 2026-09-25, 78/78 checks).** A headless probe compiled the real App
 sources with the real `TourCoordinator` and `TagOverlayController` (own `UserDefaults` suite; every window
@@ -2630,9 +2668,12 @@ macOS files: catalog `Packages/TourKit/Sources/TourKit/Catalog/EditorTours.swift
 
 **Adapted to the editor as built** (vs the spec §14.3 table): the editor always opens with the **Arrow**
 already chosen, so the table's "T Choose the Arrow" would wait for something already done — the intro starts
-by drawing one instead; a last step points at the ⓘ so users know how to replay. "E Stroke & Opacity" is one
-step outlining the Stroke section. The Text tour's "E Styles / Background / Effects" is three steps (one idea
-each).
+by drawing one instead. "E Stroke & Opacity" is one step outlining the Stroke section. The Text tour's
+"E Styles / Background / Effects" is three steps (one idea each). **Trimmed after the 2026-09-26 tours review**
+(`docs/reviews/2026-09-26-tours-review.md`, E2: Welcome → Quick Access → Editor was 16 tags in a row) from 9
+steps to 5: "Your tools" is folded into the arrow step (which now outlines the tool bar and names the Arrow's
+key, so it also works on a replay started with another tool chosen), and "The side panel", "The hint line" and
+"Replay any time" are dropped — "Finish up" names the ⓘ instead. The chain is now 3 + 4 + 5 = 12 tags.
 
 #### Triggers (all `version` 1, all on surface `editor`)
 
@@ -2655,52 +2696,56 @@ glyph stays `ⓘ`. **Every body must fit the tag's 2 lines** (236 pt of text at 
 width minus 2 × 12 padding); the 20-word lint limit alone doesn't guarantee it (an 18-word body was cut off
 with "…"). After translating, re-check with the port's font (Segoe UI 12) — see the test below.
 
-**Editor** (`editor`, 9 steps):
+**Editor** (`editor`, 5 steps). Requires / Placement as in §7.4 (tried first, dropped for the automatic side when
+it doesn't fit; "—" / "automatic" = none):
 
-| # | Kind | Anchor | Title | Body | Advances on |
-|---|---|---|---|---|---|
-| 1 | E | `editor.toolbar` | Your tools | Every tool is here. Hover one to see its key — A is Arrow, T is Text. | Next |
-| 2 | T | `editor.canvas` | Draw an arrow | Drag on the image. The arrow points to where you let go. | `annotationAdded("arrow")` |
-| 3 | E | `editor.inspector` | The side panel | Settings for the current tool — or for the object you select. | Next |
-| 4 | T | `editor.inspector.colour` | Pick a colour | Click any swatch. It colours what's selected and what you draw next. | `styleChanged("strokeColor")` |
-| 5 | E | `editor.inspector.stroke` | Width and opacity | Set the line width. Opacity, just below, makes it see-through. | Next |
-| 6 | E | `editor.hint` | The hint line | It says what the current tool does and which keys help. | Next |
-| 7 | E | `editor.zoom` | Zoom | Pinch or ⌘-scroll to zoom. ⌘0 fits the image, ⌘1 shows it at real size. | Next |
-| 8 | E | `editor.actions` | Finish up | Copy it, Save it as a file, or Stack it bottom-right. Done closes. | Next |
-| 9 | E | `editor.info` | Replay any time | Click ⓘ to see this tour again or list the keyboard shortcuts. | Next ("Done") |
+| # | Kind | Anchor | Title | Body | Advances on | Requires | Placement |
+|---|---|---|---|---|---|---|---|
+| 1 | T | `editor.toolbar` | Draw an arrow | Pick the Arrow (A) in this bar, then drag on the image. Hover any tool for its key. | `annotationAdded("arrow")` | — | automatic |
+| 2 | T | `editor.inspector.colour` | Pick a colour | Click any swatch. It colours what’s selected and what you draw next. | `styleChanged("strokeColor")` | — | automatic |
+| 3 | E | `editor.inspector.stroke` | Width and opacity | Set the line width. Opacity, just below, makes it see-through. | Next | — | automatic |
+| 4 | E | `editor.zoom` | Zoom | Pinch or ⌘-scroll to zoom. ⌘0 fits the image, ⌘1 shows it at real size. | Next | — | automatic |
+| 5 | E | `editor.actions` | Finish up | Copy it, Save it, or Stack it bottom-right. Done closes; ⓘ replays this tour. | Next ("Done") | — | automatic |
 
 **Text** (`text`, 6 steps):
 
-| # | Kind | Anchor | Title | Body | Advances on |
-|---|---|---|---|---|---|
-| 1 | T | `editor.canvas` | Click to type | Click anywhere on the image, type, then press Return. | `annotationAdded("text")` (the text is committed) |
-| 2 | E | `editor.canvas` | Or drag a box | Drag instead of clicking to make a text box — the words wrap inside it. | Next |
-| 3 | T | `editor.canvas` | Resize your text | Drag a round corner of the text to make it bigger or smaller. | `action("editor.textScaled")` |
-| 4 | E | `editor.inspector.styles` | Styles | One click gives your text a ready-made look. | Next |
-| 5 | E | `editor.inspector.background` | Background | Put a box behind the text: Solid in any colour, or Auto for contrast. | Next |
-| 6 | E | `editor.inspector.effects` | Effects | An outline or shadow keeps text readable on busy images. | Next ("Done") |
+| # | Kind | Anchor | Title | Body | Advances on | Requires | Placement |
+|---|---|---|---|---|---|---|---|
+| 1 | T | `editor.canvas` | Click to type | Click anywhere on the image, type, then press Return. | `annotationAdded("text")` (the text is committed) | — | automatic |
+| 2 | E | `editor.canvas` | Or drag a box | Drag instead of clicking to make a text box — the words wrap inside it. | Next | — | automatic |
+| 3 | T | `editor.canvas` | Resize your text | Drag a round corner of the text to make it bigger or smaller. | `action("editor.textScaled")` | `annotationAdded("text")` | automatic |
+| 4 | E | `editor.inspector.styles` | Styles | One click gives your text a ready-made look. | Next | — | automatic |
+| 5 | E | `editor.inspector.background` | Background | Put a box behind the text: Solid in any colour, or Auto for contrast. | Next | — | `below` |
+| 6 | E | `editor.inspector.effects` | Effects | An outline or shadow keeps text readable on busy images. | Next ("Done") | — | automatic |
 
 **Redaction** (`redaction`, 3 steps):
 
-| # | Kind | Anchor | Title | Body | Advances on |
-|---|---|---|---|---|---|
-| 1 | T | `editor.canvas` | Hide something | Drag over anything private — it's hidden when you let go. | `action("editor.redactionAdded")` |
-| 2 | T | `editor.inspector.strength` | Change the strength | Drag the Strength slider until it can't be read. | `styleChanged("strength")` |
-| 3 | E | `editor.inspector.redaction` | Three ways to hide | Switch any time. Black-out is the safest — nothing can be recovered. | Next ("Done") |
+| # | Kind | Anchor | Title | Body | Advances on | Requires | Placement |
+|---|---|---|---|---|---|---|---|
+| 1 | T | `editor.canvas` | Hide something | Drag over anything private — it’s hidden when you let go. | `action("editor.redactionAdded")` | — | automatic |
+| 2 | T | `editor.inspector.strength` | Change the strength | Drag the Strength slider until it can’t be read. | `styleChanged("strength")` | — | `below` |
+| 3 | E | `editor.inspector.redaction` | Three ways to hide | Switch any time. Black-out is the safest — nothing can be recovered. | Next ("Done") | — | automatic |
 
 **Highlighter** (`highlighter`, 2 steps):
 
-| # | Kind | Anchor | Title | Body | Advances on |
-|---|---|---|---|---|---|
-| 1 | T | `editor.canvas` | Highlight something | Drag across text like a marker pen. Hold ⇧ for a straight line. | `annotationAdded("highlighter")` |
-| 2 | E | `editor.inspector.highlighterStroke` | Marker width | The highlighter keeps its own colour and width, apart from other tools. | Next ("Done") |
+| # | Kind | Anchor | Title | Body | Advances on | Requires | Placement |
+|---|---|---|---|---|---|---|---|
+| 1 | T | `editor.canvas` | Highlight something | Drag across text like a marker pen. Hold ⇧ for a straight line. | `annotationAdded("highlighter")` | — | automatic |
+| 2 | E | `editor.inspector.highlighterStroke` | Marker width | Pick Thin, Medium or Thick. The marker keeps its own colour and width. | Next ("Done") | — | automatic |
 
 **Spotlight** (`spotlight`, 2 steps):
 
-| # | Kind | Anchor | Title | Body | Advances on |
-|---|---|---|---|---|---|
-| 1 | T | `editor.canvas` | Spotlight something | Drag over what matters — everything else dims. Hold ⌥ for an ellipse. | `annotationAdded("spotlight")` |
-| 2 | E | `editor.inspector.spotlightDim` | Dim outside | Set how dark everything outside your spotlights gets. | Next ("Done") |
+| # | Kind | Anchor | Title | Body | Advances on | Requires | Placement |
+|---|---|---|---|---|---|---|---|
+| 1 | T | `editor.canvas` | Spotlight something | Drag over what matters — everything else dims. Hold ⌥ for an ellipse. | `annotationAdded("spotlight")` | — | automatic |
+| 2 | E | `editor.inspector.spotlightDim` | Dim outside | Set how dark everything outside your spotlights gets. | Next ("Done") | — | `below` |
+
+Why the non-automatic ones (review 2026-09-26): **Text 3 requires the text** — after Skip Step on "Click to
+type" there's no text to resize, so the step would be a dead end (X2). **Text 5, Redaction 2, Spotlight 2 are
+`below`** — inside the side panel, under the section: automatically they sat left of the panel, over the
+object the user had just made (X3). The canvas steps need no hint: the automatic big-control rule (§7.3) puts
+them beside the window or inside the canvas's top-right corner. Apostrophes are typographic (’) in every
+string.
 
 A step whose anchor isn't on screen is skipped (§7.2) — e.g. "Pick a colour" if the user switched to Blur
 first (Blur has no Colour section), or "Change the strength" after switching to Black-out.
@@ -2805,7 +2850,7 @@ key but no button — after Pixelate.)
 
 #### Tests to port (`Packages/EditorKit/Tests/EditorKitTests/EditorTourTests.swift`)
 - every editor-tour body fits the tag's 2 lines (a wrapping label with the tag's body font at 236 pt: unlimited
-  height ≤ 2-line height);
+  height ≤ 2-line height), with any `{shortcut:…}` resolved to "⇧⌘4", "⌃⌥⇧⌘4" and "⌃⌥⇧⌘F12";
 - every step's anchor exists on a real editor window, with the tour's tool chosen (Editor → Arrow, Text → Text,
   Redaction → Blur, Highlighter → Highlighter, Spotlight → Spotlight);
 - every tool button and bottom-bar/title-bar control carries its anchor;
@@ -2835,6 +2880,15 @@ and started it in the next editor. An **existing user** got nothing by itself (s
 chosen, an object drawn — no tag, nothing marked seen), while the ⓘ still replayed the tour. 142 checks, all
 passing.
 
+**After the 2026-09-26 content fixes (probe, same technique):** the Editor tour showed its 5 steps in order —
+a synthetic drag completed step 1 (Return passed through to the editor on that Try step), a swatch click
+step 2, Return / Next the rest; Text, Redaction, Highlighter and Spotlight showed every step and their Try steps
+completed on the real actions; the Highlighter's outlined section offers Thin / Medium / Thick, as step 2 says.
+In a build merged with the engine lane's `requires`, a Text replay with Skip Step on "Click to type" went
+straight past "Resize your text", and Text 5 / Redaction 2 / Spotlight 2 sat under their section inside the
+panel. 50+ checks per run, all passing, in a 1132 × 708 and a 1240 × 772 window. Snapshot:
+`docs/reviews/2026-09-26-tours-fixes/content-03-editor-arrow-step-dark.jpg`.
+
 ### 7.6 First recording (strip) + recording pill tours (lane 7R)
 
 **What it is.** Two tours for recording. **First recording** walks through every choice on the record
@@ -2847,37 +2901,43 @@ macOS files: steps `Packages/TourKit/Sources/TourKit/Catalog/RecordingTours.swif
 `App/Recording/RecordingCoordinator.swift`; tags kept out of recordings `App/Recording/TourTagRecordingGate.swift`
 (+ `ScreenRecorder.updateFilter` in RecordingKit); tests `Packages/RecordingKit/Tests/RecordingKitTests/RecordingTourTests.swift`
 (every body fits the tag's 2 lines at its 260 pt max width, every Try step waits for an event a surface posts).
-Snapshots: `docs/reviews/2026-09-25-tours/recording-01-strip-microphone-choices.jpg` (step 5, tag above the
-strip) and `recording-02-pill-mute-mic-try.jpg` (step 2, tag above the pill).
+Snapshots (before the 2026-09-26 trim, so their step numbers are the old 11/10-step tours):
+`docs/reviews/2026-09-25-tours/recording-01-strip-microphone-choices.jpg` (tag above the strip) and
+`recording-02-pill-mute-mic-try.jpg` (tag above the pill); after it:
+`docs/reviews/2026-09-26-tours-fixes/content-04-strip-format-fps-dark.jpg`.
 
 #### First recording — tour id `firstRecording`, version 1
 - **Surface** `recordStrip` (the strip panel). **Starts** the first time the strip appears (`RecordStripController.show`
   posts `surfaceShown(recordStrip)` as its last line) — only for users with first-use tours on (§7.1); the ⓘ
   and Help & Tours → "Recording Setup Tour" replay it. **Hands over to** `recordingPill`.
-- Steps, verbatim (E = Explain, advances on Next; T = Try, advances on the event; strings use ’ and “ ”):
+- Steps, verbatim (E = Explain, advances on Next; T = Try, advances on the event; strings use ’ and “ ”).
+  Six steps since the 2026-09-26 tours review (`docs/reviews/2026-09-26-tours-review.md`, R2: 11 steps, then
+  the pill's 8–10, made ~20 tags before one video): Format + FPS share a step, each audio menu's choices are in
+  its Try step, and Camera / Mouse cursor are named in the hint-line step — still every choice on the strip
+  (the owner: "walks you through all the choices you can make"). No step has a Requires or a Placement
+  (all automatic — the strip is 964 pt wide, so there's rarely room beside it and the tags go above it):
 
 | # | Kind (event) | Anchor = control | Title | Body |
 |---|---|---|---|---|
 | 1 | E | `strip.targets` = the Full Screen · Area… · Window… group | What to record | Full Screen records this screen, Area a part you drag, Window just one window. |
-| 2 | E | `strip.format` = "Format" caption + MP4/GIF picker | MP4 or GIF | MP4 is a video with sound. GIF is a silent, looping animation. |
-| 3 | E | `strip.fps` = "FPS" caption + 30/60 picker | Frame rate | 60 frames per second looks smoother; 30 makes smaller files. |
-| 4 | T `menuOpened("strip.microphone")` | `strip.microphone` = the Microphone dropdown | Open the Microphone menu | Click Microphone to see every input you can record from. |
-| 5 | E | `strip.microphoneColumn` = the whole Microphone column (caption, level meter or "Allow microphone access…" link, dropdown) | Microphone choices | Pick a mic, or Off to skip it. The level meter above shows it can hear you. |
-| 6 | T `menuOpened("strip.systemAudio")` | `strip.systemAudio` = the System audio dropdown | Open System audio | Click System audio to choose which sounds from your Mac are recorded. |
-| 7 | E | `strip.systemAudio` | Sound choices | Off, every app’s sound, or every app except BetterScreenshot’s own sounds. |
-| 8 | E | `strip.camera` = the Camera dropdown | Camera bubble | Adds your webcam in a round bubble. Camera Size sets Small or Medium. |
-| 9 | E | `strip.cursor` = the Mouse cursor dropdown | Mouse cursor | Choose whether your pointer shows in the video. |
-| 10 | E | `strip.hint` = the hint line (ⓘ icon + text) | Hints | Point at any control and this line explains it. |
-| 11 | T `choiceMade("strip.targets")` | `strip.targets` | Start recording | Click Full Screen, Area or Window to start. The recording controls come next. |
+| 2 | E | `strip.output` = the Format (caption + MP4/GIF) and FPS (caption + 30/60) groups together | Format and frame rate | MP4 has sound; GIF is a silent loop. 60 FPS is smoother, 30 makes smaller files. |
+| 3 | T `menuOpened("strip.microphone")` | `strip.microphoneColumn` = the whole Microphone column (caption, level meter or "Allow microphone access…" link, dropdown) | Pick a microphone | Click Microphone, then pick a mic or Off. Once it’s on, a meter shows it hears you. |
+| 4 | T `menuOpened("strip.systemAudio")` | `strip.systemAudio` = the System audio dropdown | Record your Mac’s sound | Click System audio to choose: Off, all apps, or all but BetterScreenshot. |
+| 5 | E | `strip.hint` = the hint line (ⓘ icon + text) | Camera, cursor and hints | Point at any control — Camera, Mouse cursor — and this line explains it. |
+| 6 | T `choiceMade("strip.targets")` | `strip.targets` | Start recording | Click Full Screen, Area or Window to start. The recording controls come next. |
 
+- **Step 3's copy** (review R1): the mic is **Off** by default and the level meter needs the microphone
+  permission first (until then the column shows "Allow microphone access…"), so the meter is promised only
+  "once it's on". Step 4's choices are the menu's items: Off · All apps · All apps except BetterScreenshot.
 - **GIF mode.** GIFs are silent, so the Microphone and System audio dropdowns are disabled; while Format is
   GIF the strip **removes** the anchors `strip.microphone`, `strip.microphoneColumn` and `strip.systemAudio`
-  (whenever it rebuilds its menus), so steps 4–7 are skipped instead of asking the user to open a disabled
-  menu. Back to MP4 → the anchors return.
-- **Menus.** Steps 4 and 6 complete the moment the dropdown's menu opens. The tag stays where it is (a menu
-  is drawn above it), shows its 0.8 s done state, then the next Explain step (5 / 7) describes the choices —
-  while the menu is still open or after it closes.
-- **Hand-over.** Step 11 completes on any of the three target buttons (the event is posted before the strip
+  (whenever it rebuilds its menus), so steps 3–4 are skipped (the tour is steps 1, 2, 5, 6) instead of asking
+  the user to open a disabled menu. Back to MP4 → the anchors return.
+- **Menus.** Steps 3 and 4 complete the moment the dropdown's menu opens. The tag stays where it is (a menu is
+  drawn above it), shows its 0.8 s done state, then the next step appears — while the menu is still open or
+  after it closes. The choices were already named in the Try step's body, so no Explain step has to wait for
+  the menu to close.
+- **Hand-over.** Step 6 completes on any of the three target buttons (the event is posted before the strip
   hides): First recording is marked seen and Recording pill is queued; it starts as soon as the pill appears
   (Full Screen: right away; Area/Window: once the user has picked). Closing the strip another way (✕, the
   record shortcut) pauses the tour; it resumes at that step the next time the strip opens.
@@ -2894,40 +2954,53 @@ strip) and `recording-02-pill-mute-mic-try.jpg` (step 2, tag above the pill).
   left out when that action is unbound): **Start/Stop Recording** combo → "Close this strip · stop a
   recording"; **Pause/Resume Recording** combo → "Pause or resume a recording". Defaults: only the first,
   ⇧⌘5 (Windows: the port's own combo string, e.g. Ctrl+Shift+5).
-- **Anchor-only layout change.** The three target buttons are wrapped in their own horizontal stack (spacing
-  8 = the row's), so the tour can outline them together; pixel-identical. WPF: a `StackPanel` around them.
+- **Anchor-only layout changes.** The three target buttons are wrapped in their own horizontal stack (spacing
+  8 = the row's), so the tour can outline them together; pixel-identical. Likewise the Format and FPS groups
+  are wrapped in one stack (`strip.output`, spacing 20 = their old gap; the row keeps 16 pt after it, before
+  the ⓘ) — a probe measured both groups' frames before and after: identical. WPF: a `StackPanel` around each.
+  `strip.format`, `strip.fps` and `strip.microphone` stay set (their `choiceMade` / `menuOpened` events use
+  those names) though no step outlines them now.
 
 #### Recording pill — tour id `recordingPill`, version 1
 - **Surface** `recordingPill`. **Starts** the first time the pill appears — `RecordingControlsController.show`
   posts `surfaceShown(recordingPill)` as its last line, i.e. when a recording session starts (countdown
   included) — or at once after First recording hands over. No ⓘ (the pill is too small): Help & Tours →
   "Recording Controls Tour" replays it (while no recording runs it waits for the next one).
-- Steps:
+- Steps. The tour runs over the user's first real recording (with the default 0 s countdown it has already
+  started), so it's short — 5 steps, 4 without a mic track (review P1; it was 10) — left to right along the
+  pill (P3), and its only Try step is Stop, which ends the recording anyway (P2: a "Mute the mic" Try step
+  completed on mute and left the mic muted). No Requires; all placements automatic (above the pill, or below
+  at the top of the screen):
 
 | # | Kind (event) | Anchor = control | Title | Body |
 |---|---|---|---|---|
 | 1 | E | `pill.timer` = the elapsed-time column | Recording time | How long you’ve been recording. Drag the pill anywhere you like. |
-| 2 | T `action("pill.micMuted")` | `pill.mic` = Mic | Mute the mic | Click Mic to mute it — click again to unmute. The video stays in sync. |
-| 3 | E | `pill.systemAudio` = System audio | System audio | Mutes the sound your Mac plays. It’s greyed out when that wasn’t recorded. |
-| 4 | E | `pill.camera` = Camera | Camera bubble | Shows or hides your camera bubble while you record. |
-| 5 | E | `pill.switch` = Switch Window… / Switch Area… | Record something else | Move the recording to another window or area without stopping. |
-| 6 | E | `pill.restart` = ↺ | Restart | Deletes what’s recorded so far and starts again. Click twice to confirm. |
-| 7 | E | `pill.discard` = 🗑 | Discard | Stops and deletes this recording. Click twice to confirm. |
-| 8 | E | `pill.pause` = ⏸ | Pause | Pauses the recording. Press it again to carry on. |
-| 9 | E | `pill.collapse` = the chevron | Fewer controls | Collapses the pill to the timer, Pause and Stop. Click again for all. |
-| 10 | T `action("recording.stopped")` | `pill.stop` = ■ | Stop when done | Press Stop when you’re finished. Your video then opens in a card. |
+| 2 | E | `pill.mic` = Mic | Mute the mic | Click Mic to mute it, and again to unmute. The video stays in sync. |
+| 3 | E | `pill.restart` = ↺ | Restart or discard | Restart starts over; Discard, next to it, deletes it. Both need a second click. |
+| 4 | E | `pill.pause` = ⏸ | Pause | Pauses the recording. Press it again to carry on. |
+| 5 | T `action("recording.stopped")` | `pill.stop` = ■ | Stop when done | Press Stop when you’re finished. Your video then opens in a card. |
 
-- **Skipped by design** (a missing anchor = skipped step): **2** when the recording has no microphone track —
-  the Mic button is greyed out, so the pill **removes its `pill.mic` anchor** rather than ask for a disabled
-  click; **5** on full-screen recordings (no Switch button); **2–7** while the pill is collapsed (hidden).
-  Explain steps on a greyed-out control (System audio / Camera when unavailable) still show — their bodies
-  say so. The tag sits above (or below, at the top of the screen) the pill, never on it (§7.3 keep-out).
+- **Skipped by design** (a missing anchor = skipped step): **2** when the recording has no microphone track
+  (the default — mic Off) — the Mic button is greyed out, so the pill **removes its `pill.mic` anchor**;
+  **2–3** while the pill is collapsed (hidden). Dropped from the tour (still on the pill, explained by its own
+  hover hints): System audio, Camera, Switch Window…/Area…, the collapse chevron.
+- **Anchors the pill sets** (`view.tourAnchor`): `pill.timer`, `pill.systemAudio`, `pill.switch`, `pill.restart`,
+  `pill.discard`, `pill.pause`, `pill.stop`, `pill.collapse` always; `pill.mic` only while there's a mic track to
+  mute and `pill.camera` only while the camera can be used (a camera is connected and access isn't denied) —
+  both set in `RecordingControlsController.render`, so a future step never points at a greyed-out button
+  (review P4). **WPF:** set/clear `AutomationProperties.AutomationId` in the same render pass.
 - **Events:** `action("pill.micMuted")` — `RecordingControlsController.micTapped` when Mic is clicked while
-  audible (the muting click); `action("recording.stopped")` — the **first line of `RecordingCoordinator.stop()`**,
-  before the pill hides, so every way of stopping completes step 10 (■, the record shortcut, the menu bar, a
-  failed stream, quitting); `action("recording.started")` — `RecordingCoordinator.begin` once the engine runs
-  (no step waits on it). Discard, Restart and cancelling the countdown post nothing (the tour pauses when the
-  pill goes and resumes with the next recording).
+  audible (still posted; no step waits for it now); `action("recording.stopped")` — the **first line of
+  `RecordingCoordinator.stop()`**, before the pill hides, so every way of stopping completes step 5 (■, the
+  record shortcut, the menu bar, a failed stream, quitting); `action("recording.started")` —
+  `RecordingCoordinator.begin` once the engine runs (no step waits on it). Discard, Restart and cancelling the
+  countdown post nothing (the tour pauses when the pill goes and resumes with the next recording).
+- **Verified (probe, 2026-09-26, same technique as below; no real recording, mic or camera):** default user
+  (mic off, full screen) → strip steps 1–6 in order, then pill steps 1, 3, 4, 5; mic on + Area → strip 1–6,
+  pill 1–5, and the mic was still **on** after the tour; GIF → strip 1, 2, 5, 6. Every anchor found, every
+  Try step completed on its real action (the menus' `menuWillOpen`, the target buttons, ■). `pill.camera`:
+  absent with "No camera found" and with camera access off, present when the camera is off or on. Snapshot:
+  `docs/reviews/2026-09-26-tours-fixes/content-04-strip-format-fps-dark.jpg`.
 
 #### Tags are never recorded — not even for one frame (owner)
 A tag is two windows per overlay (decor = dim + box + leader line, and the bubble; §7.3). Recording pill runs
@@ -2995,15 +3068,31 @@ the per-part controls and the two ways to save. macOS files: steps
   comes last of "load succeeded" and `showWindow` — never over "Loading…" or the "can't be opened" state.
 - Steps:
 
-| # | Kind (event) | Anchor = control | Title | Body |
-|---|---|---|---|---|
-| 1 | E | `video.preview` = the video preview | Preview | Plays only the parts you keep. Click it, or press Space, to play. |
-| 2 | E | `video.timeline` = the timeline's visible area (ruler + filmstrip) | The timeline | Click to move the playhead. Drag a part’s yellow edge to trim it. |
-| 3 | T `action("video.split")` | `video.timeline` | Split the clip | Click the timeline to place the playhead, then press S or click Split. |
-| 4 | T `action("video.segmentDeleted")` | `video.timeline` | Delete a part | Click a part to select it, then press ⌫ to cut it out. |
-| 5 | E | `video.segment` = the selected-part row ("Segment n of m", its source range, Speed, Mute segment) | Selected part | Change its speed or mute just this part. Right-click a part for the same. |
-| 6 | E | `video.saveCopy` = Save as Copy (with its ▾ menu) | Save a copy | Saves the edit as a new file. The ▾ menu exports a GIF instead. |
-| 7 | E | `video.replace` = Replace Original | Replace the original | Overwrites the recording with this edit, then reloads it for more changes. |
+| # | Kind (event) | Anchor = control | Title | Body | Requires | Placement |
+|---|---|---|---|---|---|---|
+| 1 | E | `video.preview` = the video preview | Preview | Plays only the parts you keep. Click it, or press Space, to play. | — | automatic |
+| 2 | E | `video.timeline` = the timeline's visible area (ruler + filmstrip) | The timeline | Click to move the playhead. Drag a part’s yellow edge to trim it. | — | `above` |
+| 3 | T `action("video.split")` | `video.timeline` | Split the clip | Click the timeline to place the playhead, then press S or click Split. | — | `above` |
+| 4 | T `action("video.segmentDeleted")` | `video.timeline` | Delete a part | Click a part to select it, then press ⌫ to cut it out. | `action("video.split")` | `above` |
+| 5 | E | `video.segment` = the selected-part row ("Segment n of m", its source range, Speed, Mute segment) | Selected part | Change its speed or mute just this part. Right-click a part for the same. | — | `right` |
+| 6 | E | `video.saveCopy` = Save as Copy (with its ▾ menu) | Save a copy | Saves the edit as a new file. The ▾ menu exports a GIF instead. | — | automatic |
+| 7 | E | `video.replace` = Replace Original | Replace the original | Overwrites the recording with this edit, then reloads it for more changes. | — | automatic |
+
+Requires / Placement as in §7.4 (tried first, dropped for the automatic side when it doesn't fit). Why
+(review 2026-09-26, `docs/reviews/2026-09-26-tours-review.md`):
+- **Step 4 requires the split.** With only one part, deleting is refused (a part must remain — `CutList.remove`)
+  and ⌫ just beeps, so after Skip Step on "Split the clip" step 4 would be a dead end (V3); it's skipped instead.
+- **Steps 2–4 `above`** — over the preview, which has room; automatically they went below the timeline and
+  hung past the window's bottom edge over the action bar (V4).
+- **Step 5 `right`** — beside the window, at the row's height, when the screen has room (a small window, or a
+  wide screen); otherwise the automatic side, which is below the row, or — when the window sits on the
+  screen's bottom edge, as at the 780 × 560 minimum size — above it, over the timeline and its Split/Delete
+  buttons (V2). An explicit `below` couldn't help there: it doesn't fit either.
+- Step 1 needs no hint: the automatic big-control rule (§7.3) puts the tag beside the window or inside the
+  preview's top-right corner.
+- **Verified (probe, 2026-09-26, 960 × 720 and 780 × 560 windows):** all 7 steps in order, both Try steps
+  completed on a real click + S / ⌫; in a build merged with the engine lane's `requires`, a replay with Skip Step
+  on "Split the clip" skipped "Delete a part"; steps 2–4 sat above the timeline in both sizes.
 
 - **Why step 3 outlines the timeline, not the Split button:** the tag placed under the button covered the very
   timeline the step asks the user to click (probe snapshot). `video.timeline` is the timeline's **scroll view**
@@ -3046,25 +3135,39 @@ the screen (847 pt on a 956 pt screen), and the Keyboard Shortcuts card is below
 
 **Settings tour** — id `settings`, version 1, surface `settings`, trigger `surfaceShown(settings)`, no hand-over.
 
-| # | | Anchor → the element it outlines | Title | Body | Advances on |
-|---|---|---|---|---|---|
-| 1 | E | `settings.cards` → the three-column card grid (everything between the header and Keyboard Shortcuts) | Your settings | Related settings share a card. Changes apply right away. | Next |
-| 2 | E | `settings.tip` → the ⓘ help icon next to "After a capture" (first row of the Capture card) | Tips on every row | Hover any ⓘ for a plain explanation of that setting and an example. | Next |
-| 3 | E | `settings.shortcuts` → the full-width Keyboard Shortcuts card (scrolled into view) | Keyboard shortcuts | Click any shortcut, then press new keys to change it. Esc cancels. | Done |
+| # | | Anchor → the element it outlines | Title | Body | Advances on | Requires | Placement |
+|---|---|---|---|---|---|---|---|
+| 1 | E | `settings.cards` → the three-column card grid (everything between the header and Keyboard Shortcuts) | Your settings | Related settings share a card. Changes apply right away. | Next | — | automatic |
+| 2 | E | `settings.tip` → the "After a capture" label **together with** its ⓘ help icon (first row of the Capture card) | Tips on every row | Hover any ⓘ for a plain explanation of that setting and an example. | Next | — | `above` |
+| 3 | E | `settings.shortcuts` → the full-width Keyboard Shortcuts card (scrolled into view) | Keyboard shortcuts | Click any shortcut, then press new keys to change it. Esc cancels. | Done | — | automatic |
 
-On a 1470 × 956 screen the 960 pt window leaves no room beside it, so step 1's tag sits inside the box's
-top-left corner (the §7.3 "over" fallback) and step 3's tag sits above the card.
+- Step 1: `settings.cards` fills most of the window, so the automatic big-control rule (§7.3) puts the tag
+  beside the window when the screen has room, else inside the cards' top-right corner (over the first rows of
+  the third column — never the "After a capture" row step 2 needs). Before that rule it fell back to the
+  top-left corner and covered the Capture card (review S1).
+- Step 2 outlines the label + ⓘ (`SettingsView.fieldLabel(…, tipAnchor:)` puts the anchor on the whole
+  label-and-ⓘ row; WPF: the `StackPanel` holding both). With only the 16 pt ⓘ outlined, the tag sat left of it
+  and hid the label, so the user couldn't see which setting the ⓘ belonged to (S2). `above` puts the tag over
+  the page title and the Capture card's header; automatically it went below, over the next rows.
+- Step 3's tag sits above the card.
 
 **History tour** — id `history`, version 1, surface `history`, trigger `surfaceShown(history)`, no hand-over.
 
-| # | | Anchor → the element it outlines | Title | Body | Advances on |
-|---|---|---|---|---|---|
-| 1 | E | `history.grid` → the grid's scroll area (or, when History is empty, the empty-state view) | Your capture history | Every screenshot and recording you take is kept here, newest first. | Next |
-| 2 | T | `history.item` → the first (newest) capture's cell | Select a capture | Click any capture to select it. Double-click opens it instead. | `action("history.selected")` |
-| 3 | E | `history.item` | Several at once | ⌘-click or ⇧-click to add more, then drag them into any app together. | Next |
-| 4 | E | `history.actions` → the bottom action bar (count · Copy · Annotate · Pin · Edit Video… · Show in Finder · Delete · ⋯) | Actions | Copy, annotate, pin or delete the selection. Right-click does the same. | Done |
+| # | | Anchor → the element it outlines | Title | Body | Advances on | Requires | Placement |
+|---|---|---|---|---|---|---|---|
+| 1 | E | `history.grid` → the grid's scroll area (or, when History is empty, the empty-state view) | Your capture history | Every screenshot and recording you take is kept here, newest first. | Next | — | automatic |
+| 2 | T | `history.item` → the first (newest) capture's cell | Select a capture | Click any capture to select it. Double-click opens it instead. | `action("history.selected")` | — | automatic |
+| 3 | E | `history.item` | Several at once | ⌘-click or ⇧-click to add more, then drag them into any app together. | Next | — | automatic |
+| 4 | E | `history.actions` → the bottom action bar (count · Copy · Annotate · Pin · Edit Video… · Show in Finder · Delete · ⋯) | Actions | Copy, annotate, pin, edit a video, show in Finder or delete. Right-click works too. | Done | — | automatic |
 
-- `history.item` exists only while History has entries, so with an empty History the tour is steps 1 and 4.
+- `history.item` exists only while History has entries, and `history.actions` too (the view sets it only
+  when there are entries: `actionBar.tourAnchor(history.entries.isEmpty ? "" : "history.actions")`) — with
+  an empty History the tour is step 1 alone, instead of "Actions" describing a selection that can't exist over
+  disabled buttons (review H1). **WPF:** clear the action bar's AutomationId while the list is empty.
+- Verified (probe, 2026-09-26): 5 synthetic captures → steps 1–4, a real click on the first cell completed
+  step 2; empty History → step 1 only, no `history.actions` anchor. Settings: step 2's anchor is 108 × 16 pt
+  (label + ⓘ) and its tag sat above it in a build merged with the engine lane's placement code. Snapshot:
+  `docs/reviews/2026-09-26-tours-fixes/content-05-settings-tip-label-dark.jpg`.
 - Events (`HistoryView` in `HistoryWindowController.swift`): `action("history.selected")` after any single
   click on a cell (plain, ⌘ or ⇧ — the selection has already changed; a double-click's first click posts it
   too); `action("history.dragged")` when a drag of one or more captures out of the grid starts (no step waits
