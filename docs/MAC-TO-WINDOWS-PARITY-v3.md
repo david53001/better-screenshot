@@ -2457,6 +2457,11 @@ for the leader line).
    axis when the tag fits within it** (a tag below the editor's title-bar ⓘ ends at the window's right edge
    instead of hanging 170 past it). The side **fits** if the tag is fully inside `area` *and* still overlaps
    the box's span on the sliding axis (so the leader stays short). Round the tag's origin to whole points.
+   **Left/right tags then slide off the host's controls** (review W1, 2026-09-26): among y = centred, and
+   y just above / just below each obstacle (the host's other controls — same list as the leader routing),
+   each clamped so the tag's straight part (inset by the tag radius 12) still overlaps the box's straight
+   part (inset by the box radius), pick the y whose tag rect covers the least obstacle area; ties → nearest
+   centred. No obstacles → centred. (The Welcome page's ⇧⌘4 tag no longer covers the text line above it.)
 6. **Order of attempts** (first that fits wins):
    A. The step's **placement**, if not `automatic`: `left/right/above/below` → that one side (outside the
       keep-out, then outside just the box); `insideCorner` → the inside corner (C). If it doesn't fit, carry

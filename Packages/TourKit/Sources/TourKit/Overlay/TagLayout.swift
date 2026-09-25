@@ -163,7 +163,8 @@ enum TagLayout {
             switch side {
             case .left, .right:
                 let x = side == .left ? clear.minX - gap - w : clear.maxX + gap
-                let y = clamp(box.midY - h / 2, ys.0, ys.1)
+                let y = clearestY(centred: clamp(box.midY - h / 2, ys.0, ys.1), x: x, size: size,
+                                  box: box, range: ys, obstacles: obstacles)
                 tag = CGRect(x: x, y: y, width: w, height: h)
                 guard tag.minX >= area.minX, tag.maxX <= area.maxX, h <= area.height,
                       tag.minY < box.maxY, tag.maxY > box.minY else { continue }
@@ -181,6 +182,33 @@ enum TagLayout {
                              leader: leader(side: side, tag: tag, box: box, outer: outer, obstacles: obstacles))
         }
         return nil
+    }
+
+    /// A side tag's y: centred on the box, unless sliding it along the box (keeping a straight leader —
+    /// the tag's straight part still overlapping the box's) covers less of the host's other controls,
+    /// e.g. the Welcome page's text line just above the ⇧⌘4 row (review W1). Ties stay nearest the centre.
+    private static func clearestY(centred: CGFloat, x: CGFloat, size: CGSize, box: CGRect,
+                                  range: (CGFloat, CGFloat), obstacles: [CGRect]) -> CGFloat {
+        guard !obstacles.isEmpty else { return centred }
+        let h = size.height, reach = TagStyle.tagRadius + TagStyle.boxRadius
+        let lo = max(range.0, box.minY + reach - h), hi = min(range.1, box.maxY - reach)
+        guard lo <= hi else { return centred }
+        func covered(_ y: CGFloat) -> CGFloat {
+            let tag = CGRect(x: x, y: y, width: size.width, height: h)
+            return obstacles.reduce(0) { sum, o in
+                let i = tag.intersection(o)
+                return i.isNull ? sum : sum + i.width * i.height
+            }
+        }
+        var candidates = [clamp(centred, lo, hi)]
+        for o in obstacles {   // just clear of each control, above or below it
+            candidates.append(clamp(o.maxY + 1, lo, hi))
+            candidates.append(clamp(o.minY - 1 - h, lo, hi))
+        }
+        return candidates.min { a, b in
+            let ca = covered(a), cb = covered(b)
+            return ca != cb ? ca < cb : abs(a - centred) < abs(b - centred)
+        }!
     }
 
     /// Straight across when the tag and box overlap enough — at the point nearest the box's middle that

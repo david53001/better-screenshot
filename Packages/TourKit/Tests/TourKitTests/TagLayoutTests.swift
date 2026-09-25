@@ -415,6 +415,23 @@ let tagStyleTests: [TestCase] = [
         t.equal(TagStyle.announcement(title: "Colours", body: "Pick a colour.", number: 2, total: 7),
                 "Colours. Pick a colour. Step 2 of 7.")
     },
+    TestCase("aSideTagSlidesOffALabelItWouldCover") { t in
+        // The Welcome page (review W1): the ⇧⌘4 keys cell, with the page's text line just above it and to
+        // the left, where a tag centred on the row would cover it.
+        let screen = CGRect(x: 0, y: 0, width: 1470, height: 900)
+        let keys = CGRect(x: 650, y: 420, width: 70, height: 26)
+        let tagSize = CGSize(width: 260, height: 96)
+        let centred = TagLayout.place(anchor: keys, tagSize: tagSize, visible: screen)
+        let text = CGRect(x: 380, y: centred.tag.maxY - 20, width: 440, height: 40)   // overlaps it
+        let p = TagLayout.place(anchor: keys, tagSize: tagSize, visible: screen, obstacles: [text])
+        t.equal(p.side, .left)
+        t.isFalse(p.tag.intersects(text), "tag \(p.tag) still covers the text \(text)")
+        t.isTrue(p.tag.minY < p.box.maxY && p.tag.maxY > p.box.minY, "tag still beside the box")
+        // Nothing in the way → centred as before.
+        let free = TagLayout.place(anchor: keys, tagSize: tagSize, visible: screen,
+                                   obstacles: [CGRect(x: 900, y: 100, width: 50, height: 20)])
+        t.equal(free.tag, centred.tag)
+    },
     TestCase("tourRedIsC62D22") { t in
         let c = TagStyle.tourRed.usingColorSpace(.sRGB)!
         t.equal(Int((c.redComponent * 255).rounded()), 0xC6)
