@@ -7,7 +7,10 @@ Status + lanes: `docs/PROGRESS-v3.md` (lane "Tours & help"). Windows-port notes:
 
 ## What's here (`Sources/TourKit/`)
 - `TourModel.swift` — `TourID` (persisted raw values — never rename), `TourSurface`, `TourEvent`,
-  `TourStep` (anchor · Explain/Try · title · body), `TourTrigger`, `Tour`.
+  `TourStep` (anchor · Explain/Try · title · body · `requires` · `placement`), `TourTrigger`, `Tour`.
+  `requires: TourEvent?` = show the step only if that event was seen during this run (else skipped like a
+  missing anchor — "Resize your text" needs a text). `placement` = `.automatic` (default) or
+  `.left/.right/.above/.below/.insideCorner`, tried first and dropped when it doesn't fit on screen.
 - `TourEvents.swift` — the one-way bus. Surfaces call `TourEvents.post(_:)` and
   `TourEvents.surfaceShown(_:in:)`; the app's `TourCoordinator` (`App/Tours/`) sets the handlers. No
   handler = no-op, so posting is always safe.
@@ -25,16 +28,28 @@ Status + lanes: `docs/PROGRESS-v3.md` (lane "Tours & help"). Windows-port notes:
   `shouldAskQuestion` / `shouldOpenWelcomeOnLaunch`, `tours(triggeredBy:)`; `TourText` resolves
   `{shortcut:<action>}` through a caller-supplied lookup.
 - `TourEngine.swift` — one tour's pure state machine: start at a step · Next (Explain only) · Skip step ·
-  Skip tour · Try steps advance only on their exact event · missing anchors and already-done Try steps
-  skipped · pause/resume · `.finished(handsOverTo:)`; `start`/`resume` with nothing presentable →
-  `.nothingToShow` (never burns a tour).
+  Skip tour · Try steps advance only on their exact event · missing anchors, already-done Try steps and
+  steps whose `requires` wasn't seen skipped · pause/resume · `.finished(handsOverTo:)`; `start`/`resume`
+  with nothing presentable → `.nothingToShow` (never burns a tour). `progress(isPresent:)` is the tag's
+  "n of m" over the steps that actually show (shown so far + presentable after; a `requires` a Try step
+  ahead will meet counts) — never the catalog index, so it doesn't skip numbers; its total can change.
+  `init(tour:observed:)` carries events into a resumed run.
 - `TourNames.swift` — `TourID.menuTitle` / `menuSymbol` for the Help & Tours menu.
 - `Overlay/` — the tag (spec §14.3): `TagOverlayController()` is the real `TourTagPresenting` — a
-  click-through decor panel (20% dim, red box, leader line) + a clickable tag panel, both child windows of
-  the host that never become key; follows the host/anchor, hides with the anchor; Return = Next / Esc =
-  Skip tour via a local monitor (not while typing; Esc also not while the host window's
-  `TourEscapeClaiming.claimsEscape` is true — the editor's Esc-to-Select). Pure `TagLayout` (placement) and `TagKeys` are
-  unit-tested; all sizes/colours/strings in `TagStyle`; `windowNumbers` is for a capture's exclusion list.
+  click-through decor panel (dim 20 %, 35 % over a dark control; red box; leader line) + a clickable tag
+  panel, both child windows of the host that never become key; follows the host/anchor, hides with the
+  anchor; Return = Next / Esc = Skip Tour via a local monitor — not while typing, not while the window or
+  its first responder says `TourKeysClaiming.claimsTourKeys` (Settings while a shortcut well records), and
+  Esc also not while the host's `TourEscapeClaiming.claimsEscape` is true (the editor's Esc-to-Select).
+  Local monitors run in the order they were added and the tag's usually comes first, so any control with
+  its own Return/Esc must claim them this way. `TourHostShaping` (`Overlay/TourHostShaping.swift`) lets a
+  borderless host report what's visible of it (the pill: capsule + hint band) so the tag dims/keeps out of
+  that, not its window. `updateProgress(number:total:)` redoes the counter in place. Pure `TagLayout`
+  (placement: step placement → big control (≥ 60 % of the window both ways) beside the window or in its
+  top-right corner → sides; title-bar anchors below-first; slide within the host; leader routed round the
+  host's other controls) and `TagKeys` are unit-tested; all sizes/colours/strings in `TagStyle` — tour red
+  #C62D22 (white 5.5:1), secondary text 90 % white; `TagContrastTests` checks every text/background pair
+  against WCAG AA. `windowNumbers` is for a capture's exclusion list.
   `windows` (both panels, shown or not) is what the app's `TourTagRecordingGate` (App/Recording) keeps
   transparent until a running screen recording leaves them out — **never set the panels' `alphaValue` here**
   (e.g. a fade-in): the gate owns it, and that's what keeps tags out of recordings.

@@ -260,9 +260,11 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.pill)
                 if toursWereReset {
-                    Text("Tours reset")
+                    // Says how to see them when the switch above is off (nothing starts by itself then).
+                    Text(TourRules.resetConfirmation(firstUseToursEnabled: toursEnabled))
                         .font(SettingsTheme.Font.rowSubLabel)
                         .foregroundColor(SettingsTheme.label)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }

@@ -83,8 +83,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         tours.extraAnchorWindows = { [weak self] in self?.menuBar?.iconWindow.map { [$0] } ?? [] }
         menuBar.onReplayTour = { [weak self] tour in self?.tours.replay(tour, in: nil) }
         menuBar.onResetTours = { [weak self] in
-            self?.tours.resetAllTours()
-            self?.hud.show("Tours reset", symbol: "arrow.counterclockwise")
+            guard let self else { return }
+            self.tours.resetAllTours()
+            // With first-use tours off nothing starts by itself — the HUD says how to turn them on.
+            self.hud.show(TourRules.resetConfirmation(firstUseToursEnabled: self.tours.firstUseToursEnabled),
+                          symbol: "arrow.counterclockwise")
         }
         menuBar.onToggleRecording = { [weak self] in self?.recordingCoordinator.toggle() }
         menuBar.onOpenHistory = { [weak self] in self?.historyWindow.show() }
@@ -97,6 +100,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         onboarding.shouldAskTourQuestion = { [weak self] in self?.tours.shouldAskQuestion ?? false }
         onboarding.onTourAnswer = { [weak self] showMeAround, window in
             self?.tours.answerQuestion(showMeAround: showMeAround, in: window)
+        }
+        // Its job is done once the Welcome tour ends: don't leave it behind the Quick Access/Editor tours.
+        tours.onFinished = { [weak self] id in
+            if id == .welcome { self?.onboarding.close() }
         }
         coordinator.presentSetup = { [weak self] in self?.onboarding.show(.needsPermission) }
         recordingCoordinator.presentSetup = { [weak self] in self?.onboarding.show(.needsPermission) }

@@ -17,4 +17,11 @@ public protocol TourTagPresenting: AnyObject {
     /// A Try step was just done: a brief "done" state (and VoiceOver announcement) before the next step.
     func showCompleted()
     func hide()
+    /// The step on screen keeps its place, but "n of m" changed (a later step's control appeared or went).
+    func updateProgress(number: Int, total: Int)
+}
+
+public extension TourTagPresenting {
+    /// Presenters that only show a counter when a step appears can ignore mid-step changes.
+    func updateProgress(number: Int, total: Int) {}
 }

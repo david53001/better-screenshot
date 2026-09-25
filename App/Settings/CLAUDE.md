@@ -21,7 +21,9 @@
   `.fixedSize(horizontal: false, vertical: true)` on each `Text`, or the popover cuts every line to one row.
 - `Components/MonoControls.swift` — `MonoComboField` must use `.menuStyle(.button)` + `.buttonStyle(.plain)`
   + `.menuIndicator(.hidden)`; `.borderlessButton` renders it as bare text with a second chevron.
-- `SettingsWindowController.swift` — hosts the SwiftUI settings view in an AppKit window. `makeWindow()`
+- `SettingsWindowController.swift` — hosts the SwiftUI settings view in an AppKit window (`SettingsWindow`,
+  which adopts TourKit's `TourKeysClaiming`: while any `RecorderWell` is recording, Return/Esc go to the
+  well, never to a tour tag — `RecorderWell.anyRecording(in:)` in `ShortcutRecorderField.swift`). `makeWindow()`
   (internal, so probes can build it without showing it) installs the title-bar ⓘ (TourKit `InfoButton`:
   Replay Tour + the bound shortcuts and Esc, kept current by observing `store.$bindings`); `show()` posts
   `TourEvents.surfaceShown(.settings)`. Settings tour anchors in `SettingsView`: `settings.cards` (the

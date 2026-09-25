@@ -4,7 +4,8 @@
 /// host window) so the engine stays testable.
 ///
 /// Rules:
-/// - A step is shown only if its anchor is present; otherwise it is skipped.
+/// - A step is shown only if its anchor is present and its `requires` event (if any) was seen during this
+///   run; otherwise it is skipped (a "Resize your text" step whose text was never made).
 /// - A Try step advances only when its exact `advanceOn` event arrives (or on Skip step) — never on Next.
 /// - A Try step whose event was already seen during this run is skipped silently ("already done").
 /// - Walking past the last step finishes the tour and reports its hand-over.
@@ -33,11 +34,23 @@ public struct TourEngine: Equatable, Sendable {
     public private(set) var status: Status = .idle
     /// Index of the step on screen (running) or to resume at (paused).
     public private(set) var current: Int?
-    /// Every event seen while running — lets a later Try step the user already did be skipped.
+    /// Every event seen while running — lets a later Try step the user already did be skipped, and a
+    /// step that `requires` one be shown.
     public private(set) var observed: Set<TourEvent> = []
+    /// Steps shown in this run (for the "n of m" counter).
+    public private(set) var shown: Set<Int> = []
+    /// Where this run started: steps before it belong to an earlier run (a resumed tour).
+    public private(set) var runStart = 0
 
     public init(tour: Tour) {
         self.tour = tour
+    }
+
+    /// Carries events seen before a pause into the resumed run (the coordinator's own suspensions), so
+    /// a step that `requires` one of them still shows.
+    public init(tour: Tour, observed: Set<TourEvent>) {
+        self.tour = tour
+        self.observed = observed
     }
 
     public var currentStep: TourStep? {
@@ -52,6 +65,8 @@ public struct TourEngine: Equatable, Sendable {
         guard let first = firstPresentable(from: from, isPresent: isPresent) else { return .nothingToShow }
         status = .running
         current = first
+        runStart = from
+        shown = [first]
         return .show(step: first)
     }
 
@@ -101,12 +116,43 @@ public struct TourEngine: Equatable, Sendable {
         return start(at: current ?? 0, isPresent: isPresent)
     }
 
+    /// "n of m" for the step on screen, counting only steps that show in this run (review 2026-09-26, T2):
+    /// - before it: the ones shown in this run — and, for a resumed run, the earlier run's steps whose
+    ///   anchor is present now;
+    /// - it;
+    /// - after it: the ones presentable now (anchor present, Try step not already done, `requires` met),
+    ///   where a `requires` also counts as met when a counted Try step before it (this one included)
+    ///   waits for that event — the user is expected to do it.
+    /// Ask again whenever something may have changed (a new step, an anchor appearing or going): the
+    /// numbers never skip, but the total can move. Nil unless running or paused.
+    public func progress(isPresent: (String) -> Bool) -> (number: Int, total: Int)? {
+        guard status == .running || status == .paused, let current else { return nil }
+        var number = 0, total = 0
+        var expected = observed
+        for (i, step) in tour.steps.enumerated() {
+            let counts: Bool
+            if i < current {
+                counts = shown.contains(i) || (i < runStart && isPresent(step.anchor))
+            } else if i == current {
+                counts = true
+            } else {
+                counts = isPresent(step.anchor) && !alreadyDone(step) && requirementMet(step, seen: expected)
+            }
+            guard counts else { continue }
+            total += 1
+            if i <= current { number += 1 }
+            if i >= current, case .tryIt(let event) = step.kind { expected.insert(event) }
+        }
+        return (number, total)
+    }
+
     // MARK: - Private
 
     private mutating func advance(isPresent: (String) -> Bool) -> Effect {
         let from = (current ?? -1) + 1
         if let next = firstPresentable(from: from, isPresent: isPresent) {
             current = next
+            shown.insert(next)
             return .show(step: next)
         }
         status = .finished
@@ -118,7 +164,7 @@ public struct TourEngine: Equatable, Sendable {
         var i = max(0, index)
         while i < tour.steps.count {
             let step = tour.steps[i]
-            if isPresent(step.anchor), !alreadyDone(step) { return i }
+            if isPresent(step.anchor), !alreadyDone(step), requirementMet(step, seen: observed) { return i }
             i += 1
         }
         return nil
@@ -127,5 +173,9 @@ public struct TourEngine: Equatable, Sendable {
     private func alreadyDone(_ step: TourStep) -> Bool {
         if case .tryIt(let event) = step.kind { return observed.contains(event) }
         return false
+    }
+
+    private func requirementMet(_ step: TourStep, seen: Set<TourEvent>) -> Bool {
+        step.requires.map(seen.contains) ?? true
     }
 }

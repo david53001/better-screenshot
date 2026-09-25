@@ -59,7 +59,10 @@ an Explain step advances on Next, a **Try** step when the app posts the matching
   `show()` ends with `TourEvents.surfaceShown(.recordStrip)`. The ⓘ (`InfoButton`) sits between FPS and ✕.
 - **Pill** (`Recording pill` tour): anchors `pill.timer/mic/systemAudio/camera/switch/restart/discard/pause/
   collapse/stop`; `pill.mic` only while there's a mic track (set in `render`). `micTapped` posts
-  `action("pill.micMuted")` when muting; `show()` ends with `surfaceShown(.recordingPill)`. No ⓘ.
+  `action("pill.micMuted")` when muting; `show()` ends with `surfaceShown(.recordingPill)`. No ⓘ. The pill's
+  window is a `PillPanel` adopting TourKit's `TourHostShaping`: it reports the capsule (`pillFrame`, radius
+  20) plus the hover-hint band above and below it, so a tour tag dims only the capsule and doesn't jump
+  30 pt when a hovered control grows the window for its hint.
 - **Coordinator:** `stop()` posts `action("recording.stopped")` first (every stop path); `begin` posts
   `action("recording.started")` once the engine runs.
 - **Tags are never recorded** (owner: not even one frame) — `TourTagRecordingGate.swift`: every display filter

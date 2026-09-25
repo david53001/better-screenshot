@@ -20,11 +20,18 @@ stream building the tag overlay + ⓘ button in TourKit (status: `docs/PROGRESS-
     `.event(…)`-triggered tours (only when nothing is running); `replay(id, window)` → now in that window,
     or (nil) now if its surface is on screen, else queued + the surface opened (`openSurface`) or a HUD note.
   - Automatic starts need `firstUseToursEnabled == true` (absent = false) and an unseen tour version. The
-    audience only decides whether the Welcome window asks.
+    audience only decides whether the Welcome window asks. Reset All Tours' confirmation is
+    `TourRules.resetConfirmation(firstUseToursEnabled:)` — it says to turn on Tours & tips when they're off.
   - One tour on screen: another surface's tour pauses the running one (resumed when that one ends, if its
-    window is still up). A tour on its last step that `handsOverTo` the starting tour is finished instead.
+    window is still up, with the events it had seen — `TourEngine(tour:observed:)`). A tour on its last
+    step that `handsOverTo` the starting tour is finished instead.
     Host window closed or ordered out → pause (0.5 s watchdog while a tour runs; panels are ordered out,
     not closed). A step whose anchor disappears is skipped. Skip tour / finish → `toursSeen[id] = version`.
+  - "n of m" comes from `TourEngine.progress` (only the steps that actually show); the 0.5 s watchdog
+    recomputes it and calls the tag's `updateProgress` when it changed.
+  - `onFinished(id)` fires when a finished run leaves the screen (incl. when the next tour replaces its
+    "Done" state, from `stopRunning`, and a last-step tour finished by its hand-over) — `AppDelegate` closes
+    the Welcome window when the Welcome tour finishes. Not on Skip tour.
   - Persists exactly: `tourAudience`, `tourQuestionAnswered`, `firstUseToursEnabled`, `toursSeen`,
     `toursPaused` (`TourPreferenceKey`).
   - Anchors are looked up in the tour's host window, then in `extraAnchorWindows()` (only windows visible on

@@ -147,4 +147,108 @@ let tourEngineTests: [TestCase] = [
         t.equal(e.pause(), .none)
         t.equal(e.resume(isPresent: all), .none)
     },
+
+    // MARK: requires (review 2026-09-26, X2 / V3)
+
+    TestCase("aStepWhoseRequirementWasNeverSeenIsSkipped") { t in
+        var e = TourEngine(tour: textLike)
+        t.equal(e.start(isPresent: all), .show(step: 0))
+        t.equal(e.skipStep(isPresent: all), .show(step: 1))       // no text made
+        t.equal(e.next(isPresent: all), .show(step: 3))           // "Resize your text" skipped like a missing anchor
+    },
+    TestCase("aStepWhoseRequirementWasSeenIsShown") { t in
+        var e = TourEngine(tour: textLike)
+        _ = e.start(isPresent: all)
+        t.equal(e.handle(.annotationAdded("text"), isPresent: all), .show(step: 1))
+        t.equal(e.next(isPresent: all), .show(step: 2))
+    },
+    TestCase("aRequirementSeenOnAnExplainStepCountsToo") { t in
+        var e = TourEngine(tour: textLike)
+        _ = e.start(isPresent: all)
+        _ = e.skipStep(isPresent: all)
+        _ = e.handle(.annotationAdded("text"), isPresent: all)     // made during "Or drag a box"
+        t.equal(e.next(isPresent: all), .show(step: 2))
+    },
+    TestCase("startingAtAStepWhoseRequirementIsMissingSkipsIt") { t in
+        var e = TourEngine(tour: textLike)
+        t.equal(e.start(at: 2, isPresent: all), .show(step: 3))
+        var carried = TourEngine(tour: textLike, observed: [.annotationAdded("text")])
+        t.equal(carried.start(at: 2, isPresent: all), .show(step: 2))   // a resumed run keeps what it saw
+    },
+    TestCase("aTrailingUnmetRequirementFinishesTheTour") { t in
+        let short = Tour(id: .videoEditor, surface: .videoEditor, trigger: .surfaceShown(.videoEditor), steps: [
+            TourStep(anchor: "video.a", kind: .tryIt(advanceOn: .action("video.split")), title: "A", body: "Split."),
+            TourStep(anchor: "video.b", kind: .tryIt(advanceOn: .action("video.segmentDeleted")), title: "B",
+                     body: "Delete.", requires: .action("video.split")),
+        ])
+        var e = TourEngine(tour: short)
+        _ = e.start(isPresent: all)
+        t.equal(e.skipStep(isPresent: all), .finished(handsOverTo: nil))
+    },
+
+    // MARK: progress — "n of m" over the steps that actually show (review 2026-09-26, T2)
+
+    TestCase("progressCountsEveryStepWhenAllShow") { t in
+        var e = TourEngine(tour: tour)
+        _ = e.start(isPresent: all)
+        t.isTrue(e.progress(isPresent: all)! == (1, 5))
+        _ = e.next(isPresent: all)
+        t.isTrue(e.progress(isPresent: all)! == (2, 5))
+    },
+    TestCase("progressNeverSkipsANumberForMissingControls") { t in
+        // The recording pill for a new user: no mic track, full screen (no Switch button).
+        let pill = Tour(id: .recordingPill, surface: .recordingPill, trigger: .surfaceShown(.recordingPill),
+                        steps: (1...10).map { TourStep(anchor: "pill.s\($0)", kind: .explain, title: "S", body: "S.") })
+        let present = except("pill.s2", "pill.s5")
+        var e = TourEngine(tour: pill)
+        var seen: [String] = []
+        var effect = e.start(isPresent: present)
+        while case .show = effect {
+            let p = e.progress(isPresent: present)!
+            seen.append("\(p.number)/\(p.total)")
+            effect = e.next(isPresent: present)
+        }
+        t.equal(seen, ["1/8", "2/8", "3/8", "4/8", "5/8", "6/8", "7/8", "8/8"])
+    },
+    TestCase("progressTotalFollowsControlsComingAndGoing") { t in
+        var e = TourEngine(tour: tour)
+        _ = e.start(isPresent: all)
+        t.isTrue(e.progress(isPresent: except("editor.c", "editor.e"))! == (1, 3))
+        t.isTrue(e.progress(isPresent: all)! == (1, 5))
+    },
+    TestCase("progressLeavesOutTryStepsAlreadyDone") { t in
+        var e = TourEngine(tour: tour)
+        _ = e.start(isPresent: all)
+        _ = e.handle(.annotationAdded("arrow"), isPresent: all)    // step d done early
+        t.isTrue(e.progress(isPresent: all)! == (1, 4))
+    },
+    TestCase("progressExpectsARequirementATryStepAheadWillMeet") { t in
+        var e = TourEngine(tour: textLike)
+        _ = e.start(isPresent: all)
+        t.isTrue(e.progress(isPresent: all)! == (1, 4), "“Resize” counted: the user is about to make the text")
+        _ = e.skipStep(isPresent: all)
+        t.isTrue(e.progress(isPresent: all)! == (2, 3), "skipped the text → “Resize” no longer counted")
+    },
+    TestCase("progressOfAResumedRunCountsTheEarlierRunsSteps") { t in
+        var e = TourEngine(tour: tour)
+        _ = e.start(at: 2, isPresent: all)
+        t.isTrue(e.progress(isPresent: all)! == (3, 5))
+        t.isTrue(e.progress(isPresent: except("editor.a"))! == (2, 4))
+    },
+    TestCase("progressIsNilWhenNotRunning") { t in
+        var e = TourEngine(tour: tour)
+        t.isNil(e.progress(isPresent: all))
+        _ = e.start(at: 4, isPresent: all)
+        _ = e.next(isPresent: all)
+        t.isNil(e.progress(isPresent: all))
+    },
 ]
+
+/// Text-tour shape: try "make a text" · explain · explain "resize it" (requires the text) · explain.
+private let textLike = Tour(id: .text, surface: .editor, trigger: .event(.toolSelected("text")), steps: [
+    TourStep(anchor: "editor.canvas", kind: .tryIt(advanceOn: .annotationAdded("text")), title: "Type", body: "Click."),
+    TourStep(anchor: "editor.canvas", kind: .explain, title: "Box", body: "Drag."),
+    TourStep(anchor: "editor.canvas", kind: .explain, title: "Resize", body: "Resize.",
+             requires: .annotationAdded("text")),
+    TourStep(anchor: "editor.inspector.styles", kind: .explain, title: "Styles", body: "Styles."),
+])
