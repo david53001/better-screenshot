@@ -189,11 +189,14 @@ public final class TagOverlayController: TourTagPresenting {
             }
             return
         }
-        for w in [decor, tagPanel] where w.parent !== host || !w.isVisible {
-            w.parent?.removeChildWindow(w)
-            w.level = Self.probeLevel ?? host.level
-            w.collectionBehavior = [.fullScreenAuxiliary, .ignoresCycle]
-            host.addChildWindow(w, ordered: .above)   // decor first, then the tag above it
+        // Both or neither: re-adding one alone could put the dim above the tag.
+        if [decor, tagPanel].contains(where: { $0.parent !== host || !$0.isVisible }) {
+            for w in [tagPanel, decor] { w.parent?.removeChildWindow(w) }
+            for w in [decor, tagPanel] {   // decor first, then the tag above it
+                w.level = Self.probeLevel ?? host.level
+                w.collectionBehavior = [.fullScreenAuxiliary, .ignoresCycle]
+                host.addChildWindow(w, ordered: .above)
+            }
         }
         if let level = Self.probeLevel {
             for w in [decor, tagPanel] where w.level != level { w.level = level }
