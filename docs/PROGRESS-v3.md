@@ -30,6 +30,14 @@ keep the Mac responsive.
 | — | Coordinator | Windows doc §A (`6a1304e`), all merges, CHANGELOG/README/CLAUDE.md, full verification | **done** 2026-09-24 | `main` |
 
 **Known follow-ups** (after all lanes merge):
+- **GitHub CI is red, and was before v3** (every push since at least 2026-09-08): `.github/workflows/ci.yml`
+  runs on `macos-14`, whose older Swift compiler rejects `App/Capture/TempFileService.swift:24` ("reference
+  to captured var 'self' in concurrently-executing code"); the owner's local toolchain accepts it. Fix by
+  moving CI to a newer runner/Xcode (e.g. `macos-15`) and/or making that closure capture safely, then check
+  the rest of the build on that compiler.
+- **Not released yet:** everything since `v2.11.0` (v3 Parts 0–7, UI-review fixes, window placement, tours)
+  is on `main` only. The README's install one-liner fetches the latest GitHub *release*, so users get it only
+  after a release is tagged and published (signed with the stable identity — see root `CLAUDE.md`).
 - Mid-recording microphone device switch from the live pill (needs Part 4's device catalog + Part 5's
   pill) — spec §8.
 - History thumbnail isn't regenerated after the video editor's Replace Original (pre-existing).

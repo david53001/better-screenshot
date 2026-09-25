@@ -39,7 +39,12 @@ Local Swift packages + a menu-bar app target:
 - `OverlayKit` — area-selection overlay + Quick Access thumbnail (`NSPanel`).
 - `EditorKit` — annotation document model + custom `NSView` canvas + tools + flatten-to-image renderer.
 - `HistoryKit` — capture history index/store + restore stack (pure logic + file IO).
-- `App/` (target) — hotkeys, menu bar, settings, and capture→overlay→editor→output orchestration.
+- `RecordingKit` — screen/GIF recording (ScreenCaptureKit + AVAssetWriter), camera bubble, click/keystroke
+  overlays, and the video editor (cut list, per-segment speed/mute, exporter).
+- `TourKit` — guided tours (v3 Part 7): tour model + catalog, engine, new-user classifier, the red tag
+  overlay and the ⓘ button. The app side is `App/Tours/TourCoordinator.swift`.
+- `App/` (target) — hotkeys, menu bar, settings, and capture→overlay→editor→output orchestration; every app
+  window opens through `App/Lifecycle/WindowPlacer.swift` (centred, reopens at its last size/full screen).
 
 **Coordinate convention:** annotations live in base-image pixel space, top-left origin; rendering uses a flipped `NSGraphicsContext` so AppKit drawing (incl. text) is right-side-up.
 

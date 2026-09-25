@@ -4,17 +4,19 @@ A free, open-source screenshot and annotation tool for macOS, living in your men
 
 ## Features
 
-- **Capture** an area (`⌘⇧4`), a window (`⌘⇧8`), or the full screen (`⌘⇧6`) — the native `⌘⇧4` is disabled while the app runs and restored on quit
-- **Capture Text (`⌘⇧7`)** — on-device OCR + QR decode straight to the clipboard
-- **Record (`⌘⇧5`)** the full screen, a selected area, or a single window to MP4 or GIF — with system audio, microphone, a camera bubble, click highlights, and a keystroke overlay; an optional 3/5/10-second countdown before recording; pause/resume that leaves no gap in the saved file; a labelled setup strip to pick the microphone (with a live level meter), camera, system-audio mode and cursor; a floating control pill to pause, stop, restart, discard, mute the mic or system sound, or switch the recorded window/area mid-recording (kept out of the video by default); and a **video editor** for finished MP4s — split, delete, per-segment speed/mute, frame-exact cuts, export as GIF
+- **Capture** an area (`⇧⌘4`), a window (`⇧⌘8`), or the full screen (`⇧⌘6`) — the native `⇧⌘4` is disabled while the app runs and restored on quit
+- **Capture Text (`⇧⌘7`)** — on-device OCR + QR decode straight to the clipboard
+- **Record (`⇧⌘5`)** the full screen, a selected area, or a single window to MP4 or GIF — with system audio, microphone, a camera bubble, click highlights, and a keystroke overlay; an optional 3/5/10-second countdown before recording; pause/resume that leaves no gap in the saved file; a labelled setup strip to pick the microphone (with a live level meter), camera, system-audio mode and cursor; a floating control pill to pause, stop, restart, discard, mute the mic or system sound, or switch the recorded window/area mid-recording (kept out of the video by default); and a **video editor** for finished MP4s — split, delete, per-segment speed/mute, frame-exact cuts, export as GIF
 - **Quick Access overlay** after capture: drag the thumbnail anywhere, copy, save, or jump into the editor; the last 3 captures stack at the screen corner. Its buttons measure the pixels behind them and pick a glyph tone plus scrim strength that guarantees a WCAG 4.5:1 contrast ratio, so they stay readable over any screenshot
 - **Capture History** — every capture and recording is remembered locally (capped at the 100 most recent, with no time limit); browse, copy, annotate, pin, delete, or clear all from the History window, and restore an accidentally closed thumbnail with Restore Recently Closed
 - **Pin to screen** — float a capture always-on-top (drag, resize, multi-pin), from the History window's Pin action or the menu bar's **Pin from Clipboard**
 - **Annotation editor**: arrow, line, rectangle, ellipse, text (any installed font, B/I/U/S, alignment, resizable and corner-scalable text boxes, solid/auto background, outline, shadow, one-click styles), numbered counters, highlighter, spotlight, blur / pixelate / black-out redaction with adjustable strength, crop
   - A labelled options panel on the right that follows the tool or selection, opacity for every object, recent colours + eyedropper, and a hint line explaining the current tool
   - Zoom (pinch, `⌘`-scroll, `⌘+`/`⌘−`, `⌘0` fit, `⌘1` 100%) and single-key tools (V A L R F O T N H B P S X C)
-  - Undo/redo (`⌘Z` / `⌘⇧Z` / `⌘Y`), drag to select multiple objects, resize handles, bring-to-front / send-to-back
+  - Undo/redo (`⌘Z` / `⇧⌘Z` / `⌘Y`), drag to select multiple objects, resize handles, bring-to-front / send-to-back
 - **One-button setup** — Screen Recording is the only permission the app needs; the welcome window handles the whole flow and restarts the app for you
+- **Optional guided tours, for new users only** — the welcome window's last page asks *"Want a quick tour?"*. Say **Show Me Around** and each part of the app (capturing, the Quick Access card, the editor and its tools, recording, the video editor, Settings, History) points out its controls with a short red tag the first time you use it — interactive steps finish when you actually do the thing, and every step and tour can be skipped. Anyone who already used the app is never asked. Replay any tour from the **ⓘ** button on each window or the menu bar's **Help & Tours**; turn first-use tours on or off in Settings → Startup → Tours & tips. Tour tags never appear in your screenshots or recordings
+- Windows open centred on the screen you're using, and the editor, video editor and History reopen at the size — or in full screen — you last left them
 - Saves PNG or JPG to a folder you choose; copy lands on the clipboard
 
 **Requires macOS 14 (Sonoma) or later.**
@@ -81,7 +83,7 @@ Optional: run `./scripts/setup-signing.sh` once before building to create a stab
 Run the tests:
 
 ```sh
-./scripts/test.sh    # all five suites: CaptureKit, OverlayKit, EditorKit, RecordingKit, HistoryKit
+./scripts/test.sh    # all six suites: CaptureKit, OverlayKit, EditorKit, RecordingKit, HistoryKit, TourKit
 ```
 
 The design docs and implementation plans the app was built from live in [`docs/`](docs/); release history is in [`CHANGELOG.md`](CHANGELOG.md).
