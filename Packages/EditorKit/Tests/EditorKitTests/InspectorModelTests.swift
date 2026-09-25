@@ -139,13 +139,30 @@ let zoomMathTests: [TestCase] = [
         t.approxEqual(Double(ZoomMath.percent(magnification: 1, backingScale: 1)), 100)
         t.approxEqual(Double(ZoomMath.magnification(percent: 200, backingScale: 2)), 1)
     },
-    TestCase("fitCoversBothDimensionsAndNeverUpscalesPastOnePointPerPixel") { t in
+    TestCase("fitCoversBothDimensionsAndNeverUpscalesPastOneHundredPercent") { t in
         t.approxEqual(Double(ZoomMath.fitMagnification(imageSize: CGSize(width: 2000, height: 1000),
-                                                       available: CGSize(width: 1000, height: 1000))), 0.5)
+                                                       available: CGSize(width: 1000, height: 1000), backingScale: 1)), 0.5)
         t.approxEqual(Double(ZoomMath.fitMagnification(imageSize: CGSize(width: 1000, height: 3000),
-                                                       available: CGSize(width: 1000, height: 600))), 0.2)
+                                                       available: CGSize(width: 1000, height: 600), backingScale: 2)), 0.2)
+        // A small capture opens at its real size: 1 pt per px on a 1× screen, ½ pt per px on Retina (100%).
         t.approxEqual(Double(ZoomMath.fitMagnification(imageSize: CGSize(width: 200, height: 100),
-                                                       available: CGSize(width: 1000, height: 1000))), 1)
+                                                       available: CGSize(width: 1000, height: 1000), backingScale: 1)), 1)
+        let retina = ZoomMath.fitMagnification(imageSize: CGSize(width: 360, height: 225),
+                                               available: CGSize(width: 1000, height: 1000), backingScale: 2)
+        t.approxEqual(Double(retina), 0.5)
+        t.approxEqual(Double(ZoomMath.percent(magnification: retina, backingScale: 2)), 100)
+        // A 1600 px capture in an 800 pt column fits exactly at 100%, not 115%.
+        t.approxEqual(Double(ZoomMath.fitMagnification(imageSize: CGSize(width: 1600, height: 1000),
+                                                       available: CGSize(width: 920, height: 577), backingScale: 2)), 0.5)
+    },
+    TestCase("pointSizeIsTheCapturesRealOnScreenSize") { t in
+        let p = ZoomMath.pointSize(pixels: CGSize(width: 1600, height: 1000), backingScale: 2)
+        t.approxEqual(Double(p.width), 800)
+        t.approxEqual(Double(p.height), 500)
+        let one = ZoomMath.pointSize(pixels: CGSize(width: 1600, height: 1000), backingScale: 1)
+        t.approxEqual(Double(one.width), 1600)
+        // A bogus scale never enlarges.
+        t.approxEqual(Double(ZoomMath.pointSize(pixels: CGSize(width: 300, height: 10), backingScale: 0).width), 300)
     },
     TestCase("clampRangeIsFitToEightHundred") { t in
         // Retina: 800% = m 4; fit 0.3 is the floor.

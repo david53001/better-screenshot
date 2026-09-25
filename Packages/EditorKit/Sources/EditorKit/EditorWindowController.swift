@@ -52,12 +52,15 @@ public final class EditorWindowController: NSWindowController {
         inspector = EditorInspectorView(recentColors: recentColors)
         zoom = CanvasZoomController(canvas: canvas, scrollView: scrollView)
 
-        // Room for the image at up to 1200pt wide (the old display cap) plus the panel, within
-        // the screen; Fit then scales the image into whatever room the window has.
-        let displayW = min(CGFloat(image.width), 1200)
-        let displayH = displayW * CGFloat(image.height) / CGFloat(image.width)
-        let screen = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame.size
-            ?? CGSize(width: 1440, height: 900)
+        // Room for the image at its real on-screen size (points, not pixels — 100%), up to
+        // 1200pt wide, plus the panel, within the screen; Fit then scales the image into
+        // whatever room the window has, never past 100%.
+        let mainScreen = NSScreen.main ?? NSScreen.screens.first
+        let real = ZoomMath.pointSize(pixels: CGSize(width: image.width, height: image.height),
+                                      backingScale: mainScreen?.backingScaleFactor ?? 2)
+        let displayW = min(real.width, 1200)
+        let displayH = displayW * real.height / max(real.width, 1)
+        let screen = mainScreen?.visibleFrame.size ?? CGSize(width: 1440, height: 900)
         let contentW = min(max(displayW + 48, Self.minWidthBare) + EditorInspectorView.width + 20,
                            screen.width - 40)
         let contentH = min(max(displayH + 112 /*top band + insets*/ + Self.bottomBarHeight, 520),

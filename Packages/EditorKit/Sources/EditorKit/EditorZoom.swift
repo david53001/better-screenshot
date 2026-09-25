@@ -56,7 +56,8 @@ final class CanvasZoomController: NSObject {
         let insets = scrollView.contentInsets
         let available = CGSize(width: scrollView.bounds.width - insets.left - insets.right,
                                height: scrollView.bounds.height - insets.top - insets.bottom)
-        return ZoomMath.fitMagnification(imageSize: canvas.currentDocument().size, available: available)
+        return ZoomMath.fitMagnification(imageSize: canvas.currentDocument().size, available: available,
+                                         backingScale: backingScale)
     }
 
     var percent: CGFloat { ZoomMath.percent(magnification: magnification, backingScale: backingScale) }

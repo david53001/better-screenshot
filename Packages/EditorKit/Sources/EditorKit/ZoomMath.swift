@@ -17,12 +17,19 @@ public enum ZoomMath {
         percent / 100 / max(backingScale, 1)
     }
 
-    /// "Fit": the whole image inside `available` (view points), but never larger than one
-    /// image pixel per point — the editor's historical display size for small captures.
-    public static func fitMagnification(imageSize: CGSize, available: CGSize) -> CGFloat {
+    /// "Fit": the whole image inside `available` (view points), but never larger than 100% — the
+    /// capture's real on-screen size — so a screenshot never opens enlarged (and soft).
+    public static func fitMagnification(imageSize: CGSize, available: CGSize, backingScale: CGFloat) -> CGFloat {
         guard imageSize.width > 0, imageSize.height > 0 else { return 1 }
-        let m = min(available.width / imageSize.width, available.height / imageSize.height, 1)
+        let m = min(available.width / imageSize.width, available.height / imageSize.height,
+                    magnification(percent: 100, backingScale: backingScale))
         return max(m, 0.01)
+    }
+
+    /// The image's size at 100%, in points: one image pixel per screen pixel.
+    public static func pointSize(pixels: CGSize, backingScale: CGFloat) -> CGSize {
+        let s = max(backingScale, 1)
+        return CGSize(width: pixels.width / s, height: pixels.height / s)
     }
 
     /// Allowed range: from fit (or 100% if fit is larger) up to `maxPercent`.
