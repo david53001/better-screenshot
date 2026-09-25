@@ -56,12 +56,20 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
                                                   trackingMode: .selectOne, target: nil, action: nil)
     private let segmentMuteBox = NSButton(checkboxWithTitle: "Mute segment", target: nil, action: nil)
     private let hintLabel = NSTextField(labelWithString: "")
+    /// Export progress: its own slot at the right end of the hint line, so nothing moves.
+    private let progressBar = NSProgressIndicator()
+    private let progressLabel = NSTextField(labelWithString: "")
+    private var card: NSView?
+
+    // Error state (the file can't be opened): replaces the preview and the card.
+    private let errorView = NSView()
+    private let errorTitle = NSTextField(labelWithString: "")
+    private let errorMessage = NSTextField(wrappingLabelWithString: "")
+    private let revealButton = NSButton(title: "Show in Finder", target: nil, action: nil)
 
     // Action bar
     private let keptLabel = NSTextField(labelWithString: "Loading…")
-    private let muteBox = NSButton(checkboxWithTitle: "Mute audio", target: nil, action: nil)
-    private let progressBar = NSProgressIndicator()
-    private let progressLabel = NSTextField(labelWithString: "")
+    private let muteBox = NSButton(checkboxWithTitle: "Mute whole video", target: nil, action: nil)
     private let cancelButton = NSButton(title: "Cancel", target: nil, action: nil)
     private let replaceButton = NSButton(title: "Replace Original", target: nil, action: nil)
     private lazy var copyButton: NSComboButton = {
@@ -119,11 +127,18 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
         playerView.translatesAutoresizingMaskIntoConstraints = false
 
         let card = buildCard()
+        self.card = card
         let bar = buildActionBar()
+        buildErrorView()
         content.addSubview(playerView)
         content.addSubview(card)
         content.addSubview(bar)
+        content.addSubview(errorView)
         NSLayoutConstraint.activate([
+            errorView.topAnchor.constraint(equalTo: content.topAnchor),
+            errorView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            errorView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            errorView.bottomAnchor.constraint(equalTo: bar.topAnchor),
             playerView.topAnchor.constraint(equalTo: content.topAnchor),
             playerView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             playerView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
@@ -192,7 +207,7 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
         timelineScroll.horizontalScrollElasticity = .none
         timelineScroll.verticalScrollElasticity = .none
         timelineScroll.translatesAutoresizingMaskIntoConstraints = false
-        timelineScroll.heightAnchor.constraint(equalToConstant: 66).isActive = true
+        timelineScroll.heightAnchor.constraint(equalToConstant: 74).isActive = true
         timeline.toolTip = "Click to move the playhead and pick a segment · drag a yellow edge to trim · right-click for speed and mute"
         timeline.onScrub = { [weak self] t in self?.scrub(to: t) }
         timeline.onSelect = { [weak self] i in self?.select(i) }
@@ -226,7 +241,19 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
         hintLabel.textColor = NSColor(white: 1, alpha: 0.55)
         hintLabel.lineBreakMode = .byTruncatingTail
         hintLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        let row3 = Self.row([info, hintLabel], spacing: 6)
+        progressBar.style = .bar
+        progressBar.controlSize = .small
+        progressBar.minValue = 0; progressBar.maxValue = 1
+        progressBar.widthAnchor.constraint(equalToConstant: 160).isActive = true
+        progressBar.isHidden = true
+        progressLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        progressLabel.textColor = NSColor(white: 1, alpha: 0.6)
+        progressLabel.alignment = .right
+        progressLabel.widthAnchor.constraint(equalToConstant: 34).isActive = true
+        progressLabel.isHidden = true
+        let row3 = Self.row([info, hintLabel, Self.flexible(), progressBar, progressLabel], spacing: 6)
+        // The bar and its percentage never change the row's height.
+        row3.heightAnchor.constraint(equalToConstant: 16).isActive = true
 
         let stack = NSStackView(views: [row1, timelineScroll, row2, row3])
         stack.orientation = .vertical
@@ -266,14 +293,6 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
         keptLabel.toolTip = "Length of the saved video / length of the recording"
         muteBox.target = self; muteBox.action = #selector(muteAllToggled)
         muteBox.toolTip = "Save without any sound"
-        progressBar.style = .bar
-        progressBar.controlSize = .small
-        progressBar.minValue = 0; progressBar.maxValue = 1
-        progressBar.widthAnchor.constraint(equalToConstant: 140).isActive = true
-        progressBar.isHidden = true
-        progressLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
-        progressLabel.textColor = .secondaryLabelColor
-        progressLabel.isHidden = true
         cancelButton.target = self; cancelButton.action = #selector(cancel)
         cancelButton.bezelStyle = .rounded
         cancelButton.toolTip = "Close without saving"
@@ -283,10 +302,9 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
         // Accent look without a Return shortcut: replacing the file shouldn't be one
         // stray keypress away.
         replaceButton.bezelColor = .controlAccentColor
-        replaceButton.toolTip = "Overwrite the original recording with the edit"
 
-        let row = Self.row([keptLabel, Self.gap(4), muteBox, Self.gap(8), progressBar, progressLabel,
-                            Self.flexible(), cancelButton, copyButton, replaceButton], spacing: 10)
+        let row = Self.row([keptLabel, Self.gap(4), muteBox, Self.flexible(), cancelButton, copyButton,
+                            replaceButton], spacing: 10)
         bar.addSubview(row)
         NSLayoutConstraint.activate([
             hairline.topAnchor.constraint(equalTo: bar.topAnchor),
@@ -298,6 +316,43 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
         ])
         return bar
     }
+
+    /// Icon, title, what went wrong and what to do — centred where the preview and the
+    /// card would be.
+    private func buildErrorView() {
+        let icon = NSImageView(image: NSImage(systemSymbolName: "exclamationmark.triangle",
+                                              accessibilityDescription: "Error")!
+            .withSymbolConfiguration(.init(pointSize: 34, weight: .regular))!)
+        icon.contentTintColor = NSColor(white: 1, alpha: 0.6)
+        errorTitle.font = .systemFont(ofSize: 15, weight: .semibold)
+        errorTitle.textColor = .white
+        errorTitle.alignment = .center
+        errorMessage.font = .systemFont(ofSize: 12)
+        errorMessage.textColor = NSColor(white: 1, alpha: 0.6)
+        errorMessage.alignment = .center
+        errorMessage.preferredMaxLayoutWidth = 400
+        revealButton.bezelStyle = .rounded
+        revealButton.target = self; revealButton.action = #selector(revealInFinder)
+        revealButton.toolTip = "Select the file in a Finder window"
+        let stack = NSStackView(views: [icon, errorTitle, errorMessage, revealButton])
+        stack.orientation = .vertical
+        stack.alignment = .centerX
+        stack.spacing = 6
+        stack.setCustomSpacing(14, after: icon)
+        stack.setCustomSpacing(18, after: errorMessage)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        errorView.translatesAutoresizingMaskIntoConstraints = false
+        errorView.isHidden = true
+        errorView.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.centerXAnchor.constraint(equalTo: errorView.centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: errorView.centerYAnchor),
+            stack.widthAnchor.constraint(lessThanOrEqualTo: errorView.widthAnchor, constant: -48),
+            errorMessage.widthAnchor.constraint(lessThanOrEqualToConstant: 400),
+        ])
+    }
+
+    @objc private func revealInFinder() { NSWorkspace.shared.activateFileViewerSelecting([url]) }
 
     // MARK: - Loading
 
@@ -333,15 +388,20 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
-    /// Filmstrip frames, evenly spaced (2 per second, 12…240), loaded in the background.
+    /// Filmstrip frames (`FilmstripFrames`: dense enough that fully zoomed-in tiles don't
+    /// repeat a frame), loaded in the background, coarse to fine.
     private func loadThumbnails(asset: AVAsset, duration: Double) {
-        let count = min(max(Int(duration * 2), 12), 240)
-        let times = (0..<count).map {
-            CMTime(seconds: (Double($0) + 0.5) * duration / Double(count), preferredTimescale: 600)
-        }
+        let screenWidth = (window?.screen ?? NSScreen.main)?.visibleFrame.width ?? 1440
+        let count = FilmstripFrames.count(duration: duration,
+                                          timelineWidth: screenWidth * CGFloat(zoomSlider.maxValue),
+                                          tileWidth: timeline.minimumTileWidth)
+        let times = FilmstripFrames.times(duration: duration, count: count)
+            .map { CMTime(seconds: $0, preferredTimescale: 600) }
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 320, height: 200)
+        // Tiles are ≤ 160 × 50 pt; 200 px keeps them sharp at 2× without holding
+        // hundreds of large frames.
+        generator.maximumSize = CGSize(width: 200, height: 200)
         let tolerance = CMTime(seconds: duration / Double(count) / 2, preferredTimescale: 600)
         generator.requestedTimeToleranceBefore = tolerance
         generator.requestedTimeToleranceAfter = tolerance
@@ -663,12 +723,35 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
         zoomSlider.isEnabled = loaded
         zoomOutButton.isEnabled = loaded && zoomSlider.doubleValue > zoomSlider.minValue
         zoomInButton.isEnabled = loaded && zoomSlider.doubleValue < zoomSlider.maxValue
+        // Borderless icons keep their tint when disabled — dim them by hand.
+        for b in [playButton, zoomOutButton, zoomInButton] {
+            b.contentTintColor = NSColor(white: 1, alpha: b.isEnabled ? 0.85 : 0.3)
+        }
         speedControl.isEnabled = ready
         segmentMuteBox.isEnabled = ready && muteBox.state == .off
         muteBox.isEnabled = ready
         copyButton.isEnabled = ready
-        replaceButton.isEnabled = ready
+        // Nothing to replace until the video differs from the file (e.g. right after
+        // Replace Original, which reloads the result).
+        let edited = cuts != CutList(duration: cuts.duration) || muteBox.state == .on
+        replaceButton.isEnabled = ready && edited
+        replaceButton.toolTip = edited || !loaded ? "Overwrite the original recording with the edit"
+            : "Make an edit first — the original already matches this video"
         cancelButton.isEnabled = !isExporting
+
+        errorView.isHidden = !loadFailed
+        playerView.isHidden = loadFailed
+        card?.isHidden = loadFailed
+        if loadFailed {
+            let missing = !FileManager.default.fileExists(atPath: url.path)
+            errorTitle.stringValue = missing ? "This recording can't be found" : "This video can't be opened"
+            errorMessage.stringValue = missing
+                ? "It may have been moved, renamed or deleted. Close this window, then open the recording again from its new place."
+                : "The file may be damaged or still being saved. Close this window and try again in a moment, or check the file in Finder."
+            revealButton.isHidden = missing
+            cancelButton.title = "Close"
+            cancelButton.toolTip = "Close the editor"
+        }
 
         if list.segments.indices.contains(selected) {
             let segment = list.segments[selected]
@@ -680,7 +763,7 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
         hintLabel.stringValue = hint(for: list)
 
         if loadFailed {
-            keptLabel.stringValue = "This recording can't be opened for editing."
+            keptLabel.stringValue = ""
         } else if !loaded {
             keptLabel.stringValue = "Loading…"
         } else if let note {
@@ -694,7 +777,7 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
 
     private func hint(for list: CutList) -> String {
         if isExporting { return "Exporting — the original stays untouched until it's done." }
-        if muteBox.state == .on { return "Mute audio is on: the saved video will have no sound at all." }
+        if muteBox.state == .on { return "Mute whole video is on: the saved video will have no sound at all." }
         if list.segments.indices.contains(selected) {
             let segment = list.segments[selected]
             if segment.speed != 1 && segment.muted {
@@ -761,16 +844,15 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
         progressBar.isIndeterminate = !determinate
         progressBar.doubleValue = 0
         progressBar.isHidden = false
-        progressLabel.isHidden = false
-        progressLabel.stringValue = determinate ? "Exporting… 0%" : "Saving…"
-        keptLabel.isHidden = true
+        progressLabel.isHidden = !determinate
+        progressLabel.stringValue = "0%"
         if !determinate { progressBar.startAnimation(nil) }
         refreshChrome()
         let progress: TrimExporter.Progress = { [weak self] p in
             Task { @MainActor in
                 guard let self, self.isExporting, determinate else { return }
                 self.progressBar.doubleValue = p
-                self.progressLabel.stringValue = "Exporting… \(Int((p * 100).rounded()))%"
+                self.progressLabel.stringValue = "\(Int((p * 100).rounded()))%"
             }
         }
         Task { @MainActor in
@@ -792,7 +874,6 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
         progressBar.stopAnimation(nil)
         progressBar.isHidden = true
         progressLabel.isHidden = true
-        keptLabel.isHidden = false
         refreshChrome()
     }
 
