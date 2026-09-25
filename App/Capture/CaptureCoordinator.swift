@@ -108,7 +108,9 @@ final class CaptureCoordinator {
     private func runCaptureText(_ result: SelectionResult) async {
         do {
             let image = try await service.capture(
-                .area(rect: result.globalRect, displayID: result.displayID))
+                .area(rect: result.globalRect, displayID: result.displayID),
+                excludingWindowIDs: Self.tourTagWindowIDs)
+            TourEvents.post(.captureTaken)
             // Vision's perform() blocks — keep it off the main actor.
             let pointWidth = result.globalRect.width
             let recognition = try await Task.detached {
@@ -135,9 +137,17 @@ final class CaptureCoordinator {
         } ?? NSScreen.main
     }
 
+    /// Guided-tour tags on screen right now. Every capture leaves them out — the Welcome tour asks
+    /// for a screenshot while its tag is showing, and a tag must never end up in the user's image.
+    static var tourTagWindowIDs: Set<CGWindowID> {
+        Set(TagOverlayController.allWindowNumbers.map { CGWindowID($0) })
+    }
+
     private func run(_ target: CaptureTarget, sourceRect: CGRect? = nil) async {
         do {
-            let image = try await service.capture(target)
+            let image = try await service.capture(target, excludingWindowIDs: Self.tourTagWindowIDs)
+            // Before the card appears: a tour's "take a screenshot" step advances on it.
+            TourEvents.post(.captureTaken)
             handle(image, sourceRect: sourceRect)
         } catch {
             NSLog("Capture failed: \(error)")

@@ -78,6 +78,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.history.clearAll()
         }, tours: tourSettings)
         menuBar = MenuBarController(coordinator: coordinator, settingsWindow: settingsWindow)
+        // The Welcome tour's first step points at the menu-bar icon, which isn't in the Welcome window.
+        tours.extraAnchorWindows = { [weak self] in self?.menuBar?.iconWindow.map { [$0] } ?? [] }
         menuBar.onReplayTour = { [weak self] tour in self?.tours.replay(tour, in: nil) }
         menuBar.onResetTours = { [weak self] in
             self?.tours.resetAllTours()

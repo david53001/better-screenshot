@@ -21,7 +21,12 @@
   `.fixedSize(horizontal: false, vertical: true)` on each `Text`, or the popover cuts every line to one row.
 - `Components/MonoControls.swift` — `MonoComboField` must use `.menuStyle(.button)` + `.buttonStyle(.plain)`
   + `.menuIndicator(.hidden)`; `.borderlessButton` renders it as bare text with a second chevron.
-- `SettingsWindowController.swift` — hosts the SwiftUI settings view in an AppKit window.
+- `SettingsWindowController.swift` — hosts the SwiftUI settings view in an AppKit window. `makeWindow()`
+  (internal, so probes can build it without showing it) installs the title-bar ⓘ (TourKit `InfoButton`:
+  Replay Tour + the bound shortcuts and Esc, kept current by observing `store.$bindings`); `show()` posts
+  `TourEvents.surfaceShown(.settings)`. Settings tour anchors in `SettingsView`: `settings.cards` (the
+  three columns), `settings.tip` (the "After a capture" ⓘ, via `segmentedField(…, tipAnchor:)`),
+  `settings.shortcuts` (Keyboard Shortcuts card). Steps: `docs/MAC-TO-WINDOWS-PARITY-v3.md` §7.8.
 
 Verify: change a setting in the built app, confirm it persists across relaunch; for the editor default,
 confirm a new annotation picks up the last-used color/size.

@@ -206,10 +206,13 @@ final class OnboardingController: NSWindowController {
     }
 
     /// Two aligned columns: shortcuts right-aligned against descriptions left-aligned.
+    /// Tour anchors: the whole grid (`welcome.shortcuts`) and Capture Area's keys (`welcome.captureArea`).
     private func shortcutGrid(_ rows: [HotkeyCheatSheet.Row]) -> NSGridView {
+        let areaKeys = HotkeyCheatSheet.keys(for: .captureArea, in: bindings())
         let grid = NSGridView(views: rows.map { row -> [NSView] in
             let keys = NSTextField(labelWithString: row.keys)
             keys.font = .systemFont(ofSize: 13, weight: .semibold)
+            if row.keys == areaKeys { keys.tourAnchor = "welcome.captureArea" }
             let name = NSTextField(labelWithString: row.description)
             name.font = .systemFont(ofSize: 13)
             name.textColor = .secondaryLabelColor
@@ -221,6 +224,7 @@ final class OnboardingController: NSWindowController {
         grid.rowSpacing = 7
         // Without this the grid's width is ambiguous and it sometimes lands off-centre.
         grid.setContentHuggingPriority(.required, for: .horizontal)
+        grid.tourAnchor = "welcome.shortcuts"
         return grid
     }
 

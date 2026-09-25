@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import HistoryKit
+import TourKit
 
 /// Closures the History window needs from the capture layer (annotate/pin
 /// reuse CaptureCoordinator's existing flows).
@@ -24,19 +25,33 @@ final class HistoryWindowController {
     }
 
     func show() {
-        if window == nil {
-            let view = HistoryView(history: history, actions: actions)
-            let w = NSWindow(contentViewController: NSHostingController(rootView: view))
-            w.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-            w.title = "History"
-            w.setContentSize(NSSize(width: 700, height: 500))
-            w.isReleasedWhenClosed = false
-            window = w
-        }
+        if window == nil { window = makeWindow() }
         if let window { WindowPlacer.place(window, rememberAs: "history") }
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)   // ★ after makeKey, matching SettingsWindowController
+        // The History tour's first time (spec §14.3); a no-op unless tours are on.
+        if let window { TourEvents.surfaceShown(.history, in: window) }
     }
+
+    /// Builds the window (not shown). Internal so probes can show it behind the owner's windows.
+    func makeWindow() -> NSWindow {
+        let view = HistoryView(history: history, actions: actions)
+        let w = NSWindow(contentViewController: NSHostingController(rootView: view))
+        w.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        w.title = "History"
+        w.setContentSize(NSSize(width: 700, height: 500))
+        w.isReleasedWhenClosed = false
+        InfoButton.install(in: w, tour: .history, shortcuts: Self.infoShortcuts)
+        return w
+    }
+
+    /// The ⓘ's list: the grid's modifier clicks (History has no plain key shortcuts).
+    static let infoShortcuts: [(keys: String, action: String)] = [
+        (keys: "⌘-click", action: "Add to or remove from the selection"),
+        (keys: "⇧-click", action: "Select everything in between"),
+        (keys: "Double-click", action: "Open (screenshots open in the editor)"),
+        (keys: "Right-click", action: "More actions"),
+    ]
 }
 
 struct HistoryView: View {
@@ -55,6 +70,7 @@ struct HistoryView: View {
                 ContentUnavailableView(empty.title, systemImage: "photo.on.rectangle.angled",
                                        description: Text(empty.detail))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .tourAnchor("history.grid")
             } else {
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 12) {
@@ -67,13 +83,16 @@ struct HistoryView: View {
                                     },
                                     dragItems: { dragItems(startingAt: entry) }))
                                 .contextMenu { contextItems(for: entry) }
+                                // The History tour's "select a capture" steps point at the newest one.
+                                .tourAnchor(entry.id == history.entries.first?.id ? "history.item" : "")
                         }
                     }
                     .padding(12)
                 }
+                .tourAnchor("history.grid")
             }
         }
-        .safeAreaInset(edge: .bottom) { actionBar }
+        .safeAreaInset(edge: .bottom) { actionBar.tourAnchor("history.actions") }
         // Wide enough for every action-bar label at its full length (they never truncate).
         .frame(minWidth: Self.minWidth, minHeight: 360)
     }
@@ -103,6 +122,7 @@ struct HistoryView: View {
         }
         selection = HistorySelection.click(on: entry.id, modifier: modifier,
                                            order: history.entries.map(\.id), state: selection)
+        TourEvents.post(.action("history.selected"))
     }
 
     /// Evaluated when a drag actually starts: an unselected cell becomes the
@@ -111,6 +131,7 @@ struct HistoryView: View {
         let next = HistorySelection.dragStart(on: entry.id,
                                               order: history.entries.map(\.id), state: selection)
         selection = next
+        TourEvents.post(.action("history.dragged"))
         return history.entries
             .filter { next.selected.contains($0.id) }
             .compactMap { candidate in

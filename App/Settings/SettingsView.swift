@@ -1,6 +1,7 @@
 import SwiftUI
 import CaptureKit
 import RecordingKit
+import TourKit
 
 /// Closures the Shortcuts card needs from the app layer (AppDelegate owns the
 /// rebind transaction because it touches HotKeyManager + menu + persistence).
@@ -51,7 +52,9 @@ struct SettingsView: View {
                     columnB
                     columnC
                 }
+                .tourAnchor("settings.cards")
                 shortcutsCard
+                    .tourAnchor("settings.shortcuts")
                 footer
             }
             .padding(SettingsTheme.Metrics.outerMargin)
@@ -117,7 +120,7 @@ struct SettingsView: View {
     private var captureCard: some View {
         DarkSection("CAPTURE") {
             VStack(alignment: .leading, spacing: 14) {
-                segmentedField("After a capture", SettingsHelp.afterCapture,
+                segmentedField("After a capture", SettingsHelp.afterCapture, tipAnchor: "settings.tip",
                                selection: bind(\.afterCapture),
                                segments: [(value: .showOverlay, label: "Overlay"),
                                           (value: .copyOnly, label: "Copy"),
@@ -482,24 +485,29 @@ struct SettingsView: View {
     // MARK: - Row idioms
 
     /// Field label ("11.5 semibold") + its ⓘ tip, for the "label above a control" idiom.
-    private func fieldLabel(_ text: String, _ help: HelpText) -> some View {
+    /// `tipAnchor`: a tour anchor on this row's ⓘ (the Settings tour points at one of them).
+    private func fieldLabel(_ text: String, _ help: HelpText, tipAnchor: String? = nil) -> some View {
         HStack(spacing: 6) {
             Text(text)
                 .font(SettingsTheme.Font.fieldLabel)
                 .foregroundColor(SettingsTheme.label)
-            InfoTip(help: help)
+            if let tipAnchor {
+                InfoTip(help: help).tourAnchor(tipAnchor)
+            } else {
+                InfoTip(help: help)
+            }
         }
     }
 
     /// A field label above a full-width segmented control.
     @ViewBuilder
     private func segmentedField<T: Hashable>(
-        _ text: String, _ help: HelpText,
+        _ text: String, _ help: HelpText, tipAnchor: String? = nil,
         selection: Binding<T>, segments: [(value: T, label: String)],
         disabled: Bool = false
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            fieldLabel(text, help)
+            fieldLabel(text, help, tipAnchor: tipAnchor)
             SegmentedControl(selection: selection, segments: segments)
                 .disabled(disabled)
                 .opacity(disabled ? 0.4 : 1)

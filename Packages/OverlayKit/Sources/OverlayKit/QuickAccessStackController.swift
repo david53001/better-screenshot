@@ -1,5 +1,6 @@
 import AppKit
 import CaptureKit
+import TourKit
 
 /// Manages up to `maxCount` post-capture overlays stacked at a screen corner.
 /// Index 0 is the newest capture and sits at the corner slot; older overlays
@@ -44,6 +45,11 @@ public final class QuickAccessStackController {
                            kind: kind, actions: actions, autoDismissSeconds: autoDismissSeconds,
                            badge: badge)
         restack()
+        // Once it sits in its final slot. The Quick Access tour is about screenshot cards (Edit →
+        // editor); a recording's card has no Edit button.
+        if kind == .screenshot, let window = controller.window {
+            TourEvents.surfaceShown(.quickAccess, in: window)
+        }
     }
 
     private func restack() {

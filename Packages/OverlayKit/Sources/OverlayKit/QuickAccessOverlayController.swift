@@ -1,5 +1,6 @@
 import AppKit
 import QuartzCore
+import TourKit
 
 public struct QuickAccessActions {
     public let onCopy: () -> Void
@@ -65,6 +66,9 @@ public final class QuickAccessOverlayController: NSObject {
     /// and the app can track restorable closes.
     public var onDismissed: ((DismissReason) -> Void)?
 
+    /// The card's panel while it's on screen (the guided tours attach their tag to it).
+    public var window: NSWindow? { panel }
+
     public override init() { super.init() }
 
     /// Presents the overlay at the given screen origin (Cocoa bottom-left coords).
@@ -100,6 +104,7 @@ public final class QuickAccessOverlayController: NSObject {
         container.wantsLayer = true
         container.layer?.cornerRadius = 14
         container.layer?.masksToBounds = true
+        container.tourAnchor = "quickAccess.card"
 
         // Full-bleed image. The DraggableImageView owns the drag-to-export gesture
         // (a >4pt move starts the drag) but draws nothing itself: the picture is
@@ -112,7 +117,10 @@ public final class QuickAccessOverlayController: NSObject {
         // Screenshots drag a self-deleting temp PNG; recordings drag the real
         // saved file, which must NOT be cleaned up after the drop.
         thumb.onDragEnded = { [weak self] droppedSomewhere in
-            if droppedSomewhere { self?.dismiss(reason: .actionTaken) }
+            guard let self, droppedSomewhere else { return }
+            self.tourEvent("dragged")
+            // The Quick Access tour asks for this drag and carries on over the card.
+            if !self.isShowingTour { self.dismiss(reason: .actionTaken) }
         }
 
         if let cg {
@@ -143,8 +151,11 @@ public final class QuickAccessOverlayController: NSObject {
         switch kind {
         case .screenshot:
             stack.addArrangedSubview(button("doc.on.doc", "Copy") { [weak self] in self?.copyAction() })
-            stack.addArrangedSubview(button("pencil.tip.crop.circle", "Edit") { [weak self] in self?.annotateAction() })
+            let edit = button("pencil.tip.crop.circle", "Edit") { [weak self] in self?.annotateAction() }
+            edit.tourAnchor = "quickAccess.edit"
+            stack.addArrangedSubview(edit)
             stack.addArrangedSubview(button("square.and.arrow.down", "Save to screenshots") { [weak self] in self?.saveAction() })
+            stack.tourAnchor = "quickAccess.actions"
         case .recording:
             stack.addArrangedSubview(button("doc.on.doc", "Copy file") { [weak self] in self?.copyAction() })
             if actions.onTrim != nil {
@@ -260,8 +271,24 @@ public final class QuickAccessOverlayController: NSObject {
         autoDismissTimer?.invalidate()
         autoDismissTimer = Timer.scheduledTimer(withTimeInterval: Double(autoDismissSeconds),
                                                 repeats: false) { [weak self] _ in
-            self?.dismiss(reason: .closed)
+            guard let self else { return }
+            // A running tour pauses the countdown, like hovering does.
+            if self.isShowingTour { self.startAutoDismiss() } else { self.dismiss(reason: .closed) }
         }
+    }
+
+    /// A guided tour is pointing at this card: TourKit's tag panels are child windows of their host.
+    /// The card then stays up — no auto-dismiss, and a drop doesn't close it.
+    private var isShowingTour: Bool {
+        guard let children = panel?.childWindows, !children.isEmpty else { return false }
+        let tags = MainActor.assumeIsolated { Set(TagOverlayController.allWindowNumbers) }
+        return children.contains { tags.contains($0.windowNumber) }
+    }
+
+    /// Tells the guided tours what the user did on the card ("quickAccess.<name>"); a no-op when no
+    /// tour listens. Every caller runs on the main thread (clicks, drags).
+    private func tourEvent(_ name: String) {
+        MainActor.assumeIsolated { TourEvents.post(.action("quickAccess.\(name)")) }
     }
 
     /// Pauses the auto-dismiss countdown (e.g. while the mouse hovers the card).
@@ -367,11 +394,13 @@ public final class QuickAccessOverlayController: NSObject {
     }
 
     // Copy keeps the overlay up (so the user can still save/drag/close it).
-    @objc private func copyAction() { actions?.onCopy() }
+    @objc private func copyAction() { tourEvent("copy"); actions?.onCopy() }
     // Save writes to the screenshot folder, then dismisses.
-    @objc private func saveAction() { actions?.onSave(); dismiss(reason: .actionTaken) }
-    // Opening the editor takes over from the overlay.
+    @objc private func saveAction() { tourEvent("save"); actions?.onSave(); dismiss(reason: .actionTaken) }
+    // Opening the editor takes over from the overlay. The tour hears about it first, so the
+    // Quick Access tour finishes (and hands over) before the editor window appears.
     @objc private func annotateAction() {
+        tourEvent("edit")
         let a = actions
         dismiss(reason: .actionTaken)
         a?.onAnnotate()

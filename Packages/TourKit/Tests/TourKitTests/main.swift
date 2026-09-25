@@ -9,4 +9,5 @@ runTests("TourKitTests",
     + tourRulesTests
     + tourEngineTests
     + tagLayoutTests + tagKeysTests + tagStyleTests
+    + tagFitTests
 )
