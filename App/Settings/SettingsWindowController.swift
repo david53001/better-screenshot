@@ -34,10 +34,9 @@ final class SettingsWindowController {
             let fittingHeight = hosting.view.fittingSize.height
             let height = fittingHeight > 0 ? min(fittingHeight, maxH) : maxH
             w.setContentSize(NSSize(width: 960, height: height))
-
-            w.center()
             window = w
         }
+        if let window { WindowPlacer.place(window) }
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)   // ★ after makeKey, matching OnboardingController
     }

@@ -31,9 +31,9 @@ final class HistoryWindowController {
             w.title = "History"
             w.setContentSize(NSSize(width: 700, height: 500))
             w.isReleasedWhenClosed = false
-            w.center()
             window = w
         }
+        if let window { WindowPlacer.place(window, rememberAs: "history") }
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)   // ★ after makeKey, matching SettingsWindowController
     }

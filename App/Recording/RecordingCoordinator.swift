@@ -650,6 +650,7 @@ final class RecordingCoordinator {
             restoreCard?()
         }
         trimController = c
+        if let window = c.window { WindowPlacer.place(window, rememberAs: "editVideo") }
         c.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
     }

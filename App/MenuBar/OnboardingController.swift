@@ -41,7 +41,7 @@ final class OnboardingController: NSWindowController {
 
     func show(_ state: State) {
         render(state)
-        window?.center()
+        if let window { WindowPlacer.place(window) }
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)

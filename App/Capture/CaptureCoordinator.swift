@@ -46,6 +46,7 @@ final class CaptureCoordinator {
             self?.settings.persistEditorRecentColors()
         }
         editorController = controller
+        if let window = controller.window { WindowPlacer.place(window, rememberAs: "annotate") }
         controller.showWindow(nil)
         controller.window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)

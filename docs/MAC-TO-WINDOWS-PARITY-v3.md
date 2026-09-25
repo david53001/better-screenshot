@@ -2073,6 +2073,52 @@ clipped; 12× zoom → 200 unique, evenly spaced labels; nothing loaded → no t
 
 ---
 
+## Window placement — centred, reopens as last closed (owner request 2026-09-25)
+
+**Why:** the annotation editor was created at screen position (0, 0) and never centred, so it opened in
+the **bottom-left corner**; the other windows used AppKit's `center()`, which sits about a third of the
+way down, not in the middle. The owner wants every window **exactly centred**, and a window that was last
+**full screen** (or covering the whole screen) to come back that way.
+
+**Behaviour (macOS, as built):**
+- Every app window — Annotate, Edit Video, History, Settings, Welcome — opens **exactly centred** in
+  the *visible* area (screen minus menu bar and Dock) of the screen **under the mouse pointer**, shrunk to
+  fit that area if it's bigger. A window that's already open is just brought forward, not moved.
+- **Annotate, Edit Video and History** (the resizable ones) also reopen the way the **last window of that
+  kind was closed**:
+  - closed at some size → the same size, centred (never below the window's minimum size);
+  - closed covering the whole visible screen (zoomed/Fill, or dragged to the edges — within 8 pt on
+    both axes) → covers the whole visible screen of the screen it opens on;
+  - closed in **full screen** (green button) → opens, then goes full screen; leaving full screen
+    returns it to the centred size it had before full screen.
+  - Nothing remembered yet → the window's own default size (the editor's default still comes from the
+    image's real size, as in Part 1), centred.
+- Settings and Welcome are fixed-size: centred only.
+
+**Data:** per window kind, UserDefaults key `windowPlacement.<kind>` (`annotate`, `editVideo`, `history`)
+= JSON `{"width": <pt>, "height": <pt>, "mode": "normal" | "fill" | "fullScreen"}` — width/height are
+the window's outer size outside full screen. Saved when the window closes.
+
+**Pure logic to port 1:1:** `Packages/CaptureKit/Sources/CaptureKit/WindowPlacement.swift` —
+`centred(size, in: visible)`, `opening(remembered:defaultSize:minSize:visible:)` →
+`(frame, enterFullScreen)`, `memo(frameSize:normalSize:isFullScreen:visible:)`; tests in
+`Packages/CaptureKit/Tests/CaptureKitTests/WindowPlacementTests.swift` (13 cases — port them as-is).
+The AppKit glue is `App/Lifecycle/WindowPlacer.swift` (`place(window, rememberAs:)`, called right
+before each window is shown).
+
+**Windows / WPF notes:**
+- Visible area = `System.Windows.Forms.Screen.FromPoint(Cursor.Position).WorkingArea`, converted from
+  device pixels to WPF DIPs (divide by the monitor's DPI scale). Set `WindowStartupLocation = Manual` and
+  `Left/Top/Width/Height` from `opening(...)`'s frame (WPF's y goes **down** — flip from AppKit's
+  bottom-up maths, or compute top = visible.Top + (visible.Height − h) / 2 directly).
+- Windows has no macOS-style full-screen Space. Map `fullScreen` **and** `fill` to
+  `WindowState.Maximized` (with `RestoreBounds` = the centred remembered size); on close, save
+  `RestoreBounds` size + `mode = "fill"` when `WindowState == Maximized`. A borderless true full screen
+  is not wanted.
+- Save in the port's settings store under the same keys and JSON shape.
+
+---
+
 ## Part 7 — Interactive guided tours and ⓘ help on every window
 
 _(pending — designed 2026-09-25 in the v3 spec §14; filled when Part 7 lands)_

@@ -56,6 +56,10 @@ port notes: `docs/MAC-TO-WINDOWS-PARITY-v3.md`.
 - Window recordings had no system audio from apps that play sound in helper processes (browsers,
   Electron apps) — window recordings now take system audio from the whole display's audio.
 - Dropdown fields in Settings (e.g. the Pin corner-radius menu) drew as bare text with two chevrons.
+- The annotation editor opened in the bottom-left corner of the screen. Every window (Annotate, Edit
+  Video, History, Settings, Welcome) now opens exactly centred on the screen you're using, and Annotate,
+  Edit Video and History reopen the way you last closed them — same size, covering the whole screen, or
+  in full screen.
 
 ### UI polish — fixes from the independent UI review
 Review: `docs/reviews/2026-09-25-ui-review.md` (5/10 before these fixes); after-screenshots in
