@@ -1,6 +1,8 @@
 import AppKit
 import AVFoundation
+import CaptureKit
 import RecordingKit
+import TourKit
 
 /// The pre-record strip: target buttons · Format · FPS on top, then one labelled
 /// column per source (Microphone · System audio · Camera · Mouse cursor), each a
@@ -10,8 +12,10 @@ import RecordingKit
 /// into `SettingsStore.recording` (the same values the Settings window edits).
 /// Drawn in the shared dark HUD look (`RecordingHUDStyle`).
 /// Lives in App because it bridges RecordingConfig ↔ SettingsStore.
+/// Guided tour: the "First recording" tour runs on it (anchors `strip.*`, `menuOpened`/`choiceMade`
+/// events below; steps in TourKit's `RecordingTours.swift`); the ⓘ beside ✕ replays it.
 @MainActor
-final class RecordStripController: NSObject {
+final class RecordStripController: NSObject, NSMenuDelegate {
     private var panel: NSPanel?
     private let store: SettingsStore
     private let micCatalog: DeviceCatalog
@@ -27,6 +31,8 @@ final class RecordStripController: NSObject {
     private var audioPopup = RecordStripController.popup()
     private var cameraPopup = RecordStripController.popup()
     private var cursorPopup = RecordStripController.popup()
+    /// The Microphone column (caption, level meter, menu) — the tour's "Microphone choices" step.
+    private var micColumn: NSView?
     private var meter = LevelMeterView()
     private var allowMic = NSButton()
     private var hintLabel = NSTextField(labelWithString: Hint.idle)
@@ -128,6 +134,7 @@ final class RecordStripController: NSObject {
         }
 
         p.orderFrontRegardless()
+        TourEvents.surfaceShown(.recordStrip, in: p)
     }
 
     func hide() {
@@ -155,6 +162,10 @@ final class RecordStripController: NSObject {
         let full = target("Full Screen", "display", .fullScreen, #selector(fullScreen))
         let area = target("Area…", "rectangle.dashed", .area, #selector(areaSelect))
         let window = target("Window…", "macwindow", .window, #selector(windowSelect))
+        // Grouped only so the tour can outline all three; same 8 pt spacing as the row.
+        let targets = NSStackView(views: [full, area, window])
+        targets.spacing = 8
+        targets.tourAnchor = Anchor.targets
 
         let format = ChoiceControl(["MP4", "GIF"], selected: store.recording.format == .mp4 ? 0 : 1,
                                    name: "Format") { [weak self] in self?.formatChanged(to: $0) }
@@ -170,15 +181,23 @@ final class RecordStripController: NSObject {
         cancel.toolTip = "Close without recording"
         track(cancel, .cancel, captions: [cancel])
 
+        // ⓘ: replay the First recording tour · the strip's keyboard shortcuts.
+        let info = InfoButton(tour: .firstRecording, shortcuts: shortcuts())
+        info.contentTintColor = RecordingHUDStyle.secondaryText
+        track(info, .info, captions: [info])
+
         let spacer = NSView()
         spacer.setContentHuggingPriority(.init(1), for: .horizontal)
         let formatGroup = labelled("Format", format, .format)
+        formatGroup.tourAnchor = Anchor.format
         let fpsGroup = labelled("FPS", fps, .fps)
-        let row = NSStackView(views: [full, area, window, spacer, formatGroup, fpsGroup, cancel])
+        fpsGroup.tourAnchor = Anchor.fps
+        let row = NSStackView(views: [targets, spacer, formatGroup, fpsGroup, info, cancel])
         row.spacing = 8
         row.distribution = .fill
         row.setCustomSpacing(20, after: formatGroup)
         row.setCustomSpacing(16, after: fpsGroup)
+        row.setCustomSpacing(2, after: info)
         return row
     }
 
@@ -203,6 +222,11 @@ final class RecordStripController: NSObject {
         audioPopup.action = #selector(audioChosen(_:))
         cameraPopup.action = #selector(cameraChosen(_:))
         cursorPopup.action = #selector(cursorChosen(_:))
+        // Tour: opening a menu posts `menuOpened` (menuWillOpen); the mic and system-audio anchors are
+        // set in refreshSources() — only while those menus can be used (not in GIF mode).
+        for popup in [micPopup, audioPopup, cameraPopup, cursorPopup] { popup.menu?.delegate = self }
+        cameraPopup.tourAnchor = Anchor.camera
+        cursorPopup.tourAnchor = Anchor.cursor
 
         // Beside the Microphone caption: the live level meter, or a link to grant
         // access (neither when the mic is Off — so no empty band under the menus).
@@ -226,8 +250,10 @@ final class RecordStripController: NSObject {
         track(allowMic, .allowMic)
 
         let w = Self.columnWidth
+        let mic = column("mic", "Microphone", micPopup, w, accessories: [meter, allowMic], hint: .microphone)
+        micColumn = mic
         let row = NSStackView(views: [
-            column("mic", "Microphone", micPopup, w, accessories: [meter, allowMic], hint: .microphone),
+            mic,
             column("speaker.wave.2", "System audio", audioPopup, w, hint: .systemAudio),
             column("video", "Camera", cameraPopup, w, hint: .camera),
             column("cursorarrow", "Mouse cursor", cursorPopup, Self.cursorWidth, hint: .cursor),
@@ -276,6 +302,7 @@ final class RecordStripController: NSObject {
         let row = NSStackView(views: [icon, hintLabel])
         row.spacing = 6
         row.distribution = .fill
+        row.tourAnchor = Anchor.hint
         return row
     }
 
@@ -291,6 +318,10 @@ final class RecordStripController: NSObject {
     private func refreshSources() {
         let config = store.recording
         let isGIF = config.format == .gif
+        // GIFs are silent and these menus are greyed out: the tour skips their steps (no anchor).
+        micPopup.tourAnchor = isGIF ? nil : Anchor.microphone
+        micColumn?.tourAnchor = isGIF ? nil : Anchor.microphoneColumn
+        audioPopup.tourAnchor = isGIF ? nil : Anchor.systemAudio
 
         let mics = micCatalog.snapshot()
         fill(micPopup, mics.options.map { ($0.title, $0.choice.id, nil) },
@@ -407,7 +438,7 @@ final class RecordStripController: NSObject {
 
     /// Plain-language explanation per control. `idle` shows when nothing is hovered.
     fileprivate enum Hint: String {
-        case fullScreen, area, window, format, fps, cancel
+        case fullScreen, area, window, format, fps, info, cancel
         case microphone, systemAudio, camera, cursor, allowMic
 
         static let idle = "Pick what to record, then choose Full Screen, Area or Window."
@@ -425,6 +456,7 @@ final class RecordStripController: NSObject {
         case .window: return "Window: click a window to record just that window, even as it moves."
         case .format: return "Format: MP4 is a video with sound. GIF is a silent, looping animation."
         case .fps: return "Frame rate: 60 looks smoother, 30 makes smaller files."
+        case .info: return "Replay this tour, or see the keyboard shortcuts."
         case .cancel: return "Close this strip without recording."
         case .microphone:
             return isGIF ? Hint.noSoundInGIF
@@ -487,42 +519,84 @@ final class RecordStripController: NSObject {
 
     // MARK: - Actions
 
-    @objc private func fullScreen() { onFullScreen?() }
-    @objc private func areaSelect() { onArea?() }
-    @objc private func windowSelect() { onWindow?() }
+    // The target buttons post `choiceMade` before they hide the strip: the tour's last step ("Start
+    // recording") completes on it and hands over to the pill tour.
+    @objc private func fullScreen() { TourEvents.post(.choiceMade(Anchor.targets)); onFullScreen?() }
+    @objc private func areaSelect() { TourEvents.post(.choiceMade(Anchor.targets)); onArea?() }
+    @objc private func windowSelect() { TourEvents.post(.choiceMade(Anchor.targets)); onWindow?() }
     @objc private func cancelTapped() { onCancel?() }
     private func formatChanged(to index: Int) {
         store.recording.format = index == 0 ? .mp4 : .gif
         store.persist()
         refreshSources()   // also refreshes the idle hint (GIF says why audio is off)
+        TourEvents.post(.choiceMade(Anchor.format))
     }
     private func fpsChanged(to index: Int) {
         store.recording.fps = index == 1 ? 60 : 30
         store.persist()
+        TourEvents.post(.choiceMade(Anchor.fps))
     }
     @objc private func micChosen(_ sender: NSPopUpButton) {
         store.recording.setMicrophone(DeviceChoice(id: sender.selectedItem?.representedObject as? String))
         store.persist()
         refreshMeter()
+        TourEvents.post(.choiceMade(Anchor.microphone))
     }
     @objc private func audioChosen(_ sender: NSPopUpButton) {
         store.recording.systemAudioMode = SystemAudioMode(
             rawValue: sender.selectedItem?.representedObject as? String ?? "") ?? .off
         store.persist()
+        TourEvents.post(.choiceMade(Anchor.systemAudio))
     }
     @objc private func cameraChosen(_ sender: NSPopUpButton) {
         store.recording.setCamera(DeviceChoice(id: sender.selectedItem?.representedObject as? String))
         store.persist()
+        TourEvents.post(.choiceMade(Anchor.camera))
     }
     @objc private func cameraSizeChosen(_ sender: NSMenuItem) {
         guard let size = CameraSize(rawValue: sender.representedObject as? String ?? "") else { return }
         store.recording.cameraSize = size
         store.persist()
         refreshSources()   // moves the checkmark and keeps the camera row selected
+        TourEvents.post(.choiceMade(Anchor.camera))
     }
     @objc private func cursorChosen(_ sender: NSPopUpButton) {
         store.recording.showsCursor = sender.selectedItem?.representedObject as? String != "hidden"
         store.persist()
+        TourEvents.post(.choiceMade(Anchor.cursor))
+    }
+
+    // MARK: - Tour
+
+    /// Tour anchor ids (`view.tourAnchor`) — the catalog's steps name the same strings.
+    private enum Anchor {
+        static let targets = "strip.targets"
+        static let format = "strip.format"
+        static let fps = "strip.fps"
+        static let microphone = "strip.microphone"
+        static let microphoneColumn = "strip.microphoneColumn"
+        static let systemAudio = "strip.systemAudio"
+        static let camera = "strip.camera"
+        static let cursor = "strip.cursor"
+        static let hint = "strip.hint"
+    }
+
+    /// A source menu is about to open (click, keyboard or VoiceOver): the tour's "Open the … menu" steps.
+    func menuWillOpen(_ menu: NSMenu) {
+        let anchors: [(NSPopUpButton, String)] = [(micPopup, Anchor.microphone), (audioPopup, Anchor.systemAudio),
+                                                  (cameraPopup, Anchor.camera), (cursorPopup, Anchor.cursor)]
+        if let anchor = anchors.first(where: { $0.0.menu === menu })?.1 {
+            TourEvents.post(.menuOpened(anchor))
+        }
+    }
+
+    /// The ⓘ's Keyboard Shortcuts list: the user's own record / pause combos (left out when unbound).
+    private func shortcuts() -> [(keys: String, action: String)] {
+        let rows: [(HotkeyAction, String)] = [(.record, "Close this strip · stop a recording"),
+                                              (.pauseResumeRecording, "Pause or resume a recording")]
+        return rows.compactMap { action, text in
+            HotkeyCheatSheet.keys(for: action, in: store.bindings).map { (keys: $0, action: text) }
+        }
     }
     @objc private func allowMicTapped() {
         if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined {

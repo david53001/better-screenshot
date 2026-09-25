@@ -250,6 +250,13 @@ public final class ScreenRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
         try await stream.updateConfiguration(streamConfig)
     }
 
+    /// Swaps the running stream's filter for the same content with a different set of left-out
+    /// windows (e.g. a tour tag that just appeared). Nothing else about the stream changes.
+    public func updateFilter(_ filter: SCContentFilter) async throws {
+        guard let stream else { throw RecorderError.notRecording }
+        try await stream.updateContentFilter(filter)
+    }
+
     private func reset() {
         stream = nil; audioStream = nil; writer = nil; videoInput = nil
         systemAudioInput = nil; micInput = nil; micCapturer = nil

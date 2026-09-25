@@ -1,5 +1,6 @@
 import AppKit
 import RecordingKit
+import TourKit
 
 /// The floating pill shown for the whole recording session (countdown included).
 /// Expanded (default):
@@ -133,6 +134,7 @@ final class RecordingControlsController {
         timeColumn.alignment = .leading
         timeColumn.spacing = 0
         timeColumn.detachesHiddenViews = true
+        timeColumn.tourAnchor = "pill.timer"
 
         let mic = PillButton.labelled(["Mic"], symbols: ["mic.fill", "mic.slash.fill"],
                                       target: self, action: #selector(micTapped))
@@ -160,6 +162,16 @@ final class RecordingControlsController {
         for b in [mic, sound, camera, switchButton, restart, discard, pause, stop, chevron] {
             b.onHover = { [weak self] button, inside in self?.hoverChanged(button, inside) }
         }
+        // Tour anchors (the recording pill tour, spec §14.3). The mic's is set in render(): only
+        // while there's a mic track to mute.
+        sound.tourAnchor = "pill.systemAudio"
+        camera.tourAnchor = "pill.camera"
+        switchButton.tourAnchor = "pill.switch"
+        restart.tourAnchor = "pill.restart"
+        discard.tourAnchor = "pill.discard"
+        pause.tourAnchor = "pill.pause"
+        stop.tourAnchor = "pill.stop"
+        chevron.tourAnchor = "pill.collapse"
 
         let sep1 = Self.separator(), sep2 = Self.separator(), sep3 = Self.separator()
         let views: [NSView] = [dot, timeColumn, sep1, mic, sound, camera, sep2, switchButton, sep3,
@@ -249,6 +261,7 @@ final class RecordingControlsController {
             forName: NSWindow.didMoveNotification, object: p, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.panelMoved() }
         }
+        TourEvents.surfaceShown(.recordingPill, in: p)
     }
 
     func hide() {
@@ -289,6 +302,8 @@ final class RecordingControlsController {
                offIsWarning: true,
                tipOn: "Mute microphone — the video keeps a silent gap, stays in sync",
                tipOff: "Unmute microphone")
+        // "Mute the mic" (a Try step) only makes sense with a mic track: without one the tour skips it.
+        if case .unavailable = s.mic { micButton?.tourAnchor = nil } else { micButton?.tourAnchor = "pill.mic" }
         render(soundButton, s.sound, on: "speaker.wave.2.fill", off: "speaker.slash.fill",
                unavailable: "speaker.slash.fill", offIsWarning: true,
                tipOn: "Mute system audio — the video keeps a silent gap, stays in sync",
@@ -458,7 +473,10 @@ final class RecordingControlsController {
 
     // MARK: - Actions
 
-    @objc private func micTapped() { onToggleMic?() }
+    @objc private func micTapped() {
+        if status.mic == .on { TourEvents.post(.action("pill.micMuted")) }
+        onToggleMic?()
+    }
     @objc private func soundTapped() { onToggleSound?() }
     @objc private func cameraTapped() { onToggleCamera?() }
     @objc private func switchTapped() { cancelConfirm(); onSwitch?() }

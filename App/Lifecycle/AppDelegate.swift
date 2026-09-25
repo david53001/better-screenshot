@@ -27,7 +27,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             screenRecordingGranted: PermissionManager.hasScreenRecordingPermission)
         NSApp.setActivationPolicy(.accessory)
         tours = TourCoordinator(
-            makePresenter: { TagOverlayController() },
+            // The tag overlay, with its windows kept out of screen recordings (TourTagRecordingGate).
+            makePresenter: { RecordingSafeTagPresenter() },
             shortcutText: { [weak self] name in
                 guard let action = HotkeyAction(rawValue: name) else { return nil }
                 return HotkeyCheatSheet.keys(for: action, in: self?.settings.bindings ?? .defaults)
