@@ -67,6 +67,7 @@ enum TagLayout {
             case .over:
                 continue
             }
+            tag.origin = CGPoint(x: tag.origin.x.rounded(), y: tag.origin.y.rounded())   // whole points
             return Placement(side: side, box: box, outer: outer, tag: tag,
                              leader: leader(side: side, tag: tag, box: box, outer: outer))
         }
