@@ -6,7 +6,8 @@ import CoreGraphics
 /// The outline box is the anchor grown by `boxPadding` (clipped to the screen, for a menu-bar icon);
 /// its 2 pt stroke sits just outside that. In order:
 /// 1. A step's own `placement` (left/right/above/below/insideCorner) if it fits; else as automatic.
-/// 2. A **big** control — at least `bigAnchorFraction` of its host window (the editor canvas, the video
+/// 2. A **big** control — at least `bigAnchorFraction` of its host window's width *and* height (the editor
+///    canvas, the video
 ///    preview, the Settings cards) — gets the tag beside the *whole window* if there's room on screen,
 ///    else inside its own top-right corner: "beside" it would mean over the window's other controls.
 /// 3. The first side in the preference order where the tag fits inside the visible frame (minus
@@ -59,11 +60,14 @@ enum TagLayout {
         anchor.minY >= contentLayout.maxY - 1
     }
 
-    /// A control covering at least `TagStyle.bigAnchorFraction` of its host window (what's visible of it).
+    /// A control spanning at least `TagStyle.bigAnchorFraction` of its host window's width and of its height
+    /// (what's visible of it). Both, not the area: Settings' Keyboard Shortcuts card is half the window's
+    /// area but a wide strip — beside it (above) is fine, and its top-right corner holds the wells to click.
     static func isBig(anchor: CGRect, host: CGRect) -> Bool {
         let visible = anchor.intersection(host)
         guard !visible.isNull, host.width > 0, host.height > 0 else { return false }
-        return visible.width * visible.height >= TagStyle.bigAnchorFraction * host.width * host.height
+        let f = TagStyle.bigAnchorFraction
+        return visible.width >= f * host.width && visible.height >= f * host.height
     }
 
     /// - Parameters:

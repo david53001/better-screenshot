@@ -210,11 +210,20 @@ let tagLayoutTests: [TestCase] = [
 
     // MARK: Big controls (review T3 — the editor canvas, the video preview, the Settings cards)
 
-    TestCase("aBigControlIsHalfItsWindow") { t in
+    TestCase("aBigControlSpansMostOfItsWindowBothWays") { t in
         let window = CGRect(x: 0, y: 0, width: 1000, height: 800)
         t.isTrue(TagLayout.isBig(anchor: CGRect(x: 0, y: 0, width: 700, height: 600), host: window))
         t.isFalse(TagLayout.isBig(anchor: CGRect(x: 0, y: 0, width: 260, height: 700), host: window))   // side panel
         t.isFalse(TagLayout.isBig(anchor: CGRect(x: 0, y: 0, width: 1000, height: 150), host: window))  // timeline
+        // Settings: the three columns are big; the Keyboard Shortcuts card (half the area, a wide strip) isn't.
+        let settings = CGRect(x: 255, y: 76, width: 960, height: 847)
+        t.isTrue(TagLayout.isBig(anchor: CGRect(x: 273, y: 167, width: 923, height: 652), host: settings))
+        t.isFalse(TagLayout.isBig(anchor: CGRect(x: 273, y: 76, width: 924, height: 458), host: settings))
+        // The editor canvas and the video preview (measured in the probe).
+        t.isTrue(TagLayout.isBig(anchor: CGRect(x: 169, y: 218, width: 848, height: 544),
+                                 host: CGRect(x: 169, y: 154, width: 1132, height: 708)))
+        t.isTrue(TagLayout.isBig(anchor: CGRect(x: 255, y: 394, width: 960, height: 458),
+                                 host: CGRect(x: 255, y: 136, width: 960, height: 720)))
         // Only the part inside the window counts.
         t.isFalse(TagLayout.isBig(anchor: CGRect(x: 900, y: 0, width: 700, height: 800), host: window))
     },
