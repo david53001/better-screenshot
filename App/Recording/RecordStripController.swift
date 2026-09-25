@@ -3,10 +3,12 @@ import AVFoundation
 import RecordingKit
 
 /// The pre-record strip: target buttons · Format · FPS on top, then one labelled
-/// column per source (Microphone · System audio · Camera · Cursor), each a caption
-/// over a popup menu, with a live mic level meter, and a hint line at the bottom
-/// explaining whatever the pointer is over. Every choice persists straight into
-/// `SettingsStore.recording` (the same values the Settings window edits).
+/// column per source (Microphone · System audio · Camera · Mouse cursor), each a
+/// caption over a popup menu, with a live mic level meter beside the Microphone
+/// caption, and a hint line at the bottom explaining whatever the pointer is over
+/// (the hovered group's caption brightens to match). Every choice persists straight
+/// into `SettingsStore.recording` (the same values the Settings window edits).
+/// Drawn in the shared dark HUD look (`RecordingHUDStyle`).
 /// Lives in App because it bridges RecordingConfig ↔ SettingsStore.
 @MainActor
 final class RecordStripController: NSObject {
@@ -21,15 +23,17 @@ final class RecordStripController: NSObject {
     var onCancel: (() -> Void)?
 
     // Rebuilt by every `show()`.
-    private var micPopup = NSPopUpButton()
-    private var audioPopup = NSPopUpButton()
-    private var cameraPopup = NSPopUpButton()
-    private var cursorPopup = NSPopUpButton()
+    private var micPopup = RecordStripController.popup()
+    private var audioPopup = RecordStripController.popup()
+    private var cameraPopup = RecordStripController.popup()
+    private var cursorPopup = RecordStripController.popup()
     private var meter = LevelMeterView()
     private var allowMic = NSButton()
     private var hintLabel = NSTextField(labelWithString: Hint.idle)
     /// Views whose hover/focus shows a hint, innermost last (nested areas win).
     private var hintViews: [(view: NSView, hint: Hint)] = []
+    /// Captions/icons that brighten while their group's hint is showing.
+    private var captions: [Hint: [NSView]] = [:]
     private var hovered: [Hint] = []
     private var focused: Hint?
     private var focusObservation: NSKeyValueObservation?
@@ -37,11 +41,14 @@ final class RecordStripController: NSObject {
     private var meterCapturer: MicCapturer?
     private var level = 0.0
 
-    /// Column widths fit their usual content untruncated (measured regular popups:
-    /// "All apps except BetterScreenshot" 251pt, "David’s iPhone Microphone" 213pt).
-    /// Longer device names truncate and show the full name as a tooltip.
-    private static let widths = (mic: 216.0, audio: 252.0, camera: 216.0, cursor: 128.0)
+    /// Microphone, System audio and Camera share one column width that fits their
+    /// usual content untruncated (measured regular popups: "All apps except
+    /// BetterScreenshot" 251pt); Mouse cursor only needs "Shown"/"Hidden". Longer
+    /// device names truncate and show the full name as a tooltip.
+    private static let columnWidth: CGFloat = 252
+    private static let cursorWidth: CGFloat = 128
     private static let columnGap: CGFloat = 16
+    private static let meterWidth: CGFloat = 120
 
     init(store: SettingsStore, micCatalog: DeviceCatalog = AudioInputCatalog(),
          cameraCatalog: DeviceCatalog = CameraCatalog()) {
@@ -56,11 +63,12 @@ final class RecordStripController: NSObject {
     func show(on screen: NSScreen) {
         guard panel == nil else { return }
         (micPopup, audioPopup, cameraPopup, cursorPopup) =
-            (NSPopUpButton(), NSPopUpButton(), NSPopUpButton(), NSPopUpButton())
+            (Self.popup(), Self.popup(), Self.popup(), Self.popup())
         meter = LevelMeterView()
         allowMic = NSButton()
         hintLabel = NSTextField(labelWithString: Hint.idle)
         hintViews = []
+        captions = [:]
         hovered = []
         focused = nil
 
@@ -69,17 +77,12 @@ final class RecordStripController: NSObject {
         content.alignment = .leading
         content.spacing = 12
         content.edgeInsets = NSEdgeInsets(top: 14, left: 16, bottom: 12, right: 16)
-        let w = Self.widths
-        let width = w.mic + w.audio + w.camera + w.cursor + 3 * Self.columnGap
+        let width = 3 * Self.columnWidth + Self.cursorWidth + 3 * Self.columnGap
         for row in content.arrangedSubviews {
             row.widthAnchor.constraint(equalToConstant: width).isActive = true
         }
 
-        let bg = NSVisualEffectView()
-        bg.appearance = NSAppearance(named: .vibrantDark)
-        bg.material = .hudWindow
-        bg.blendingMode = .behindWindow
-        bg.state = .active
+        let bg = RecordingHUDStyle.makeBackground(cornerRadius: 12)
         content.translatesAutoresizingMaskIntoConstraints = false
         bg.addSubview(content)
         NSLayoutConstraint.activate([
@@ -88,25 +91,24 @@ final class RecordStripController: NSObject {
             content.topAnchor.constraint(equalTo: bg.topAnchor),
             content.bottomAnchor.constraint(equalTo: bg.bottomAnchor),
         ])
-        let size = content.fittingSize
-        let frame = CGRect(x: screen.visibleFrame.midX - size.width / 2,
-                           y: screen.visibleFrame.minY + 60,
-                           width: size.width, height: size.height)
-        let p = NSPanel(contentRect: frame,
-                        styleMask: [.titled, .nonactivatingPanel, .fullSizeContentView],
-                        backing: .buffered, defer: false)
-        p.titleVisibility = .hidden
-        p.titlebarAppearsTransparent = true
-        for b in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
-            p.standardWindowButton(b)?.isHidden = true
-        }
+        // Borderless so the HUD's own 12pt corners and border show; KeyablePanel keeps
+        // it able to take keyboard focus (Tab with Full Keyboard Access) when clicked.
+        let p = KeyablePanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
+                             backing: .buffered, defer: false)
+        p.isOpaque = false
+        p.backgroundColor = .clear
+        p.hasShadow = true
         p.appearance = NSAppearance(named: .darkAqua)
         p.isMovableByWindowBackground = true
         p.level = .floating
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         p.contentView = bg
+        panel = p
+        refreshSources()   // fill the menus and show the meter/link before measuring
+        let size = content.fittingSize
         p.setContentSize(size)
-        p.setFrameOrigin(frame.origin)
+        p.setFrameOrigin(NSPoint(x: screen.visibleFrame.midX - size.width / 2,
+                                 y: screen.visibleFrame.minY + 60))
 
         for (view, hint) in hintViews {
             view.addTrackingArea(NSTrackingArea(
@@ -126,8 +128,6 @@ final class RecordStripController: NSObject {
         }
 
         p.orderFrontRegardless()
-        panel = p
-        refreshSources()
     }
 
     func hide() {
@@ -156,21 +156,19 @@ final class RecordStripController: NSObject {
         let area = target("Area…", "rectangle.dashed", .area, #selector(areaSelect))
         let window = target("Window…", "macwindow", .window, #selector(windowSelect))
 
-        let format = NSSegmentedControl(labels: ["MP4", "GIF"], trackingMode: .selectOne,
-                                        target: self, action: #selector(formatChanged(_:)))
-        format.selectedSegment = store.recording.format == .mp4 ? 0 : 1
-        let fps = NSSegmentedControl(labels: ["30", "60"], trackingMode: .selectOne,
-                                     target: self, action: #selector(fpsChanged(_:)))
-        fps.selectedSegment = store.recording.fps == 60 ? 1 : 0
+        let format = ChoiceControl(["MP4", "GIF"], selected: store.recording.format == .mp4 ? 0 : 1,
+                                   name: "Format") { [weak self] in self?.formatChanged(to: $0) }
+        let fps = ChoiceControl(["30", "60"], selected: store.recording.fps == 60 ? 1 : 0,
+                                name: "Frame rate") { [weak self] in self?.fpsChanged(to: $0) }
 
         let cancel = NSButton(image: NSImage(systemSymbolName: "xmark.circle.fill",
                                              accessibilityDescription: "Cancel")!,
                               target: self, action: #selector(cancelTapped))
         cancel.isBordered = false
         cancel.symbolConfiguration = .init(pointSize: 16, weight: .regular)
-        cancel.contentTintColor = .secondaryLabelColor
+        cancel.contentTintColor = RecordingHUDStyle.secondaryText
         cancel.toolTip = "Close without recording"
-        track(cancel, .cancel)
+        track(cancel, .cancel, captions: [cancel])
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.init(1), for: .horizontal)
@@ -188,16 +186,16 @@ final class RecordStripController: NSObject {
     private func labelled(_ caption: String, _ control: NSView, _ hint: Hint) -> NSView {
         let label = NSTextField(labelWithString: caption)
         label.font = .systemFont(ofSize: 12)
-        label.textColor = .secondaryLabelColor
+        label.textColor = RecordingHUDStyle.secondaryText
         let group = NSStackView(views: [label, control])
         group.spacing = 6
-        track(group, hint)
+        track(group, hint, captions: [label])
         return group
     }
 
     private func sourcesRow() -> NSView {
         for (popup, name) in [(micPopup, "Microphone"), (audioPopup, "System audio"),
-                              (cameraPopup, "Camera"), (cursorPopup, "Cursor")] {
+                              (cameraPopup, "Camera"), (cursorPopup, "Mouse cursor")] {
             popup.target = self
             popup.setAccessibilityLabel(name)
         }
@@ -206,34 +204,33 @@ final class RecordStripController: NSObject {
         cameraPopup.action = #selector(cameraChosen(_:))
         cursorPopup.action = #selector(cursorChosen(_:))
 
-        // Mic footer: the live level meter, or a link to grant access.
+        // Beside the Microphone caption: the live level meter, or a link to grant
+        // access (neither when the mic is Off — so no empty band under the menus).
         allowMic.isBordered = false
         allowMic.attributedTitle = NSAttributedString(
             string: "Allow microphone access…",
             attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.linkColor])
         allowMic.target = self
         allowMic.action = #selector(allowMicTapped)
-        let micFooter = NSView()
-        for v in [meter, allowMic] {
-            v.translatesAutoresizingMaskIntoConstraints = false
-            micFooter.addSubview(v)
-        }
+        meter.translatesAutoresizingMaskIntoConstraints = false
+        allowMic.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            meter.leadingAnchor.constraint(equalTo: micFooter.leadingAnchor, constant: 2),
-            meter.trailingAnchor.constraint(equalTo: micFooter.trailingAnchor, constant: -2),
-            meter.centerYAnchor.constraint(equalTo: micFooter.centerYAnchor),
+            meter.widthAnchor.constraint(equalToConstant: Self.meterWidth),
             meter.heightAnchor.constraint(equalToConstant: 6),
-            allowMic.leadingAnchor.constraint(equalTo: micFooter.leadingAnchor, constant: 2),
-            allowMic.centerYAnchor.constraint(equalTo: micFooter.centerYAnchor),
+            // No taller than the caption, so the strip is the same height whether the
+            // meter, the link or neither is showing.
+            allowMic.heightAnchor.constraint(equalToConstant: 15),
+            // Its intrinsic width comes out short and the title wraps (clipped) otherwise.
+            allowMic.widthAnchor.constraint(equalToConstant: ceil(allowMic.attributedTitle.size().width) + 4),
         ])
         track(allowMic, .allowMic)
 
-        let w = Self.widths
+        let w = Self.columnWidth
         let row = NSStackView(views: [
-            column("mic", "Microphone", micPopup, w.mic, footer: micFooter, hint: .microphone),
-            column("speaker.wave.2", "System audio", audioPopup, w.audio, footer: NSView(), hint: .systemAudio),
-            column("video", "Camera", cameraPopup, w.camera, footer: NSView(), hint: .camera),
-            column("cursorarrow", "Cursor", cursorPopup, w.cursor, footer: NSView(), hint: .cursor),
+            column("mic", "Microphone", micPopup, w, accessories: [meter, allowMic], hint: .microphone),
+            column("speaker.wave.2", "System audio", audioPopup, w, hint: .systemAudio),
+            column("video", "Camera", cameraPopup, w, hint: .camera),
+            column("cursorarrow", "Mouse cursor", cursorPopup, Self.cursorWidth, hint: .cursor),
         ])
         row.orientation = .horizontal
         row.alignment = .top
@@ -241,26 +238,28 @@ final class RecordStripController: NSObject {
         return row
     }
 
-    /// Icon + caption over a popup, then a fixed-height footer line (the mic's meter).
+    /// Icon + caption (+ right-aligned `accessories`, e.g. the mic meter) over a popup.
     private func column(_ symbol: String, _ caption: String, _ popup: NSPopUpButton, _ width: CGFloat,
-                        footer: NSView, hint: Hint) -> NSView {
+                        accessories: [NSView] = [], hint: Hint) -> NSView {
         popup.widthAnchor.constraint(equalToConstant: width).isActive = true
         let icon = NSImageView(image: NSImage(systemSymbolName: symbol, accessibilityDescription: nil)!)
         icon.symbolConfiguration = .init(pointSize: 12, weight: .medium)
-        icon.contentTintColor = .secondaryLabelColor
+        icon.contentTintColor = RecordingHUDStyle.secondaryText
         let label = NSTextField(labelWithString: caption)
         label.font = .systemFont(ofSize: 12, weight: .medium)
-        label.textColor = .secondaryLabelColor
-        let header = NSStackView(views: [icon, label])
+        label.textColor = RecordingHUDStyle.secondaryText
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.init(1), for: .horizontal)
+        spacer.setContentCompressionResistancePriority(.init(1), for: .horizontal)
+        let header = NSStackView(views: [icon, label, spacer] + accessories)
         header.spacing = 5
-        footer.translatesAutoresizingMaskIntoConstraints = false
-        footer.heightAnchor.constraint(equalToConstant: 12).isActive = true
-        footer.widthAnchor.constraint(equalToConstant: width).isActive = true
-        let column = NSStackView(views: [header, popup, footer])
+        header.distribution = .fill
+        header.widthAnchor.constraint(equalToConstant: width).isActive = true
+        let column = NSStackView(views: [header, popup])
         column.orientation = .vertical
         column.alignment = .leading
         column.spacing = 6
-        track(column, hint)
+        track(column, hint, captions: [icon, label])
         return column
     }
 
@@ -268,9 +267,9 @@ final class RecordStripController: NSObject {
         let icon = NSImageView(image: NSImage(systemSymbolName: "info.circle",
                                               accessibilityDescription: nil)!)
         icon.symbolConfiguration = .init(pointSize: 12, weight: .regular)
-        icon.contentTintColor = .secondaryLabelColor
+        icon.contentTintColor = RecordingHUDStyle.secondaryText
         hintLabel.font = .systemFont(ofSize: 12)
-        hintLabel.textColor = .secondaryLabelColor
+        hintLabel.textColor = RecordingHUDStyle.secondaryText
         hintLabel.lineBreakMode = .byTruncatingTail
         hintLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         hintLabel.setContentHuggingPriority(.init(1), for: .horizontal)
@@ -314,13 +313,13 @@ final class RecordStripController: NSObject {
             item.state = size == config.cameraSize ? .on : .off
             sizes.addItem(item)
         }
-        let sizeItem = NSMenuItem(title: "Bubble Size", action: nil, keyEquivalent: "")
+        let sizeItem = NSMenuItem(title: "Camera Size", action: nil, keyEquivalent: "")
         sizeItem.submenu = sizes
         cameraPopup.menu?.addItem(.separator())
         cameraPopup.menu?.addItem(sizeItem)
 
-        fill(cursorPopup, [("Visible", "visible", "The pointer is recorded as it moves."),
-                           ("Hidden", "hidden", "The video shows no mouse pointer.")],
+        fill(cursorPopup, [("Shown", "visible", "The mouse cursor is recorded as it moves."),
+                           ("Hidden", "hidden", "The video shows no mouse cursor.")],
              selected: config.showsCursor ? "visible" : "hidden")
 
         refreshMeter()
@@ -342,9 +341,10 @@ final class RecordStripController: NSObject {
     }
 
     /// A device name too long for its column truncates; hovering shows it whole.
+    /// (Not `cellSize` — that's the widest *menu item*, so "Off" got a tooltip too.)
     private func showFullTitleIfTruncated(_ popup: NSPopUpButton) {
         popup.window?.layoutIfNeeded()
-        let truncated = (popup.cell?.cellSize.width ?? 0) > popup.frame.width
+        let truncated = (popup.cell as? EvenInsetPopUpCell)?.truncatesTitle(in: popup.bounds) ?? false
         popup.toolTip = truncated ? popup.titleOfSelectedItem : nil
     }
 
@@ -414,6 +414,9 @@ final class RecordStripController: NSObject {
         static let noSoundInGIF = "GIFs have no sound. Switch Format to MP4 to record audio."
     }
 
+    /// With nothing hovered: in GIF mode, say up front why the audio menus are greyed out.
+    private var idleHint: String { store.recording.format == .gif ? Hint.noSoundInGIF : Hint.idle }
+
     private func text(for hint: Hint) -> String {
         let isGIF = store.recording.format == .gif
         switch hint {
@@ -430,7 +433,7 @@ final class RecordStripController: NSObject {
             return isGIF ? Hint.noSoundInGIF
                 : "System audio: records the sound your Mac plays, like videos and calls. Choose \"Off\" to skip it."
         case .camera: return "Camera: shows your webcam in a round bubble on the recording. Set its size in the menu."
-        case .cursor: return "Cursor: choose whether the mouse pointer appears in the video."
+        case .cursor: return "Mouse cursor: choose whether it appears in the video."
         case .allowMic:
             return AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined
                 ? "Click to let BetterScreenshot use the microphone. macOS asks once."
@@ -438,12 +441,28 @@ final class RecordStripController: NSObject {
         }
     }
 
-    private func track(_ view: NSView, _ hint: Hint) {
+    private func track(_ view: NSView, _ hint: Hint, captions: [NSView] = []) {
         hintViews.append((view, hint))
+        if !captions.isEmpty { self.captions[hint, default: []] += captions }
     }
 
+    /// Shows the hovered (else focused) control's hint, and brightens that group's
+    /// caption so it's clear which control the hint line is about.
     private func updateHint() {
-        hintLabel.stringValue = (hovered.last ?? focused).map(text(for:)) ?? Hint.idle
+        let active = hovered.last ?? focused
+        hintLabel.stringValue = active.map(text(for:)) ?? idleHint
+        hintLabel.textColor = active == nil ? RecordingHUDStyle.secondaryText : RecordingHUDStyle.primaryText
+        for (hint, views) in captions {
+            let color = hint == active ? RecordingHUDStyle.primaryText : RecordingHUDStyle.secondaryText
+            for view in views {
+                switch view {
+                case let label as NSTextField: label.textColor = color
+                case let image as NSImageView: image.contentTintColor = color
+                case let button as NSButton: button.contentTintColor = color
+                default: break
+                }
+            }
+        }
     }
 
     @objc(mouseEntered:) func mouseEntered(with event: NSEvent) {
@@ -472,13 +491,13 @@ final class RecordStripController: NSObject {
     @objc private func areaSelect() { onArea?() }
     @objc private func windowSelect() { onWindow?() }
     @objc private func cancelTapped() { onCancel?() }
-    @objc private func formatChanged(_ sender: NSSegmentedControl) {
-        store.recording.format = sender.selectedSegment == 0 ? .mp4 : .gif
+    private func formatChanged(to index: Int) {
+        store.recording.format = index == 0 ? .mp4 : .gif
         store.persist()
-        refreshSources()
+        refreshSources()   // also refreshes the idle hint (GIF says why audio is off)
     }
-    @objc private func fpsChanged(_ sender: NSSegmentedControl) {
-        store.recording.fps = sender.selectedSegment == 1 ? 60 : 30
+    private func fpsChanged(to index: Int) {
+        store.recording.fps = index == 1 ? 60 : 30
         store.persist()
     }
     @objc private func micChosen(_ sender: NSPopUpButton) {
@@ -515,6 +534,106 @@ final class RecordStripController: NSObject {
         } else if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
             NSWorkspace.shared.open(url)
         }
+    }
+}
+
+private extension RecordStripController {
+    static func popup() -> NSPopUpButton {
+        let popup = NSPopUpButton()
+        popup.cell = EvenInsetPopUpCell(textCell: "", pullsDown: false)
+        return popup
+    }
+}
+
+/// Format / FPS picker: a rounded track with the chosen option filled in the accent
+/// colour. NSSegmentedControl only draws a strong selection while its window is key,
+/// and this non-activating panel rarely is — inactive, the chosen segment was only a
+/// shade lighter than the other (UI review S5).
+private final class ChoiceControl: NSStackView {
+    private var selected: Int
+    private let onChange: (Int) -> Void
+    private var buttons: [NSButton] = []
+
+    init(_ titles: [String], selected: Int, name: String, onChange: @escaping (Int) -> Void) {
+        self.selected = selected
+        self.onChange = onChange
+        super.init(frame: .zero)
+        spacing = 2
+        edgeInsets = NSEdgeInsets(top: 2, left: 2, bottom: 2, right: 2)
+        wantsLayer = true
+        layer?.cornerRadius = 7
+        layer?.backgroundColor = NSColor.white.withAlphaComponent(0.1).cgColor
+        setAccessibilityElement(true)
+        setAccessibilityRole(.radioGroup)
+        setAccessibilityLabel(name)
+        for (i, title) in titles.enumerated() {
+            let b = NSButton(title: title, target: self, action: #selector(chosen(_:)))
+            b.tag = i
+            b.isBordered = false
+            b.wantsLayer = true
+            b.layer?.cornerRadius = 5
+            b.setAccessibilityRole(.radioButton)
+            b.translatesAutoresizingMaskIntoConstraints = false
+            b.heightAnchor.constraint(equalToConstant: 22).isActive = true
+            b.widthAnchor.constraint(equalToConstant: 40).isActive = true
+            buttons.append(b)
+            addArrangedSubview(b)
+        }
+        refresh()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    @objc private func chosen(_ sender: NSButton) {
+        guard sender.tag != selected else { return }
+        selected = sender.tag
+        refresh()
+        onChange(selected)
+    }
+
+    private func refresh() {
+        for b in buttons {
+            let on = b.tag == selected
+            b.layer?.backgroundColor = (on ? NSColor.controlAccentColor : .clear).cgColor
+            b.attributedTitle = NSAttributedString(string: b.title, attributes: [
+                .font: NSFont.systemFont(ofSize: 13, weight: on ? .semibold : .regular),
+                .foregroundColor: on ? NSColor.white : RecordingHUDStyle.secondaryText])
+            b.setAccessibilityValue(on)
+        }
+    }
+}
+
+/// A borderless panel that can still become key (keyboard focus in the strip).
+private final class KeyablePanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+}
+
+/// NSPopUpButtonCell squeezes its title's left inset from 12pt to 5pt when the title
+/// doesn't fit, so a truncated device name started ~7pt left of every other menu's
+/// title. Keep the inset a fitting title gets.
+private final class EvenInsetPopUpCell: NSPopUpButtonCell {
+    private func fittingInset(in bounds: NSRect) -> CGFloat {
+        let reference = NSPopUpButtonCell(textCell: "", pullsDown: false)
+        reference.controlSize = controlSize
+        reference.font = font
+        reference.addItem(withTitle: "Off")
+        return reference.titleRect(forBounds: bounds).minX
+    }
+
+    func truncatesTitle(in bounds: NSRect) -> Bool {
+        let rect = titleRect(forBounds: bounds)
+        let available = rect.maxX - max(rect.minX, fittingInset(in: bounds))
+        return attributedTitle.size().width > available + 0.5
+    }
+
+    override func drawTitle(_ title: NSAttributedString, withFrame frame: NSRect,
+                            in controlView: NSView) -> NSRect {
+        let inset = fittingInset(in: controlView.bounds)
+        guard frame.minX < inset else { return super.drawTitle(title, withFrame: frame, in: controlView) }
+        var rect = frame
+        rect.size.width -= inset - frame.minX
+        rect.origin.x = inset
+        return super.drawTitle(title, withFrame: rect, in: controlView)
     }
 }
 
