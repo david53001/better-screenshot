@@ -243,27 +243,30 @@ Snapshots from the headless probe (synthetic screenshot, Retina): `docs/parity-v
 │            └─────────────────────────────────────────────────────┘   │                      │ │
 │  ┌──────────────────────────────────────────────────────────────┐    │ COLOUR               │ │
 │  │                                                              │    │ ● ● ● ● ● ● ● ●      │ │ ← 8 presets
-│  │                                                              │    │ RECENT ● ● ●         │ │ ← hidden if empty
-│  │                 canvas (centred, Fit by default)             │    │ [▬] [⌖ Pick from Screen] ← colour well + eyedropper
+│  │                                                              │    │ RECENT     ● ● ●     │ │ ← on preset columns 3–8; hidden if empty
+│  │                 canvas (centred, Fit by default)             │    │ CUSTOM [▬] [⌖ Pick from Screen] ← colour well + eyedropper
 │  │                                                              │    │ ──────────────────── │ │
 │  │                                                              │    │ STROKE               │ │
-│  │                                                              │    │ Width ──●────── 4 px │ │
+│  │                                                              │    │ Width   ──●──── 4 px │ │
 │  │                                                              │    │ [Thin|Medium|Thick]  │ │
 │  │                                                              │    │ ──────────────────── │ │
-│  │                                                              │    │ OPACITY              │ │
-│  │                                                              │    │ ───────────●─ 100%   │ │
+│  │                                                              │    │ Opacity ──────● 100% │ │ ← no caption
+│  │                                                              │    │ ──────────────────── │ │
+│  │                                                              │    │ [Front][Back][Delete]│ │ ← Arrange footer (Select + selection)
 │  └──────────────────────────────────────────────────────────────┘    └──────────────────────┘ │
 ├──────────────────────────────────────────────────────────────────────────────────────────────┤
 │ ⓘ Drag to draw an arrow — it points to where you let go.                                      │ ← hint line
-│ 1600 × 1000 px                          [Fit · 115% ⌄] │ Done  [Stack]  [Save]  [Copy]        │ ← action row
+│ [Fit · 100% ⌄]  1600 × 1000 px                          [Done]  [Stack]  [Save]  [Copy]      │ ← action row
 └──────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Window.** Title "Annotate", transparent title bar. Minimum size **884 × 440** while the panel is shown
-(600 canvas column + 8 gap + 264 panel + 12 margin), **600 × 440** while it is hidden. Initial content size:
-`width = min(max(imageW' + 48, 600) + 264 + 20, screenW − 40)`, `height = min(max(imageH' + 112 + 84, 520),
-screenH − 60)`, where `imageW' = min(image px width, 1200)` and `imageH'` keeps the aspect ratio; screen =
-the main screen's visible area. Backdrop behind the canvas: white 12% (dark mode) / white 90% (light).
+**Window.** Title "Annotate", transparent title bar, **always dark** (`NSAppearance.darkAqua`, whatever the system
+appearance — the vibrant-dark panels wash out over a light window). Minimum size **884 × 440** while the panel is
+shown (600 canvas column + 8 gap + 264 panel + 12 margin), **600 × 440** while it is hidden. Initial content size:
+`width = min(max(imageW' + 48, 600) + 264 + 20, screenW − 40)`, `height = min(max(imageH' + 112 + 64, 660),
+screenH − 60)`, where `imageW' = min(image width in points, 1200)` — points = pixels ÷ the main screen's backing
+scale (2 on Retina), i.e. the capture's real on-screen size — and `imageH'` keeps the aspect ratio; screen = the
+main screen's visible area. Backdrop behind the canvas: white 12%.
 
 **Tool pill** (unchanged look): top 12pt from the content top, **centred over the canvas column** (not the
 window). Dark HUD (`NSVisualEffectView` `.hudWindow`, vibrant dark), corner radius 15, 1px border white 10%,
@@ -303,35 +306,46 @@ radius **12**, 1px border white 10%.
   when the sections don't fit — e.g. Text at the minimum window height). Each section: padding 12 top /
   16 sides / 14 bottom, 8pt between rows, content width **232pt**. Caption = the section title in
   UPPERCASE, 10pt semibold, white 45%. Sections are separated by a 1px line (white 10%) inset 16pt each side.
-- Row labels: 12pt regular, white 88%. Value readouts: 11.5pt monospaced digits, white 55%, right-aligned,
+- Row labels: 12pt regular, white 88%, in **one 56pt label column** for every labelled row (so all slider
+  tracks start at the same x). Value readouts: 11.5pt monospaced digits, white 55%, right-aligned,
   40pt wide. Controls use the small control size (≈22pt tall); slider rows are 24pt tall.
+- Sections holding a single slider (**Opacity**, Part 3's **Strength** and **Dim outside**) have **no
+  caption**: the name is the row's label ("Opacity", "Strength", "Dim").
+- Checkboxes are custom-drawn (`InspectorCheckbox`): a 14pt rounded box (radius 3.5) with a 1px white-55%
+  outline and a white-6% fill when off, accent-filled with a white tick when on; 6pt gap; 12pt title, white 88%.
+- **Arrange is a footer** (under Select with a selection): a 1px white-10% line inset 16pt, then 10pt, the
+  Arrange row, 12pt bottom padding. It sits right under the last section when everything fits and stays
+  pinned to the panel's bottom (the sections scroll above it) when they don't — so Delete never scrolls away.
 
 Section contents (top to bottom, only the sections listed in §1.2 appear):
 
 | Section (caption) | Rows (exact) |
 |---|---|
-| **Colour** | ① 8 preset swatches spread evenly across 232pt: Red `#FF453B` (1.00, 0.27, 0.23), Orange (1.00, 0.62, 0.04), Yellow (1.00, 0.84, 0.04), Green (0.19, 0.82, 0.35), Blue (0.04, 0.52, 1.00), Purple (0.75, 0.35, 0.95), White, Black — sRGB; each 22×22 hit area with a 16pt circle, 1px white-22% outline, tooltip = colour name; the current colour gets a 2px white ring. ② "RECENT" caption (48pt wide) + up to 6 swatches 6pt apart, tooltip "Recent colour"; row hidden when there are none. ③ Colour well 44×24 (tooltip "Custom colour — opens the colour picker") + small rounded button **"Pick from Screen"** with SF `eyedropper` (tooltip "Eyedropper — click anywhere on screen to use that colour"). |
-| **Stroke** | ① "Width" label (44pt) · slider 1…24 (whole px) · value "4 px". ② Segmented **Thin / Medium / Thick** = 2 / 4 / 7 px (tooltips "2 px", "4 px", "7 px"), equal widths, full row; no segment highlighted when the width is another value. |
-| **Font** (Text) | ① Font pop-up, full width (tooltip "Font"): System, Rounded, Serif, Mono (each drawn in its own face), separator, every installed family. ② Size pop-up 84pt wide (tooltip "Font size"): 12, 14, 18, 24, 30, 36, 48, 64, 96 "pt" (+ the current size if it's another value) · Bold/Italic toggle pair (SF `bold`, `italic`, 30pt segments, tooltips "Bold", "Italic"). ③ Alignment, full width, three equal segments (SF `text.alignleft`, `text.aligncenter`, `text.alignright`; tooltips "Align left", "Align centre", "Align right"). |
+| **Colour** | ① 8 preset swatches spread evenly across 232pt: Red `#FF453B` (1.00, 0.27, 0.23), Orange (1.00, 0.62, 0.04), Yellow (1.00, 0.84, 0.04), Green (0.19, 0.82, 0.35), Blue (0.04, 0.52, 1.00), Purple (0.75, 0.35, 0.95), White, Black — sRGB; each 22×22 hit area with a 16pt circle, 1px white-22% outline, tooltip = colour name; the current colour gets a 2px white ring (the swatches are 8pt apart, so they form an 8-column grid). ② "RECENT" caption (52pt wide = two swatch columns) + up to 6 swatches 8pt apart — on preset columns 3–8 — tooltip "Recent colour"; row hidden when there are none. ③ "CUSTOM" caption (52pt) · colour well 40×24 (tooltip "Custom colour — opens the colour picker") · 6pt · small rounded button **"Pick from Screen"** with SF `eyedropper` (tooltip "Eyedropper — click anywhere on screen to use that colour"). |
+| **Stroke** | ① "Width" label (56pt) · slider 1…24 (whole px) · value "4 px". ② Segmented **Thin / Medium / Thick** = 2 / 4 / 7 px (tooltips "2 px", "4 px", "7 px"), equal widths, full row; no segment highlighted when the width is another value. |
+| **Font** (Text) | Two rows. ① Font pop-up, the rest of the row (tooltip "Font"; long family names truncate): System, Rounded, Serif, Mono (each drawn in its own face), separator, every installed family · 8pt · size pop-up 84pt wide (tooltip "Font size"): 12, 14, 18, 24, 30, 36, 48, 64, 96 "pt" (+ the current size if it's another value). ② Emphasis toggles at the left (SF `bold`, `italic`, 28pt segments, tooltips "Bold", "Italic"; Part 2 adds underline/strikethrough) · alignment at the right, three 28pt segments (SF `text.alignleft`, `text.aligncenter`, `text.alignright`; tooltips "Align left", "Align centre", "Align right"). |
 | **Background** (Text) | Checkbox **"Contrasting box behind the text"** (tooltip "A dark or light box, whichever stands out against the text colour") = today's auto-contrast chip, `textBackground`. *Part 2 replaces this section with None / Solid / Auto + colour, padding, radius.* |
 | **Redaction** (Blur/Pixelate tools) | Segmented **Blur / Pixelate**, full width (tooltips "Blur (B)", "Pixelate (P)"); switches the active tool. *Part 3 adds Strength here.* |
-| **Opacity** | Slider 10…100 (no label) · value "100%" (tooltip "How see-through the object is"). |
-| **Arrange** (Select with a selection) | Three equal small buttons, 6pt apart: **Front** (SF `square.3.layers.3d.top.filled`, port `icon-bring-front`, tooltip "Bring to front ( ] )"), **Back** (`square.3.layers.3d.bottom.filled`, `icon-send-back`, "Send to back ( [ )"), **Delete** (`trash`, `icon-trash`, "Delete (⌫)"). |
+| **Opacity** (no caption) | "Opacity" label (56pt) · slider 10…100 · value "100%" (tooltip "How see-through the object is"). |
+| **Arrange** (Select with a selection; the footer, no caption) | Three equal small buttons, 6pt apart: **Front** (SF `arrow.up.to.line`, port `icon-bring-front`, tooltip "Bring to front ( ] )"), **Back** (`arrow.down.to.line`, `icon-send-back`, "Send to back ( [ )"), **Delete** (`trash`, `icon-trash`, "Delete (⌫)"). |
 | *(note)* Crop | No caption. 12pt, white 62%: "Drag over the part of the image you want to keep. Undo (⌘Z) brings the rest back." |
 | *(note)* Select, nothing selected | No caption: "Click an object on the image to change it here. Drag across empty space to select several." |
 
-**Bottom bar** (84pt tall, standard header material, 1px separator line on top).
-- **Hint line:** 10pt below the top, 16pt from the left: SF `info.circle` (12pt, tertiary label colour) +
-  6pt + the sentence (12pt, secondary label colour, truncates at the right).
-- **Action row:** 12pt above the bottom. Left (18pt in): image size "1600 × 1000 px" (11.5pt monospaced,
-  secondary). Right (16pt in), 8pt apart: **zoom pull-down** (small) · 12pt · vertical separator (18pt) ·
-  10pt · **Done** (borderless, secondary text, ⌘W) · **Stack** (SF `square.stack`, tooltip "Keep in the
-  bottom-right stack") · **Save** (SF `square.and.arrow.down`, ⌘S) · **Copy** (accent-filled, white text,
-  SF `doc.on.doc`, ⇧⌘C). Copy stays the rightmost, primary button.
+**Bottom bar** (64pt tall, standard header material, 1px separator line on top).
+- **Hint line:** 9pt below the top, 16pt from the left, the full width: SF `info.circle` (12pt, tertiary label
+  colour) + 6pt + the sentence (12pt, secondary label colour, truncates at the right; its tooltip is the whole
+  sentence).
+- **Action row:** 10pt above the bottom. Left (16pt in): **zoom pull-down** (small) · 12pt · image size
+  "1600 × 1000 px" (12pt system font with tabular digits, secondary, tooltip "Image size"). Right (16pt in),
+  8pt apart: **Done** (bordered, tooltip "Close the editor (⌘W)", ⌘W) · **Stack** (SF `square.stack`, tooltip
+  "Keep in the bottom-right stack") · **Save** (SF `square.and.arrow.down`, ⌘S) · **Copy** (accent-filled, white
+  text, SF `doc.on.doc`, ⇧⌘C). Copy stays the rightmost, primary button.
 
 **Title bar, right side:** Undo (SF `arrow.uturn.backward`, tooltip "Undo (⌘Z)"), Redo
 (`arrow.uturn.forward`, "Redo (⇧⌘Z)"), 10pt gap, **panel toggle** (SF `sidebar.right`, an on/off button,
-tooltip "Hide Inspector (⌥⌘I)" when shown / "Show Inspector (⌥⌘I)" when hidden). Buttons 26×22, borderless.
+tooltip "Hide Inspector (⌥⌘I)" when shown / "Show Inspector (⌥⌘I)" when hidden). Buttons 26×22, borderless,
+in a title-bar accessory whose view is 106×22 (6pt left / 10pt right insets). macOS note: the accessory view's
+frame must be given that size explicitly — at width 0 the buttons are laid out past the window edge.
 
 ### 1.2 Which sections show (pure `InspectorModel` — port 1:1)
 
@@ -406,8 +420,9 @@ On Windows write Ctrl+Z for ⌘Z and Shift+Enter / Enter for ⇧↩ / ↩.
   - *Percent* is per **screen pixel**: 100% = one image pixel per physical screen pixel (on a 2× display
     that is 0.5pt per image pixel). The control shows **"Fit · 57%"** in Fit mode, else **"150%"**.
   - *Fit* (default; ⌘0) = the whole image inside the canvas column (minus the insets), but **never larger
-    than 1pt per image pixel** (the editor's old display size for small captures). Fit re-fits whenever the
-    window resizes, the panel toggles, or a crop/undo changes the image size.
+    than 100%** — the capture's real on-screen size, so a screenshot never opens enlarged and soft (on Windows:
+    one image pixel per device pixel, i.e. 1/DPI-scale DIPs per pixel). Fit re-fits whenever the window resizes,
+    the panel toggles, or a crop/undo changes the image size.
   - Range: **min(Fit, 100%) … 800%**. ⌘+ (also ⌘=) / ⌘− step through **10, 25, 50, 75, 100, 150, 200,
     300, 400, 600, 800 %** (next stop above/below the current value). ⌘1 = 100%. Landing exactly on the Fit
     value switches back to Fit mode.
@@ -427,6 +442,7 @@ On Windows write Ctrl+Z for ⌘Z and Shift+Enter / Enter for ⇧↩ / ↩.
 |---|---|---|
 | `AnnotationStyle.opacity` (JSON key `opacity`, inside the `editorDefaultStyle` blob) | number 0.1…1, default **1** | missing → 1; decoded values are clamped to 0.1…1 |
 | `editorRecentColors` (UserDefaults, JSON array of `{"r","g","b","a"}` 0…1 sRGB) | newest first, ≤ 6, default `[]` | missing/corrupt → `[]` |
+| `AnnotationStyle.strokeColor` / `fillColor` (inside `editorDefaultStyle`) | default = the **Red swatch** (1, 0.27, 0.23), fill the same at alpha 0.25 (`AnnotationStyle.defaultRed`) | the old default red (1, 0.23, 0.19) — equal at 8-bit precision, any alpha — decodes as (1, 0.27, 0.23) at that alpha, so the Red swatch shows as selected. Tests: defaultRedIsThePresetRedSwatch · oldDefaultRedDecodesAsThePresetRed. |
 
 Port: add `public double Opacity { get; init; } = 1;` to `AnnotationStyle` in
 `windows/src/BetterScreenshot.Editor/EditorStyle.cs` (System.Text.Json leaves the initializer value when the
@@ -449,11 +465,15 @@ property is missing; clamp in the setter or after load), and an `EditorRecentCol
   everyAnnotationTypeMapsToItsTool.
 - **`RecentColors`** (`RecentColors.swift`) — `add(color, replacingFront:)`, `same(a, b)` at 8-bit precision,
   capacity 6; `init(list)` dedupes and keeps order. Test: recentColoursAreMostRecentFirstUniqueAndCapped.
-- **`ZoomMath`** (`ZoomMath.swift`) — percent ↔ magnification, `fitMagnification`, `clamp`, `steppedPercent`,
+- **`ZoomMath`** (`ZoomMath.swift`) — percent ↔ magnification, `fitMagnification(imageSize, available,
+  backingScale)` (capped at 100%), `pointSize(pixels, backingScale)` = pixels ÷ scale (scale < 1 treated as 1),
+  `clamp`, `steppedPercent`,
   `isFit` (within 0.5%), `anchoredOrigin(anchor, visibleOrigin, from, to)` = `anchor·k − (anchor − origin)`,
   `k = new/old`, `label`. Tests (`zoomMathTests`): percentIsPerScreenPixel (m 0.5 @2× = 100%) ·
-  fitCoversBothDimensionsAndNeverUpscalesPastOnePointPerPixel (2000×1000 in 1000² → 0.5; 1000×3000 in
-  1000×600 → 0.2; 200×100 → 1) · clampRangeIsFitToEightHundred (@2×: 10 → 4, 0.1 → fit 0.3, fit 1 lets 0.5
+  fitCoversBothDimensionsAndNeverUpscalesPastOneHundredPercent (@1×: 2000×1000 in 1000² → 0.5, 200×100 → 1;
+  @2×: 1000×3000 in 1000×600 → 0.2, 360×225 → 0.5 = 100%, 1600×1000 in 920×577 → 0.5) ·
+  pointSizeIsTheCapturesRealOnScreenSize (1600×1000 px @2× → 800×500 pt; @1× → 1600; scale 0 → unchanged) ·
+  clampRangeIsFitToEightHundred (@2×: 10 → 4, 0.1 → fit 0.3, fit 1 lets 0.5
   through) · stepsWalkTheStopTable (100→150, 57→75 / 50, 800 stays, 10 stays) ·
   anchoredZoomKeepsThePointUnderThePointer ((300,200) with origin (100,50), 1→2 → origin (400,250), and back) ·
   labels ("Fit · 57%", "150%").
@@ -548,39 +568,57 @@ Everything else about the panel (264 pt, 232 pt content column, captions, 8 pt r
 │ COLOUR   (unchanged, §1.1)   │
 │ ──────────────────────────── │
 │ FONT                         │
-│ [System                 ⌃⌄]  │
-│ [24 pt ⌃⌄]  [ B | I | U | S ] │ ← size 84 pt + four 30 pt toggles
-│ [  ≡  |  ≡  |  ≡  ]          │
+│ [System        ⌃⌄] [24 pt ⌃⌄]│ ← family (rest of the row) + size 84 pt
+│ [B|I|U|S]          [≡ |≡ |≡ ]│ ← four 28 pt toggles left, three 28 pt alignments right
 │ ──────────────────────────── │
 │ BACKGROUND                   │
 │ [  None  | Solid |  Auto  ]  │ ← full width, equal segments
 │ ● ● ● ● ● ● ● ●              │ ← Solid only: box palette (Black = 80 %)
-│ RECENT ● ● ●                 │ ← Solid only, hidden when empty
-│ [▬▬] [⌖ Pick from Screen]    │ ← Solid only: box colour well + eyedropper
+│ CUSTOM [▬] [⌖ Pick from Screen] ← Solid only: box colour well + eyedropper (no Recent row)
 │ Dark or light — whichever …  │ ← Auto only (note)
-│ Padding  ────●────── 6 px    │ ← Solid and Auto
-│ Corners  ──●──────── 4 px    │ ← Solid and Auto
+│ Padding ─────●────── 6 px    │ ← Solid and Auto
+│ Corners ───●──────── 4 px    │ ← Solid and Auto
 │ ──────────────────────────── │
 │ EFFECTS                      │
-│ ☑ Outline              [▬▬]  │ ← checkbox left, outline colour well right
-│     Width ──●─────── 3 px    │ ← only while Outline is on; indented 20 pt
-│ ☐ Shadow                     │
+│ ☑ Outline [▬]      ☐ Shadow  │ ← outline checkbox + its colour well; Shadow at the right
+│ Width   ──●──────── 3 px     │ ← only while Outline is on (same label column, not indented)
 │ ──────────────────────────── │
-│ OPACITY  (unchanged)         │
+│ Opacity ──────────●  100%    │ ← (as §1.1, no caption)
+│ ──────────────────────────── │
+│ [Front] [Back] [Delete]      │ ← Arrange footer, under Select (§1.1)
 └──────────────────────────────┘
 ```
 
 | Section (caption) | Rows (exact) |
 |---|---|
 | **Styles** | Two rows of three `TextPresetChip`s, `fillEqually`, 8 pt apart; each 28 pt tall. Chip drawing: rounded rect (radius 6) inset 1.5 pt; fill = the preset's box colour, or white 6 % for presets without a box (Title, Subtle); border 1 px white 16 %; **active** (the current style already has that look, `TextStylePreset.isApplied`) = 2 px accent-colour border; hover = white 10 % overlay. Label = the preset's name, centred, in the preset's font family and weight at 12 pt (Title: 15 pt), in the preset's text colour (Title keeps the user's colour, so its chip label is white 92 %). Tooltips: "Label — bold white text on a black box", "Callout — bold white text on a red box", "Note — black text on a yellow box", "Code — light monospaced text on a dark box", "Title — 48 pt bold, no box (keeps the colour)", "Subtle — 18 pt regular grey, no box". |
-| **Font** | As §1.1, except row ② is now size pop-up (84 pt) · a **four**-segment toggle group (select-any, 30 pt per segment): SF `bold`, `italic`, `underline`, `strikethrough`; tooltips "Bold", "Italic", "Underline", "Strikethrough". |
-| **Background** | ① Segmented **None / Solid / Auto**, full width, equal segments; tooltips "No box behind the text", "A box in the colour you pick below", "A dark or light box, whichever stands out against the text colour". ② *(Solid only)* the Colour section's three rows, but editing the **box** colour: 8 swatches with the same colours and names except the last is **black at 80 % alpha**, tooltip "Black (80%)"; the shared RECENT row; a second colour well 44×24 (tooltip "Custom box colour — opens the colour picker") + "Pick from Screen" (same tooltip as §1.1; the picked colour becomes the box colour — handy for covering old text with the page's own colour). ③ *(Auto only)* note, 12 pt white 62 %: "Dark or light — whichever stands out against the text colour." ④ *(Solid and Auto)* slider row "Padding" (label 56 pt wide), 0…40 whole px, value "6 px", tooltip "Space between the text and the edge of the box". ⑤ *(Solid and Auto)* slider row "Corners" (label 56 pt), 0…40 whole px, value "4 px", tooltip "How rounded the box's corners are". Hidden rows take no space. |
-| **Effects** | ① Checkbox **"Outline"** (12 pt, white 88 %; tooltip "An edge around every letter — keeps text readable on busy screenshots") · flexible space · outline colour well 44×24 (tooltip "Outline colour — picking one turns the outline on"). ② *(only while Outline is on)* slider row indented 20 pt: "Width" (44 pt label), 1…20 whole px, value "3 px", tooltip "Outline thickness in image pixels". ③ Checkbox **"Shadow"** (tooltip "A soft drop shadow under the text (and its box)"). |
+| **Font** | As §1.1, except the emphasis group in row ② has **four** segments (select-any, 28 pt each): SF `bold`, `italic`, `underline`, `strikethrough`; tooltips "Bold", "Italic", "Underline", "Strikethrough". |
+| **Background** | ① Segmented **None / Solid / Auto**, full width, equal segments; tooltips "No box behind the text", "A box in the colour you pick below", "A dark or light box, whichever stands out against the text colour". ② *(Solid only)* two of the Colour section's rows, editing the **box** colour: 8 swatches with the same colours and names except the last is **black at 80 % alpha**, tooltip "Black (80%)"; then "CUSTOM" + a second colour well 40×24 (tooltip "Custom box colour — opens the colour picker") + "Pick from Screen" — **no RECENT row** here, to keep the Text panel short (same tooltip as §1.1; the picked colour becomes the box colour — handy for covering old text with the page's own colour). ③ *(Auto only)* note, 12 pt white 62 %: "Dark or light — whichever stands out against the text colour." ④ *(Solid and Auto)* slider row "Padding" (label 56 pt wide), 0…40 whole px, value "6 px", tooltip "Space between the text and the edge of the box". ⑤ *(Solid and Auto)* slider row "Corners" (label 56 pt), 0…40 whole px, value "4 px", tooltip "How rounded the box's corners are". Hidden rows take no space. |
+| **Effects** | ① One row: checkbox **"Outline"** (12 pt, white 88 %; tooltip "An edge around every letter — keeps text readable on busy screenshots") · 6 pt · outline colour well 40×24 (tooltip "Outline colour — picking one turns the outline on") · flexible space · checkbox **"Shadow"** (tooltip "A soft drop shadow under the text (and its box)"). ② *(only while Outline is on)* slider row, not indented: "Width" (56 pt label column), 1…20 whole px, value "3 px", tooltip "Outline thickness in image pixels". |
 
-**Canvas handles.** A single selected text shows **six** handles: the four corners (**scale**) and middle-left /
-middle-right (**box width**) — top-/bottom-middle are not shown. Handles are the usual 8×8 view-pt white squares with
-a 1 px blue border (screen-sized at any zoom), hit area +2 pt; where handles overlap on a tiny text, corners win.
-All handles and the dashed selection outline sit on the **box** (text + padding) when the text has a background.
+**Outline colour follows the text colour** (`TextChip.outlineColor(current, forText:)`, pure). When the Outline is
+switched on — and when the text colour changes while it is on — the outline colour is kept if its WCAG contrast
+ratio with the text colour is **≥ 3:1** (`TextChip.minOutlineContrast`), otherwise it becomes black or white,
+whichever contrasts more with the text. (WCAG contrast = (L1 + 0.05) / (L2 + 0.05) of the two colours' relative
+luminances, sRGB gamma-expanded; alpha ignored.) So ticking Outline on white Label / Callout text gives a black
+outline, while red text keeps the default white one (≈ 3.4:1). A colour picked in the outline well is used as is.
+Tests (`TextChipTests.swift`): contrastRatioIsWCAG (white/black 21; preset red vs white ≈ 3.4, vs black ≈ 6.2) ·
+outlineContrastsWithTheTextColour (white on white → black, white on yellow → black, black on black → white; kept:
+white on red, blue on white, black on white).
+
+**Canvas handles** (`TextHandles`, pure). A single selected text shows the four corners (**scale**) as **round**
+handles (9 pt circles, white fill, 1 px blue border) centred **4 pt outside** each corner of the box, so they never
+cover the letters; and middle-left / middle-right (**box width**) as **bars** (4 pt wide, height = min(16, box
+height − 5) pt, fully rounded) centred 4 pt outside the left/right edges — **left out when shorter than 6 pt** (a
+one-line text zoomed out), so they never overlap the corners. Top-/bottom-middle are not shown. All in view points
+(screen-sized at any zoom). Hit areas: +2 pt around each handle, at least 10 pt wide for the bars; corners are
+tested first. Other shapes keep the 8 square 8×8 handles on their frame. All handles and the dashed selection
+outline sit on the **box** (text + padding) when the text has a background. Tests (`TextHandlesTests.swift`):
+textCornersSitOutsideTheBoxAndSidesClearThem · sideBarsShrinkThenDisappearOnShortTexts (17 pt box → 12 pt bars;
+6 pt box → corners only).
+
+**While typing**, a dashed frame (1 px system blue, dash 4/3, 3 pt outside) surrounds the live text — its box when it
+has one — so it is clear the text is being edited.
 
 **Hint line** (§1.3) — one sentence changed: *Select, one text* → "Drag to move it, drag a corner to resize the
 text, drag a side to change the box width, or double-click to edit."
@@ -794,27 +832,27 @@ Styles · Colour · Stroke · **Stroke (highlighter)** · Font · Background · 
 │ Blur                     │  │ Black-out                │  │ Highlighter              │  │ Spotlight                │
 │ REDACTION                │  │ REDACTION                │  │ COLOUR                   │  │ SHAPE                    │
 │ [Blur|Pixelate|Black-out]│  │ [Blur|Pixelate|Black-out]│  │ ● ● (●) ● ● ● ● ●        │  │ [▭ Rectangle|◯ Ellipse]  │
-│ Softens what's under-    │  │ Covers it with solid     │  │ [▬] [⌖ Pick from Screen] │  │ ──────────────────────── │
-│ neath. Raise the strength│  │ black — the safest       │  │ ──────────────────────── │  │ DIM OUTSIDE              │
-│ until it can't be read.  │  │ choice, nothing can be   │  │ STROKE                   │  │ ──────●────────── 60%    │
-│ ──────────────────────── │  │ recovered.               │  │ Width ────●──── 20 px    │  └──────────────────────────┘
-│ STRENGTH                 │  └──────────────────────────┘  │ [Thin|Medium|Thick]      │
-│ ───●──────────── 12 px   │                                │ ──────────────────────── │
-└──────────────────────────┘                                │ OPACITY                  │
-                                                            │ ────●──────────── 40%    │
+│ Softens what's under-    │  │ Covers it with solid     │  │ CUSTOM [▬] [⌖ Pick …]    │  │ ──────────────────────── │
+│ neath. Raise the strength│  │ black — the safest       │  │ ──────────────────────── │  │ Dim      ────●──── 60%   │
+│ until it can't be read.  │  │ choice, nothing can be   │  │ STROKE                   │  └──────────────────────────┘
+│ ──────────────────────── │  │ recovered.               │  │ Width   ───●─── 20 px    │
+│ Strength ──●──── 12 px   │  └──────────────────────────┘  │ [Thin|Medium|Thick]      │
+└──────────────────────────┘                                │ ──────────────────────── │
+                                                            │ Opacity ──●───── 40%     │
                                                             └──────────────────────────┘
 ```
-Under Select, a selected object shows the same sections plus **Arrange** (e.g. one blur → Redaction · Strength ·
-Arrange; one spotlight → Shape · Dim outside · Arrange).
+Under Select, a selected object shows the same sections plus the **Arrange** footer (§1.1) (e.g. one blur →
+Redaction · Strength · Arrange; one spotlight → Shape · Dim outside · Arrange). Strength and Dim outside, like
+Opacity, have no caption: the name is the row label ("Strength", "Dim") in the 56pt label column.
 
 | Section (caption) | Rows (exact) |
 |---|---|
 | **Redaction** (Blur, Pixelate, Black-out) | ① Segmented **Blur / Pixelate / Black-out**, small, full width, equal segments; tooltips "Blur (B)", "Pixelate (P)", "Black-out (X)". Selected segment = the active redaction tool, or (under Select) the selected redaction's mode. ② A note (12pt, white 62%, wraps at 232pt) that follows the mode — Blur: "Softens what's underneath. Raise the strength until it can't be read." · Pixelate: "Turns what's underneath into blocks. Bigger blocks hide more." · Black-out: "Covers it with solid black — the safest choice, nothing can be recovered." |
-| **Strength** (Blur, Pixelate — not Black-out) | Slider with **no label** (like Opacity) · value "12 px" (11.5pt monospaced digits, white 55%, 40pt, right-aligned). Blur: 2…40, tooltip "Blur radius, in image pixels". Pixelate: 4…48, tooltip "Size of each block, in image pixels". Whole pixels. Blur and Pixelate share this section, so switching between them only changes the range, value and tooltip. |
-| **Stroke** (Highlighter — its own section, same look as Part 1's Stroke) | ① "Width" label (44pt) · slider **4…48** · value "20 px". ② Segmented **Thin / Medium / Thick** = **12 / 20 / 32 px** (tooltips "12 px", "20 px", "32 px"); no segment highlighted for other widths. |
+| **Strength** (Blur, Pixelate — not Black-out; no caption) | "Strength" label (56pt, tooltip "How strongly it hides what's underneath") · slider · value "12 px" (11.5pt monospaced digits, white 55%, 40pt, right-aligned). Blur: 2…40, tooltip "Blur radius, in image pixels". Pixelate: 4…48, tooltip "Size of each block, in image pixels". Whole pixels. Blur and Pixelate share this section, so switching between them only changes the range, value and tooltip. |
+| **Stroke** (Highlighter — its own section, same look as Part 1's Stroke) | ① "Width" label (56pt) · slider **4…48** · value "20 px". ② Segmented **Thin / Medium / Thick** = **12 / 20 / 32 px** (tooltips "12 px", "20 px", "32 px"); no segment highlighted for other widths. |
 | **Colour**, **Opacity** (Highlighter) | Exactly Part 1's sections; they show and edit the highlighter's own pen (default Yellow ring, 40%). |
 | **Shape** (Spotlight) | Segmented **Rectangle / Ellipse**, small, full width, equal segments, each with an icon before the label (SF `rectangle`, `circle`; port: rectangle / circle outline icons); tooltips "Rectangle", "Ellipse — or hold ⌥ while dragging". |
-| **Dim outside** (Spotlight) | Slider with no label, **10…90 %**, value "60%", tooltip "How dark everything outside the spotlights gets". |
+| **Dim outside** (Spotlight; no caption) | "Dim" label (56pt) · slider **10…90 %** · value "60%"; tooltip (label and slider) "How dark everything outside the spotlights gets". |
 
 **Hint line — new / changed sentences (verbatim):**
 

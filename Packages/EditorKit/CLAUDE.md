@@ -21,16 +21,25 @@ renderer. Imported by the `App/` target (capture flow opens the editor).
   padding**, so side-handle maths subtracts it. While typing, the canvas draws the box + outline
   behind the `NSTextView` (`drawDecorations()`). The shadow maps its offset through the CTM with a
   deliberate sign flip — `canvasShadowFallsDownwardToo` guards it.
-- Window: `EditorWindowController.swift` — window, tool pill, bottom bar (hint line, dims, zoom, actions),
-  title-bar buttons, key handling (tool shortcuts, Esc, zoom keys, ⌥⌘I) and wiring. Keep it thin.
+- Window: `EditorWindowController.swift` — window, tool pill, bottom bar (hint line; zoom + image size ·
+  Done/Stack/Save/Copy), title-bar buttons, key handling (tool shortcuts, Esc, zoom keys, ⌥⌘I) and
+  wiring. Keep it thin. The window is **always Dark Aqua** (the vibrant-dark panels wash out over a light
+  window). A title-bar accessory view needs a real frame width (`stack.frame = fittingSize`) or it is clipped.
 - Side panel (v3 Part 1): `InspectorModel.swift` (pure: which `InspectorSection`s show for tool +
   selection, panel heading, hint-line sentence), `EditorInspectorView.swift` (builds the sections, emits
-  style edits), `EditorChrome.swift` (tool button, `SwatchButton`, `InspectorStyle` caption/row/note
-  helpers, `LabeledSliderRow`, `CenteringClipView`).
+  style edits; **Arrange is a footer** below the scroll area, not a scrolled section; Opacity / Strength /
+  Dim have no caption — the name sits in the row's label column), `EditorChrome.swift` (tool button,
+  `SwatchButton`, `InspectorCheckbox`, `InspectorStyle` caption/row/note helpers + the shared 56pt
+  `labelWidth` and swatch grid, `LabeledSliderRow`, `CenteringClipView`). The panel's scroll area wants
+  its content height below `windowSizeStayPut` — above it, a long panel grows the window instead of scrolling.
+- Selection handles: shapes get 8 squares on the frame; a text gets `TextHandles` (pure) — round corners
+  just outside the box (scale) and side bars (box width) that are dropped when the box is too short.
 - Tools: `EditorTool.swift` — the enum plus one switch each for name, SF Symbol, single-key shortcut,
   and `maker(of:)` (annotation → the tool that draws it; how the panel describes a selection).
 - Zoom: `ZoomMath.swift` (pure), `EditorZoom.swift` (`EditorScrollView` pinch / ⌘-scroll →
   `CanvasZoomController`, which resizes the canvas; the canvas maps view ↔ image through `scale`).
+  Fit never goes past **100%** (the capture's real size), and the initial window is sized from the
+  image's point size (`ZoomMath.pointSize`), not its pixel size.
 - `RecentColors.swift` — last 6 custom colours (pure); the host persists them (`editorRecentColors`).
 - Rendering/geometry: `DocumentRenderer.swift`, `Redactor.swift`, `ArrowGeometry.swift`.
 - v3 Part 3: `RedactionAnnotations.swift` (one `RedactionAnnotation`; mode Blur/Pixelate/Black-out +
@@ -76,4 +85,9 @@ in `docs/superpowers/specs/2026-09-24-betterscreenshot-editor-recording-v3-desig
 
 ## Verify
 `swift run -j 2 --package-path Packages/EditorKit EditorKitTests`. UI: headless probe (synthetic
-events + `cacheDisplay` snapshots) — see the Part 1 section of `docs/MAC-TO-WINDOWS-PARITY-v3.md`.
+events) — see the Part 1 section of `docs/MAC-TO-WINDOWS-PARITY-v3.md`. Capture windows with
+`CGWindowListCreateImage(.null, .optionIncludingWindow, windowID, [.boundsIgnoreFraming, .bestResolution])`:
+`cacheDisplay` leaves out the title bar and the blur effects (so snapshots made with it hid the
+zero-width title-bar buttons found by `docs/reviews/2026-09-25-ui-review.md`, issue E1). Keep probe
+windows behind the owner's work: set every window's level to
+`CGWindowLevelForKey(.desktopWindow) + 1` and call `orderBack(nil)`; never order them front.
