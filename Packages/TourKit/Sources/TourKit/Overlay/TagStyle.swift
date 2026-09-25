@@ -34,6 +34,12 @@ public enum TagStyle {
     public static let leaderLength: CGFloat = 24
     /// The tag never comes closer than this to the edges of the screen's visible frame.
     public static let screenMargin: CGFloat = 8
+    /// A control covering at least this share of its host window's area is "big" (the editor canvas,
+    /// the video preview, the Settings cards): its tag goes beside the whole window, or inside the
+    /// control's top-right corner — never beside the control, over the window's other controls.
+    public static let bigAnchorFraction: CGFloat = 0.4
+    /// An inside-corner tag's distance from the control's top and right edges.
+    public static let insideCornerInset: CGFloat = 16
 
     // MARK: Tag bubble
     public static let tagRadius: CGFloat = 12
