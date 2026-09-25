@@ -2483,10 +2483,194 @@ _(pending)_
 _(pending)_
 
 ### 7.6 First recording (strip) + recording pill tours (lane 7R)
-_(pending)_
+
+**What it is.** Two tours for recording. **First recording** walks through every choice on the record
+setup strip (Part 4) and ends by asking the user to start a recording; the moment they do, it hands over to
+**Recording pill**, which explains the live recording controls (Part 5) *while the recording runs*. Terms
+(tour, step, Explain/Try, anchor, event, surface, tag, ⓘ): §7.2–§7.3. A tag must **never** appear in the
+user's recording — see "Tags are never recorded" below.
+macOS files: steps `Packages/TourKit/Sources/TourKit/Catalog/RecordingTours.swift`; anchors and events
+`App/Recording/RecordStripController.swift`, `App/Recording/RecordingControlsController.swift`,
+`App/Recording/RecordingCoordinator.swift`; tags kept out of recordings `App/Recording/TourTagRecordingGate.swift`
+(+ `ScreenRecorder.updateFilter` in RecordingKit); tests `Packages/RecordingKit/Tests/RecordingKitTests/RecordingTourTests.swift`
+(every body fits the tag's 2 lines at its 260 pt max width, every Try step waits for an event a surface posts).
+Snapshots: `docs/reviews/2026-09-25-tours/recording-01-strip-microphone-choices.jpg` (step 5, tag above the
+strip) and `recording-02-pill-mute-mic-try.jpg` (step 2, tag above the pill).
+
+#### First recording — tour id `firstRecording`, version 1
+- **Surface** `recordStrip` (the strip panel). **Starts** the first time the strip appears (`RecordStripController.show`
+  posts `surfaceShown(recordStrip)` as its last line) — only for users with first-use tours on (§7.1); the ⓘ
+  and Help & Tours → "Recording Setup Tour" replay it. **Hands over to** `recordingPill`.
+- Steps, verbatim (E = Explain, advances on Next; T = Try, advances on the event; strings use ’ and “ ”):
+
+| # | Kind (event) | Anchor = control | Title | Body |
+|---|---|---|---|---|
+| 1 | E | `strip.targets` = the Full Screen · Area… · Window… group | What to record | Full Screen records this screen, Area a part you drag, Window just one window. |
+| 2 | E | `strip.format` = "Format" caption + MP4/GIF picker | MP4 or GIF | MP4 is a video with sound. GIF is a silent, looping animation. |
+| 3 | E | `strip.fps` = "FPS" caption + 30/60 picker | Frame rate | 60 frames per second looks smoother; 30 makes smaller files. |
+| 4 | T `menuOpened("strip.microphone")` | `strip.microphone` = the Microphone dropdown | Open the Microphone menu | Click Microphone to see every input you can record from. |
+| 5 | E | `strip.microphoneColumn` = the whole Microphone column (caption, level meter or "Allow microphone access…" link, dropdown) | Microphone choices | Pick a mic, or Off to skip it. The level meter above shows it can hear you. |
+| 6 | T `menuOpened("strip.systemAudio")` | `strip.systemAudio` = the System audio dropdown | Open System audio | Click System audio to choose which sounds from your Mac are recorded. |
+| 7 | E | `strip.systemAudio` | Sound choices | Off, every app’s sound, or every app except BetterScreenshot’s own sounds. |
+| 8 | E | `strip.camera` = the Camera dropdown | Camera bubble | Adds your webcam in a round bubble. Camera Size sets Small or Medium. |
+| 9 | E | `strip.cursor` = the Mouse cursor dropdown | Mouse cursor | Choose whether your pointer shows in the video. |
+| 10 | E | `strip.hint` = the hint line (ⓘ icon + text) | Hints | Point at any control and this line explains it. |
+| 11 | T `choiceMade("strip.targets")` | `strip.targets` | Start recording | Click Full Screen, Area or Window to start. The recording controls come next. |
+
+- **GIF mode.** GIFs are silent, so the Microphone and System audio dropdowns are disabled; while Format is
+  GIF the strip **removes** the anchors `strip.microphone`, `strip.microphoneColumn` and `strip.systemAudio`
+  (whenever it rebuilds its menus), so steps 4–7 are skipped instead of asking the user to open a disabled
+  menu. Back to MP4 → the anchors return.
+- **Menus.** Steps 4 and 6 complete the moment the dropdown's menu opens. The tag stays where it is (a menu
+  is drawn above it), shows its 0.8 s done state, then the next Explain step (5 / 7) describes the choices —
+  while the menu is still open or after it closes.
+- **Hand-over.** Step 11 completes on any of the three target buttons (the event is posted before the strip
+  hides): First recording is marked seen and Recording pill is queued; it starts as soon as the pill appears
+  (Full Screen: right away; Area/Window: once the user has picked). Closing the strip another way (✕, the
+  record shortcut) pauses the tour; it resumes at that step the next time the strip opens.
+- **Events the strip posts** (`TourEvents.post`, after the choice is saved): `menuOpened(<anchor>)` for each of
+  its four dropdowns — `strip.microphone`, `strip.systemAudio`, `strip.camera`, `strip.cursor` — from the
+  dropdown menu's `menuWillOpen` delegate (any way of opening: click, keyboard, VoiceOver); `choiceMade(<anchor>)`
+  for `strip.format`, `strip.fps`, `strip.microphone`, `strip.systemAudio`, `strip.camera` (also for Camera
+  Size) and `strip.cursor`; `choiceMade("strip.targets")` from Full Screen / Area… / Window…. **WPF:**
+  `ComboBox.DropDownOpened` → `menuOpened`, `SelectionChanged` → `choiceMade`.
+- **The strip's ⓘ.** `InfoButton(tour: firstRecording, shortcuts:)`, 26 × 22, tinted like the strip's secondary
+  text (white 60 %), in the top row **16 pt after the FPS group and 2 pt before ✕** (the row's flexible spacer
+  absorbs its width — the strip keeps its size). Hovering it brightens it and the hint line reads "Replay this
+  tour, or see the keyboard shortcuts." Keyboard Shortcuts rows (keys = the user's current combos, a row is
+  left out when that action is unbound): **Start/Stop Recording** combo → "Close this strip · stop a
+  recording"; **Pause/Resume Recording** combo → "Pause or resume a recording". Defaults: only the first,
+  ⇧⌘5 (Windows: the port's own combo string, e.g. Ctrl+Shift+5).
+- **Anchor-only layout change.** The three target buttons are wrapped in their own horizontal stack (spacing
+  8 = the row's), so the tour can outline them together; pixel-identical. WPF: a `StackPanel` around them.
+
+#### Recording pill — tour id `recordingPill`, version 1
+- **Surface** `recordingPill`. **Starts** the first time the pill appears — `RecordingControlsController.show`
+  posts `surfaceShown(recordingPill)` as its last line, i.e. when a recording session starts (countdown
+  included) — or at once after First recording hands over. No ⓘ (the pill is too small): Help & Tours →
+  "Recording Controls Tour" replays it (while no recording runs it waits for the next one).
+- Steps:
+
+| # | Kind (event) | Anchor = control | Title | Body |
+|---|---|---|---|---|
+| 1 | E | `pill.timer` = the elapsed-time column | Recording time | How long you’ve been recording. Drag the pill anywhere you like. |
+| 2 | T `action("pill.micMuted")` | `pill.mic` = Mic | Mute the mic | Click Mic to mute it — click again to unmute. The video stays in sync. |
+| 3 | E | `pill.systemAudio` = System audio | System audio | Mutes the sound your Mac plays. It’s greyed out when that wasn’t recorded. |
+| 4 | E | `pill.camera` = Camera | Camera bubble | Shows or hides your camera bubble while you record. |
+| 5 | E | `pill.switch` = Switch Window… / Switch Area… | Record something else | Move the recording to another window or area without stopping. |
+| 6 | E | `pill.restart` = ↺ | Restart | Deletes what’s recorded so far and starts again. Click twice to confirm. |
+| 7 | E | `pill.discard` = 🗑 | Discard | Stops and deletes this recording. Click twice to confirm. |
+| 8 | E | `pill.pause` = ⏸ | Pause | Pauses the recording. Press it again to carry on. |
+| 9 | E | `pill.collapse` = the chevron | Fewer controls | Collapses the pill to the timer, Pause and Stop. Click again for all. |
+| 10 | T `action("recording.stopped")` | `pill.stop` = ■ | Stop when done | Press Stop when you’re finished. Your video then opens in a card. |
+
+- **Skipped by design** (a missing anchor = skipped step): **2** when the recording has no microphone track —
+  the Mic button is greyed out, so the pill **removes its `pill.mic` anchor** rather than ask for a disabled
+  click; **5** on full-screen recordings (no Switch button); **2–7** while the pill is collapsed (hidden).
+  Explain steps on a greyed-out control (System audio / Camera when unavailable) still show — their bodies
+  say so. The tag sits above (or below, at the top of the screen) the pill, never on it (§7.3 keep-out).
+- **Events:** `action("pill.micMuted")` — `RecordingControlsController.micTapped` when Mic is clicked while
+  audible (the muting click); `action("recording.stopped")` — the **first line of `RecordingCoordinator.stop()`**,
+  before the pill hides, so every way of stopping completes step 10 (■, the record shortcut, the menu bar, a
+  failed stream, quitting); `action("recording.started")` — `RecordingCoordinator.begin` once the engine runs
+  (no step waits on it). Discard, Restart and cancelling the countdown post nothing (the tour pauses when the
+  pill goes and resumes with the next recording).
+
+#### Tags are never recorded — not even for one frame (owner)
+A tag is two windows per overlay (decor = dim + box + leader line, and the bubble; §7.3). Recording pill runs
+*during* a recording and First recording's last step starts one, so the recorder must never capture them.
+
+**macOS (ScreenCaptureKit).** A display recording captures through an `SCContentFilter` whose left-out windows
+are fixed when the filter is built or updated. `TourTagRecordingGate` (App) with `RecordingSafeTagPresenter`
+(the app's tag presenter: TourKit's `TagOverlayController`, windows exposed by `TagOverlayController.windows`):
+1. Every tag window is **registered with the gate the moment it's created** (before it's ever shown).
+2. **Every display filter** the recorder builds — at start, on Switch Area…, and on updates — **leaves out every
+   tag window that exists**. The recorder now fetches `SCShareableContent` with `onScreenWindowsOnly: false`,
+   so tag windows that are ordered out at that moment are listed too; a left-out window stays left out when it's
+   ordered out and back in (probed). In the usual flow (First recording → Recording pill) the tag windows
+   exist before the recording starts, so they're covered from the first frame.
+3. A tag window the running filter doesn't cover — only one shown for the **very first time** after the filter
+   was built — is kept **fully transparent (alpha 0)** from registration on, and only made visible after the
+   running stream's filter has been updated to leave it out: the gate calls `onNeedsExclusion`; the recorder
+   rebuilds the filter, calls `willUse(tags)` (hides any tag window only the old filter covered),
+   `SCStream.updateContentFilter`, waits 50 ms, then `didUse(tags)` (shows the covered ones). One update at a
+   time; skipped during a Switch (that retarget builds its own filter the same way); the gate re-checks every
+   0.25 s. A token stops an older update from showing windows after a newer filter was chosen.
+4. After the stream has stopped (`tearDownPanels`), every tag is shown normally again.
+Window recordings (a single-window filter) never contain the app's own windows and don't use the gate. The
+pill is still left out only when "Show recording controls in the video" is off; tags are left out always.
+
+**Windows (WPF).** Much simpler, because Windows has a per-window flag: call `SetWindowDisplayAffinity(hwnd,
+WDA_EXCLUDEFROMCAPTURE)` on **both** tag windows in `SourceInitialized`, i.e. before they're ever shown (already
+listed in §7.3). Every capture that goes through the Desktop Window Manager (DWM, Windows' compositor) honours
+it — Desktop Duplication (ffmpeg's `ddagrab` input), Windows.Graphics.Capture, and ffmpeg's `gdigrab` (a GDI
+BitBlt copy of the screen) — so no filter bookkeeping is needed. It needs Windows 10 version 2004 or later; on
+older builds hide the tags while a recording runs instead. Verify with a probe like the one below: record a
+clip while a tag is up and check the decoded frames for tour red (#FF453A) where the tag is.
+
+**How it was verified on macOS (lane probe, 2026-09-25; the probe lived in a scratch folder, not the repo).**
+A probe compiled from the real App sources
+(`RecordingCoordinator`, strip, pill, `TourCoordinator` for a new user who said yes, the real tag overlay;
+every window parked just above the desktop, behind the user's windows; the probe added the other apps' windows
+to the filter's exclusions so its own low windows weren't hidden behind them in the capture):
+- **Control:** a tag *not* left out, recorded 1.2 s → decoded frames show tour red in 88 % of the bubble's
+  sample points and 85 % of the box outline's, in all 26 frames — the check does see tags.
+- **Real run:** First recording walked step by step on the real strip → Full Screen → a real 8 s recording with
+  Recording pill stepping through, plus a tag that was hidden when the recording started and shown again during
+  it (visible at once), and a brand-new tag overlay first shown mid-recording (transparent, then visible 205 ms
+  later after the filter update). 50 frames decoded, 20 tag regions (bubble + box outline of every pill step
+  and both extra tags): **0 % tour red in every region of every frame**; the pixels there were the probe's
+  green backdrop, i.e. the regions were in view of the capture.
+- Tour checks on the same run: all 11 strip steps and the expected pill steps shown in order (2 and 5 skipped
+  by design: no mic track, full screen); a standalone pill run with a mic track and an area recording showed all
+  10; every Try step advanced on its real action (menu delegate, target button, Mic, ■); both tours ended
+  "seen". Pop-up menus were driven through the strip's real menu delegate: on macOS 26 a real menu's window
+  isn't in `NSApp.windows` when tracking begins, so a probe can't keep it off the owner's screen — don't open
+  real menus in probes.
 
 ### 7.7 Video editor tour (lane 7R)
-_(pending)_
+
+**What it is.** A tour of the Edit Video window (Part 6): the preview, the timeline, a real split and delete,
+the per-part controls and the two ways to save. macOS files: steps
+`Packages/TourKit/Sources/TourKit/Catalog/VideoEditorTours.swift`; anchors, events, ⓘ and the start signal
+`Packages/RecordingKit/Sources/RecordingKit/TrimWindowController.swift`; tests `RecordingTourTests.swift`
+(every step's anchor exists on a fresh window, the ⓘ and its keys). Snapshot:
+`docs/reviews/2026-09-25-tours/video-01-split-try.jpg` (step 3).
+
+- Tour id `videoEditor`, version 1, surface `videoEditor`. **Starts** when an Edit Video window has **loaded
+  its recording and is on screen**: the window posts `surfaceShown(videoEditor)` once per window, from whichever
+  comes last of "load succeeded" and `showWindow` — never over "Loading…" or the "can't be opened" state.
+- Steps:
+
+| # | Kind (event) | Anchor = control | Title | Body |
+|---|---|---|---|---|
+| 1 | E | `video.preview` = the video preview | Preview | Plays only the parts you keep. Click it, or press Space, to play. |
+| 2 | E | `video.timeline` = the timeline's visible area (ruler + filmstrip) | The timeline | Click to move the playhead. Drag a part’s yellow edge to trim it. |
+| 3 | T `action("video.split")` | `video.timeline` | Split the clip | Click the timeline to place the playhead, then press S or click Split. |
+| 4 | T `action("video.segmentDeleted")` | `video.timeline` | Delete a part | Click a part to select it, then press ⌫ to cut it out. |
+| 5 | E | `video.segment` = the selected-part row ("Segment n of m", its source range, Speed, Mute segment) | Selected part | Change its speed or mute just this part. Right-click a part for the same. |
+| 6 | E | `video.saveCopy` = Save as Copy (with its ▾ menu) | Save a copy | Saves the edit as a new file. The ▾ menu exports a GIF instead. |
+| 7 | E | `video.replace` = Replace Original | Replace the original | Overwrites the recording with this edit, then reloads it for more changes. |
+
+- **Why step 3 outlines the timeline, not the Split button:** the tag placed under the button covered the very
+  timeline the step asks the user to click (probe snapshot). `video.timeline` is the timeline's **scroll view**
+  (what's visible), not its content view, which is wider when zoomed in.
+- **Events** (`TourEvents.post`, only when the edit actually happened — a refused edit beeps and posts nothing,
+  e.g. the playhead too close to a part's edge, or deleting the only part): `action("video.split")` from
+  `splitAtPlayhead` (S, ⌘B, the Split button, the right-click menu); `action("video.segmentDeleted")` from
+  `deleteSelected` (⌫ / Delete key, the Delete button, the right-click menu).
+- **ⓘ:** `InfoButton.install(in: window, tour: .videoEditor, shortcuts:)` — the rightmost title-bar item (§7.3).
+  Keyboard Shortcuts (keys → action), in this order: `Space` → Play or pause · `← →` → Step one frame ·
+  `S or ⌘B` → Split at the playhead · `⌫` → Delete the selected part · `I` → Set the in point (cuts what's
+  before) · `O` → Set the out point (cuts what's after) · `⌘Z` → Undo · `⇧⌘Z` → Redo. (Windows: Ctrl for ⌘,
+  Backspace/Delete for ⌫, Ctrl+Shift+Z for redo — whatever the port's editor actually binds.)
+- **macOS gotcha:** `NSComboButton` (Save as Copy) ignores `setAccessibilityIdentifier` — it reads back "" — so
+  its anchor was invisible to the tour; a tiny subclass (`AnchoredComboButton`) keeps the id. WPF's
+  `AutomationProperties.AutomationId` has no such issue.
+- **Verified (probe, 2026-09-25):** on a real Edit Video window with a generated 4 s clip, all 7 steps shown in
+  order; step 3 advanced after a click on the timeline + the S key sent through the window; step 4 after a click
+  on a part + ⌫; Done on step 7 finished the tour; the ⓘ's Replay Tour restarted it at step 1; Skip tour hid the
+  tag.
 
 ### 7.8 Settings + History tours, Help & Tours menu, Settings row (lanes 7S + 7A)
 

@@ -45,5 +45,38 @@
   thumbnail (`bringBackCard`) — the ✂ button dismissed it; History passes nil. The editor's Save as
   Copy and Export as GIF results go through `finishRecording(at:)` (new card + History entry).
 
+## Guided tours (v3 Part 7) — strip, pill, and tags kept out of recordings
+Steps are data in `Packages/TourKit/Sources/TourKit/Catalog/RecordingTours.swift`; every step, anchor, event
+and the exclusion mechanism are written up in `docs/MAC-TO-WINDOWS-PARITY-v3.md` §7.6. A **tour** is a
+sequence of **steps**, each outlining one control (its **anchor**, `view.tourAnchor = "…"`) with a red tag;
+an Explain step advances on Next, a **Try** step when the app posts the matching `TourEvents` event.
+- **Strip** (`First recording` tour): anchors `strip.targets` (the three target buttons, grouped in their own
+  stack just for this), `strip.format`, `strip.fps`, `strip.microphone`, `strip.microphoneColumn`,
+  `strip.systemAudio`, `strip.camera`, `strip.cursor`, `strip.hint`. The mic/system-audio anchors are removed
+  in GIF mode (their menus are disabled), so those steps skip. Events: `menuOpened` from each dropdown menu's
+  `menuWillOpen` (the strip is the menus' delegate), `choiceMade` from every choice, `choiceMade("strip.targets")`
+  from Full Screen / Area… / Window… (before `on…` hides the strip — it hands over to the pill tour).
+  `show()` ends with `TourEvents.surfaceShown(.recordStrip)`. The ⓘ (`InfoButton`) sits between FPS and ✕.
+- **Pill** (`Recording pill` tour): anchors `pill.timer/mic/systemAudio/camera/switch/restart/discard/pause/
+  collapse/stop`; `pill.mic` only while there's a mic track (set in `render`). `micTapped` posts
+  `action("pill.micMuted")` when muting; `show()` ends with `surfaceShown(.recordingPill)`. No ⓘ.
+- **Coordinator:** `stop()` posts `action("recording.stopped")` first (every stop path); `begin` posts
+  `action("recording.started")` once the engine runs.
+- **Tags are never recorded** (owner: not even one frame) — `TourTagRecordingGate.swift`: every display filter
+  is built by `tagGate.displayFilter(…)`, which leaves out every tag window that exists (content fetched with
+  `onScreenWindowsOnly: false`, so hidden ones are listed too); a tag window first shown after the filter was
+  built stays alpha 0 until `refreshTagExclusion()` has updated the running stream's filter
+  (`ScreenRecorder.updateFilter`, bracketed by `willUse`/`didUse`); `tearDownPanels()` ends the gate after the
+  stream stops. `RecordingSafeTagPresenter` (same file) is the app's tag presenter (`AppDelegate`'s
+  `makePresenter:`) — it registers the overlay's windows with the gate the moment they're created. **Any new
+  display filter must go through `tagGate.displayFilter` and `willUse`/`didUse`**, or tags can leak into videos.
+  Window recordings (single-window filter) never capture our windows.
+- Verified by a headless probe compiled from the App sources (parity doc §7.6 "How it was verified"): a control
+  clip shows a tag that isn't left out; a real recording with the pill tour running, a tag re-shown and a brand-new
+  tag shown mid-recording has 0 % tour red in every tag region of every frame. Probe tips: park windows just above
+  the desktop; add the other apps' windows to the probe's filter so the capture can see its low windows; **don't
+  open real pop-up menus** (macOS 26 draws them on screen before a probe can hide them) — call the menu
+  delegate's `menuWillOpen` instead.
+
 Recording model + capture engine live in `Packages/RecordingKit`; this section is the app-side
 orchestration and on-screen controls. Verify by recording in the built app.

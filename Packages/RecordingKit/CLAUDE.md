@@ -64,6 +64,18 @@ Screen recording (ScreenCaptureKit), GIF export, and the on-screen recording ove
     shows *inside* the thumbnails and is not an app label (the 2026-09-25 UI review mistook it for one).
 - Recordings are written with a keyframe at least every 0.5 s (`RecordingConfig.keyFrameInterval`) so
   passthrough trims land close to the chosen frame.
+- Guided tours (v3 Part 7): the **video editor tour** (steps in TourKit `Catalog/VideoEditorTours.swift`, all
+  details in `docs/MAC-TO-WINDOWS-PARITY-v3.md` §7.7). `TrimWindowController` sets the anchors
+  (`view.tourAnchor`): `video.preview`, `video.timeline` (the timeline's **scroll view** — the content view is
+  wider when zoomed), `video.segment` (the selected-part row), `video.saveCopy`, `video.replace`; posts
+  `action("video.split")` / `action("video.segmentDeleted")` from `splitAtPlayhead` / `deleteSelected` only when
+  the edit applied (`perform` returns Bool); posts `surfaceShown(.videoEditor)` once per window when the
+  recording has loaded *and* the window is visible (`announceToTours`); installs the ⓘ with `shortcuts` (update
+  that list when a key is added). `NSComboButton` ignores `setAccessibilityIdentifier`, so Save as Copy is an
+  `AnchoredComboButton` that keeps it. `ScreenRecorder.updateFilter(_:)` swaps only the running stream's filter —
+  the app uses it to leave out a tour tag that appeared mid-recording (App/Recording `TourTagRecordingGate`).
+  Tests: `Tests/RecordingKitTests/RecordingTourTests.swift` (every recording/video tour body fits the tag's two
+  lines at its max width — the 20-word lint doesn't guarantee that; video-editor anchors; the ⓘ; Try events).
 
 `RecorderState`, `RecordingConfig`, `DeviceList`, `MicLevel`, `SilenceFill`, `LetterboxFit`, `RecordingPillLayout`, `RecordingHUDStyle`, `CutList`, `TimeRuler`, `FilmstripFrames`, and the trim/export pieces (except the window) are unit-tested; the AV/overlay pieces are verified manually or with headless probes (retarget, mute, pause sync — see `docs/MAC-TO-WINDOWS-PARITY-v3.md` Part 5; record strip, device menus, window-recording audio — Part 4; the video editor — Part 6).
 
