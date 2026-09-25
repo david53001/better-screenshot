@@ -51,12 +51,32 @@ public struct TourStep: Equatable, Sendable {
     /// At most 20 words, 1–2 short sentences; Try steps start with a verb. `{shortcut:<HotkeyAction
     /// raw value>}` (e.g. `{shortcut:captureArea}`) is replaced with the user's current key combo.
     public let body: String
+    /// Show this step only if this event has been seen during the tour (e.g. "Resize your text" needs a
+    /// text to exist, so it requires `.annotationAdded("text")`); otherwise it's skipped like a missing
+    /// anchor. Nil = no precondition.
+    public let requires: TourEvent?
+    /// Where the tag goes relative to the outlined control. `.automatic` lets the layout choose.
+    public let placement: Placement
 
-    public init(anchor: String, kind: Kind, title: String, body: String) {
+    /// A step's preferred tag position (review 2026-09-26, T3/E4/V2/V4).
+    public enum Placement: String, Equatable, Sendable {
+        /// The layout picks the side with room.
+        case automatic
+        case left, right, above, below
+        /// Inside the control's top-right corner, no leader line — for controls that fill most of their
+        /// window (the editor canvas, the video preview, the Settings cards), where "beside" means over
+        /// the neighbouring UI.
+        case insideCorner
+    }
+
+    public init(anchor: String, kind: Kind, title: String, body: String,
+                requires: TourEvent? = nil, placement: Placement = .automatic) {
         self.anchor = anchor
         self.kind = kind
         self.title = title
         self.body = body
+        self.requires = requires
+        self.placement = placement
     }
 }
 
