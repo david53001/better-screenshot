@@ -266,6 +266,8 @@ final class EditorInspectorView: NSVisualEffectView {
             return { s in
                 s.strokeColor = c
                 s.fillColor = RGBAColor(r: c.r, g: c.g, b: c.b, a: 0.25)
+                // A text's outline must stay visible against its new letter colour.
+                if s.textOutline { s.textOutlineColor = TextChip.outlineColor(s.textOutlineColor, forText: c) }
             }
         case .textBackground:
             return { $0.textBackgroundColor = c }
@@ -574,7 +576,11 @@ final class EditorInspectorView: NSVisualEffectView {
 
     @objc private func outlineToggled(_ sender: NSButton) {
         let on = sender.state == .on
-        onStyleEdit?({ $0.textOutline = on }, nil)
+        onStyleEdit?({ s in
+            s.textOutline = on
+            // Default white on white text (Label, Callout) would be an unreadable blob.
+            if on { s.textOutlineColor = TextChip.outlineColor(s.textOutlineColor, forText: s.strokeColor) }
+        }, nil)
     }
 
     @objc private func shadowToggled(_ sender: NSButton) {
