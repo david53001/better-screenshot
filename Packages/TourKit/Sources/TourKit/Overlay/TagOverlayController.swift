@@ -28,9 +28,10 @@ public final class TagOverlayController: TourTagPresenting {
     /// real window) so headless probes never cover the owner's screen. Never set by the app.
     static var probeLevel: NSWindow.Level?
 
-    /// Corner radius of a titled window's frame, for the dim's outline (measured on macOS 14 and 26).
-    static var titledWindowCornerRadius: CGFloat {
-        if #available(macOS 26, *) { return 16 }
+    /// Corner radius of a titled window's frame, for the dim's outline. Measured on macOS 26: 16 pt,
+    /// 26 pt with an `NSToolbar` (none of the app's windows has one); macOS 14/15: 10 pt.
+    static func titledWindowCornerRadius(hasToolbar: Bool) -> CGFloat {
+        if #available(macOS 26, *) { return hasToolbar ? 26 : 16 }
         return 10
     }
 
@@ -152,9 +153,12 @@ public final class TagOverlayController: TourTagPresenting {
         let screen = NSScreen.screens.first { $0.frame.contains(centre) } ?? host.screen ?? NSScreen.main
         isMenuBarHost = Self.isMenuBarHost(host, screen: screen)
         let vertical = TagLayout.prefersVertical(containerSize: anchor.superview?.bounds.size ?? .zero)
+        // A borderless host (record strip, pill, status item) is small: keep the tag off it entirely.
         let p = TagLayout.place(anchor: anchorRect, tagSize: tagSize,
                                 visible: screen?.visibleFrame ?? host.frame,
-                                order: TagLayout.order(verticalFirst: vertical))
+                                order: TagLayout.order(verticalFirst: vertical),
+                                keepOut: host.styleMask.contains(.titled) ? nil : host.frame,
+                                screen: screen?.frame)
 
         // The decor spans the host (for the dim), the box and the tag (for the leader line).
         var frame = p.outer.union(p.tag)
@@ -239,7 +243,7 @@ public final class TagOverlayController: TourTagPresenting {
     /// radius for titled windows; for borderless panels (record strip, pill) the radius of the
     /// rounded background view filling their content.
     static func cornerRadius(of window: NSWindow) -> CGFloat {
-        if window.styleMask.contains(.titled) { return titledWindowCornerRadius }
+        if window.styleMask.contains(.titled) { return titledWindowCornerRadius(hasToolbar: window.toolbar != nil) }
         var view = window.contentView
         for _ in 0..<3 {
             guard let v = view else { break }

@@ -54,6 +54,7 @@ public final class InfoButton: NSButton {
         // E1 — a zero-width accessory is clipped away). 6 pt from the window's right edge.
         let container = NSView(frame: NSRect(x: 0, y: 0, width: size.width + 6, height: size.height))
         button.frame = NSRect(origin: .zero, size: size)
+        button.autoresizingMask = [.minYMargin, .maxYMargin]   // stays centred when the title bar sizes it
         container.addSubview(button)
         let accessory = NSTitlebarAccessoryViewController()
         accessory.layoutAttribute = .trailing
@@ -139,8 +140,17 @@ final class ShortcutsViewController: NSViewController {
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
-        stack.edgeInsets = NSEdgeInsets(top: 12, left: 14, bottom: 12, right: 14)
-        stack.setFrameSize(stack.fittingSize)
-        view = stack
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        let root = NSView()
+        root.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 14),
+            stack.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -14),
+            stack.topAnchor.constraint(equalTo: root.topAnchor, constant: 12),
+            stack.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -12),
+        ])
+        root.setFrameSize(root.fittingSize)
+        preferredContentSize = root.frame.size
+        view = root
     }
 }

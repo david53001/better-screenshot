@@ -3,11 +3,14 @@ import CoreGraphics
 /// Where the tag goes around the highlighted control (spec §14.3). Pure and unit-tested; screen
 /// coordinates with AppKit's origin (bottom-left, y up) — "below" is lower on screen.
 ///
-/// The outline box is the anchor grown by `boxPadding`; its 2 pt stroke sits just outside that.
-/// The tag goes on the first side in the preference order where it fits inside the visible frame
-/// (minus `screenMargin`) at `leaderLength` from the outline, slid along that side to stay on
-/// screen but still overlapping the box's span so the leader line stays short. Nothing fits (a
-/// huge control on a full-screen window) → the tag sits *over* the control's top-left corner.
+/// The outline box is the anchor grown by `boxPadding` (clipped to the screen, for a menu-bar icon);
+/// its 2 pt stroke sits just outside that. The tag goes on the first side in the preference order
+/// where it fits inside the visible frame (minus `screenMargin`) at `leaderLength` from the outline,
+/// slid along that side to stay on screen but still overlapping the box's span so the leader line
+/// stays short. With a `keepOut` rect (a small borderless host — the record strip, the pill) the tag
+/// first tries to sit outside all of it, so it never covers that panel's other controls; if nothing
+/// fits there it may overlap it. Nothing fits at all (a huge control on a full-screen window) → the
+/// tag sits *over* the control's top-left corner.
 enum TagLayout {
     enum Side: String, Equatable, Sendable {
         case left, right, below, above, over
@@ -42,24 +45,45 @@ enum TagLayout {
     }
 
     static func place(anchor: CGRect, tagSize: CGSize, visible: CGRect,
-                      order: [Side] = order(verticalFirst: false)) -> Placement {
-        let box = anchor.insetBy(dx: -TagStyle.boxPadding, dy: -TagStyle.boxPadding)
+                      order: [Side] = order(verticalFirst: false),
+                      keepOut: CGRect? = nil, screen: CGRect? = nil) -> Placement {
+        var box = anchor.insetBy(dx: -TagStyle.boxPadding, dy: -TagStyle.boxPadding)
+        if let screen {
+            // A menu-bar icon fills the bar's height: keep the whole outline on the screen.
+            let limit = screen.insetBy(dx: TagStyle.boxStroke, dy: TagStyle.boxStroke)
+            if box.intersects(limit) { box = box.intersection(limit) }
+        }
         let outer = box.insetBy(dx: -TagStyle.boxStroke, dy: -TagStyle.boxStroke)
         let area = visible.insetBy(dx: TagStyle.screenMargin, dy: TagStyle.screenMargin)
-        let w = tagSize.width, h = tagSize.height
-        let gap = TagStyle.leaderLength
 
+        if let keepOut, let p = firstFit(order, clear: outer.union(keepOut), box: box, outer: outer,
+                                         size: tagSize, area: area) { return p }
+        if let p = firstFit(order, clear: outer, box: box, outer: outer, size: tagSize, area: area) { return p }
+
+        // Fallback: inside the control's top-left corner, kept on screen.
+        let w = tagSize.width, h = tagSize.height, inset = TagStyle.tagRadius
+        let tag = CGRect(x: clamp(box.minX + inset, area.minX, area.maxX - w),
+                         y: clamp(box.maxY - inset - h, area.minY, area.maxY - h),
+                         width: w, height: h)
+        return Placement(side: .over, box: box, outer: outer, tag: tag, leader: nil)
+    }
+
+    /// The first side where the tag fits `leaderLength` outside `clear`, inside `area`, overlapping
+    /// the box's span.
+    private static func firstFit(_ order: [Side], clear: CGRect, box: CGRect, outer: CGRect,
+                                 size: CGSize, area: CGRect) -> Placement? {
+        let w = size.width, h = size.height, gap = TagStyle.leaderLength
         for side in order {
             var tag: CGRect
             switch side {
             case .left, .right:
-                let x = side == .left ? outer.minX - gap - w : outer.maxX + gap
+                let x = side == .left ? clear.minX - gap - w : clear.maxX + gap
                 let y = clamp(box.midY - h / 2, area.minY, area.maxY - h)
                 tag = CGRect(x: x, y: y, width: w, height: h)
                 guard tag.minX >= area.minX, tag.maxX <= area.maxX, h <= area.height,
                       tag.minY < box.maxY, tag.maxY > box.minY else { continue }
             case .below, .above:
-                let y = side == .below ? outer.minY - gap - h : outer.maxY + gap
+                let y = side == .below ? clear.minY - gap - h : clear.maxY + gap
                 let x = clamp(box.midX - w / 2, area.minX, area.maxX - w)
                 tag = CGRect(x: x, y: y, width: w, height: h)
                 guard tag.minY >= area.minY, tag.maxY <= area.maxY, w <= area.width,
@@ -71,13 +95,7 @@ enum TagLayout {
             return Placement(side: side, box: box, outer: outer, tag: tag,
                              leader: leader(side: side, tag: tag, box: box, outer: outer))
         }
-
-        // Fallback: inside the control's top-left corner, kept on screen.
-        let inset = TagStyle.tagRadius
-        let tag = CGRect(x: clamp(box.minX + inset, area.minX, area.maxX - w),
-                         y: clamp(box.maxY - inset - h, area.minY, area.maxY - h),
-                         width: w, height: h)
-        return Placement(side: .over, box: box, outer: outer, tag: tag, leader: nil)
+        return nil
     }
 
     /// Straight across when the tag and box overlap enough; kept off both shapes' rounded corners.

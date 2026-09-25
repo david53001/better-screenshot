@@ -121,6 +121,32 @@ let tagLayoutTests: [TestCase] = [
         }
         t.equal(sides, ["left", "right", "below", "above"])
     },
+    TestCase("smallPanelHostGetsTheTagOutsideTheWholePanel") { t in
+        // The record strip near the bottom: the tag goes above the panel, not over its top row.
+        let strip = CGRect(x: 400, y: 30, width: 640, height: 120)
+        let mic = CGRect(x: 700, y: 60, width: 80, height: 22)
+        let p = TagLayout.place(anchor: mic, tagSize: tagSize, visible: screen,
+                                order: TagLayout.order(verticalFirst: true), keepOut: strip)
+        t.equal(p.side, .above)
+        t.equal(p.tag.minY, strip.maxY + gap)
+        t.isFalse(p.tag.intersects(strip))
+        t.equal(p.leader?.from.y, p.tag.minY)
+        t.equal(p.leader?.to.y, p.outer.maxY)   // the leader reaches down to the box
+    },
+    TestCase("keepOutIsDroppedWhenNothingFitsOutsideIt") { t in
+        let p = TagLayout.place(anchor: CGRect(x: 700, y: 400, width: 80, height: 22), tagSize: tagSize,
+                                visible: screen, keepOut: screen)
+        t.equal(p.side, .left)
+        t.equal(p.tag.maxX, p.outer.minX - gap)
+    },
+    TestCase("menuBarBoxIsClippedToTheScreen") { t in
+        let full = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let icon = CGRect(x: 1200, y: 875, width: 34, height: 25)   // fills the bar's height
+        let p = TagLayout.place(anchor: icon, tagSize: tagSize, visible: screen, screen: full)
+        t.equal(p.outer.maxY, full.maxY)
+        t.equal(p.box.minY, icon.minY - TagStyle.boxPadding)
+        t.equal(p.side, .below)
+    },
     TestCase("barsPreferVertical") { t in
         t.isTrue(TagLayout.prefersVertical(containerSize: CGSize(width: 600, height: 40)))
         t.isTrue(TagLayout.prefersVertical(containerSize: CGSize(width: 90, height: 30)))
