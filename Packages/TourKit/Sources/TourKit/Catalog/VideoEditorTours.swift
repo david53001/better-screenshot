@@ -16,9 +16,11 @@ extension TourCatalog {
                  title: "Delete a part",
                  body: "Click a part to select it, then press ⌫ to cut it out.",
                  requires: .action("video.split"), placement: .above),
-        // Below the row: above it, the tag covered the timeline and its Split/Delete buttons (V2).
+        // Right of the row, beside the window, when the screen has room; else the automatic side (below,
+        // or above when the window sits on the screen's bottom edge). At the minimum window size "above"
+        // covered the timeline and its Split/Delete buttons (review V2).
         TourStep(anchor: "video.segment", kind: .explain, title: "Selected part",
-                 body: "Change its speed or mute just this part. Right-click a part for the same.", placement: .below),
+                 body: "Change its speed or mute just this part. Right-click a part for the same.", placement: .right),
         TourStep(anchor: "video.saveCopy", kind: .explain, title: "Save a copy",
                  body: "Saves the edit as a new file. The ▾ menu exports a GIF instead."),
         TourStep(anchor: "video.replace", kind: .explain, title: "Replace the original",

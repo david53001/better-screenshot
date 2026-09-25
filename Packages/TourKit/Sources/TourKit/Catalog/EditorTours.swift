@@ -8,10 +8,11 @@ extension TourCatalog {
     /// The first editor window. It opens with the Arrow already chosen, so the tour starts by drawing
     /// one rather than asking to choose it. Five steps (review 2026-09-26, E2: Welcome → Quick Access →
     /// Editor was 16 tags in a row): "Your tools" is folded into the arrow step, the hint line and the
-    /// side-panel overview are dropped, and "Finish up" names the ⓘ that replays the tour.
+    /// side-panel overview are dropped, and "Finish up" names the ⓘ that replays the tour. Step 1 names
+    /// the Arrow's key because a replay (ⓘ) can start with another tool chosen.
     static let editor = Tour(id: .editor, surface: .editor, trigger: .surfaceShown(.editor), steps: [
         TourStep(anchor: "editor.toolbar", kind: .tryIt(advanceOn: .annotationAdded("arrow")), title: "Draw an arrow",
-                 body: "Drag on the image to draw an arrow. Hover a tool in this bar to see its key."),
+                 body: "Pick the Arrow (A) in this bar, then drag on the image. Hover any tool for its key."),
         TourStep(anchor: "editor.inspector.colour", kind: .tryIt(advanceOn: .styleChanged("strokeColor")),
                  title: "Pick a colour",
                  body: "Click any swatch. It colours what’s selected and what you draw next."),
