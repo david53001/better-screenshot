@@ -11,9 +11,11 @@ public enum CaptureError: Error {
 public struct CaptureService {
     public init() {}
 
-    /// `excludingWindowIDs`: on-screen windows left out of full-screen and area captures — the app
-    /// passes its guided-tour tag windows, so a tag never ends up in the user's screenshot. (A window
-    /// capture records only that one window, so it needs no exclusions.)
+    /// `excludingWindowIDs`: on-screen windows left out of the image — the app passes its guided-tour
+    /// tag windows, so a tag never ends up in the user's screenshot. Full screen and area captures
+    /// filter them out. A window capture records the window *with its child windows*, and a tag is a
+    /// child window of the window it explains, so when an excluded window belongs to the captured
+    /// window's app, that capture leaves child windows out (macOS 14.2+; earlier systems can't).
     public func capture(_ target: CaptureTarget,
                         excludingWindowIDs: Set<CGWindowID> = []) async throws -> CGImage {
         let content = try await SCShareableContent.excludingDesktopWindows(
@@ -46,6 +48,11 @@ public struct CaptureService {
             let config = SCStreamConfiguration()
             config.width = Int(window.frame.width * 2)
             config.height = Int(window.frame.height * 2)
+            let app = window.owningApplication?.processID
+            if #available(macOS 14.2, *), app != nil,
+               hidden.contains(where: { $0.owningApplication?.processID == app }) {
+                config.includeChildWindows = false
+            }
             return try await SCScreenshotManager.captureImage(
                 contentFilter: filter, configuration: config)
         }
