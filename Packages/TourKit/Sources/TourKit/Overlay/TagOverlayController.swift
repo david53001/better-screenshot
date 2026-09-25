@@ -24,6 +24,12 @@ public final class TagOverlayController: TourTagPresenting {
     /// never ends up in the user's own screenshot or recording.
     public var windowNumbers: [Int] { [decor, tagPanel].filter(\.isVisible).map(\.windowNumber) }
 
+    /// Every tour-tag window on screen right now, from any overlay. Screenshot and recording filters
+    /// exclude these so a tag never ends up in the user's own capture.
+    public static var allWindowNumbers: [Int] {
+        NSApp.windows.compactMap { $0 as? TagPanel }.filter(\.isVisible).map(\.windowNumber)
+    }
+
     /// Probes only: parks the overlay's windows at this level (just above the desktop, behind every
     /// real window) so headless probes never cover the owner's screen. Never set by the app.
     static var probeLevel: NSWindow.Level?
