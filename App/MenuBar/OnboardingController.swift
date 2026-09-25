@@ -219,6 +219,8 @@ final class OnboardingController: NSWindowController {
         grid.column(at: 1).xPlacement = .leading
         grid.columnSpacing = 14
         grid.rowSpacing = 7
+        // Without this the grid's width is ambiguous and it sometimes lands off-centre.
+        grid.setContentHuggingPriority(.required, for: .horizontal)
         return grid
     }
 

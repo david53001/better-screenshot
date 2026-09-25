@@ -86,7 +86,7 @@ struct SettingsView: View {
         VStack(spacing: SettingsTheme.Metrics.cardGap) {
             captureCard
             overlayCard
-            pinCard
+            startupCard
         }
         .frame(width: SettingsTheme.Metrics.columnWidth)
     }
@@ -94,10 +94,11 @@ struct SettingsView: View {
     // Recording is split into two cards (what to record | what shows in the video) and
     // the short cards fill in under them, so the three columns end at about the same
     // height instead of leaving a tall black gap beside one long Recording card.
+    // (Startup and Pin to Screen swapped columns when Startup gained "Tours & tips".)
     private var columnB: some View {
         VStack(spacing: SettingsTheme.Metrics.cardGap) {
             recordingCard
-            startupCard
+            pinCard
         }
         .frame(width: SettingsTheme.Metrics.columnWidth)
     }
@@ -261,10 +262,6 @@ struct SettingsView: View {
                         .foregroundColor(SettingsTheme.label)
                 }
             }
-            Text("Replay any tour from Help & Tours in the menu bar.")
-                .font(SettingsTheme.Font.rowSubLabel)
-                .foregroundColor(SettingsTheme.subLabel)
-                .fixedSize(horizontal: false, vertical: true)
         }
         .onAppear {
             toursEnabled = tours.isEnabled()
