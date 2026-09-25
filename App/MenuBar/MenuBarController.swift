@@ -1,5 +1,6 @@
 import AppKit
 import CaptureKit
+import TourKit
 
 @MainActor
 final class MenuBarController: NSObject {
@@ -52,9 +53,35 @@ final class MenuBarController: NSObject {
         add("History…", "clock.arrow.circlepath", #selector(openHistory), .openHistory)
         add("Restore Recently Closed", "arrow.uturn.backward", #selector(restoreClosed), .restoreRecentlyClosed)
         menu.addItem(.separator())
+        menu.addItem(Self.helpToursItem(target: self, replay: #selector(replayTour(_:)),
+                                        reset: #selector(resetTours)))
         add("Settings…", "gearshape", #selector(openSettings), nil, key: ",")
         add("Quit", "power", #selector(quit), nil, key: "q")
         statusItem.menu = menu
+    }
+
+    /// "Help & Tours ▸": Take the Welcome Tour · one "<Name> Tour" per other tour · Reset All Tours
+    /// (v3 spec §14.3). Each tour item carries its `TourID` raw value as `representedObject`. Static so
+    /// probes can build it without a status item.
+    static func helpToursItem(target: AnyObject, replay: Selector, reset: Selector) -> NSMenuItem {
+        let submenu = NSMenu(title: "Help & Tours")
+        func add(_ title: String, _ symbol: String, _ action: Selector, _ tour: TourID?) {
+            let item = submenu.addItem(withTitle: title, action: action, keyEquivalent: "")
+            item.target = target
+            item.image = icon(symbol)
+            item.representedObject = tour?.rawValue
+        }
+        add("Take the Welcome Tour", TourID.welcome.menuSymbol, replay, .welcome)
+        submenu.addItem(.separator())
+        for tour in TourID.allCases where tour != .welcome {
+            add(tour.menuTitle, tour.menuSymbol, replay, tour)
+        }
+        submenu.addItem(.separator())
+        add("Reset All Tours", "arrow.counterclockwise", reset, nil)
+        let parent = NSMenuItem(title: "Help & Tours", action: nil, keyEquivalent: "")
+        parent.image = icon("questionmark.circle")
+        parent.submenu = submenu
+        return parent
     }
 
     /// Display-only: firing stays Carbon. Menus just show the current combos.
@@ -81,6 +108,15 @@ final class MenuBarController: NSObject {
     var onPauseResume: (() -> Void)?
     /// Menu validation: false disables "Restore Recently Closed".
     var canRestore: (() -> Bool)?
+
+    /// Help & Tours: run a tour (from its first step) / clear which tours were seen.
+    var onReplayTour: ((TourID) -> Void)?
+    var onResetTours: (() -> Void)?
+    @objc private func replayTour(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let tour = TourID(rawValue: raw) else { return }
+        onReplayTour?(tour)
+    }
+    @objc private func resetTours() { onResetTours?() }
 
     @objc private func toggleRecording() { onToggleRecording?() }
     @objc private func openHistory() { onOpenHistory?() }

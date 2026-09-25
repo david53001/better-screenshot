@@ -20,7 +20,13 @@ public enum HotkeyCheatSheet {
     /// One row per bound entry; unbound actions are left out.
     public static func rows(for bindings: HotkeyBindings) -> [Row] {
         entries.compactMap { entry in
-            bindings.combo(for: entry.action).map { Row(keys: $0.displayString, description: entry.description) }
+            keys(for: entry.action, in: bindings).map { Row(keys: $0, description: entry.description) }
         }
+    }
+
+    /// One action's current combo as shown here and in the menu ("⇧⌘4"); nil when unbound. Also fills
+    /// the guided tours' `{shortcut:<action>}` placeholders, so tours show the same keys.
+    public static func keys(for action: HotkeyAction, in bindings: HotkeyBindings) -> String? {
+        bindings.combo(for: action)?.displayString
     }
 }

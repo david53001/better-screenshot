@@ -20,6 +20,7 @@ orchestrates the capture → overlay → editor → output flow across the `Pack
 - `History/` — capture-history glue + browser window.
 - `Settings/` — settings store + UI.
 - `MenuBar/` — status-item menu + onboarding.
+- `Tours/` — guided-tour coordinator (who gets tours, triggers, persistence; logic in `Packages/TourKit`).
 - `SystemIntegration/` — ⚠️ OS-integration & permission surface (hotkeys, TCC, login item, native-shortcut suppression).
 
 ## Verify changes to this target

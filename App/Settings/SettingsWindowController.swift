@@ -10,16 +10,20 @@ final class SettingsWindowController {
     private let store: SettingsStore
     private let shortcuts: ShortcutActions
     private let clearHistory: () -> Void
+    private let tours: TourSettingsActions
 
-    init(store: SettingsStore, shortcuts: ShortcutActions, clearHistory: @escaping () -> Void) {
+    init(store: SettingsStore, shortcuts: ShortcutActions, clearHistory: @escaping () -> Void,
+         tours: TourSettingsActions) {
         self.store = store
         self.shortcuts = shortcuts
         self.clearHistory = clearHistory
+        self.tours = tours
     }
 
     func show() {
         if window == nil {
-            let view = SettingsView(store: store, shortcuts: shortcuts, clearHistory: clearHistory)
+            let view = SettingsView(store: store, shortcuts: shortcuts, clearHistory: clearHistory,
+                                    tours: tours)
             let hosting = NSHostingController(rootView: view)
             hosting.view.appearance = NSAppearance(named: .darkAqua)
             let w = NSWindow(contentViewController: hosting)

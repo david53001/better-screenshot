@@ -2125,10 +2125,206 @@ Design: v3 spec §14 + §14.9 (`docs/superpowers/specs/2026-09-24-betterscreensh
 Code: `Packages/TourKit/` + `App/Tours/`. Each subsection is filled by the lane that builds it.
 
 ### 7.1 Who gets tours — new users only, asked first (lane 7A)
-_(pending)_
+
+**The owner's rule (verbatim intent):** tours are *only* for new users. Someone who already used the app
+must never be prompted or shown a tour by itself — not on the update that adds tours, not later, not when
+a tour is changed. New users are asked once ("do you want a tour?") and only a yes turns tours on.
+**When in doubt, treat the user as existing** — a missed new user loses nothing, a nagged existing user
+is exactly what the owner forbade.
+
+**Step 1 — classify once, first thing at launch (macOS: top of `applicationDidFinishLaunching`).**
+If the stored `tourAudience` is absent, gather the signals, run the pure classifier, store the result as
+`"new"` or `"existing"`, and never compute it again. This must run **before anything writes a
+preference** (on macOS the status item, the `didRegisterLaunchAtLogin` flag and window frames all write
+into the app's preferences, and would make every new user look existing). A probe confirmed a fresh macOS
+app domain is empty at that point and has keys after one run.
+
+The user is **existing** if *any one* of these is true (checked in this order; else **new**):
+1. The running app isn't the real one — bundle id ≠ `com.betterscreenshot.mac` (can't trust what we read).
+2. The app's **own** preferences hold any key other than the five tour keys below (only the app's own
+   domain via `persistentDomain(forName: bundleID)` — never the global domain).
+3. `~/Library/Application Support/BetterScreenshot/` exists and has **any** entry (file or folder, even an
+   empty `History/`). A path that exists but isn't a folder, or can't be listed, counts as content (doubt).
+4. Screen Recording permission is already granted (a fresh install never has it).
+
+Stored value parsing is fail-safe too: absent → not classified yet; exactly `"new"` → new; **anything
+else** (`"New"`, `""`, garbage) → existing.
+
+**Windows mapping.** The port keeps everything in `%APPDATA%\BetterScreenshot\` (`settings.json` +
+`History\`). Classify at the very start of the port's startup (its `App` startup handler) **before the
+first `SettingsStore.Save()`**. Signals: (1) always
+the real app — pass the known id; (2) the top-level property names present in an existing
+`settings.json` (excluding the five tour keys); (3) `%APPDATA%\BetterScreenshot\` has any entry other than
+`settings.json` (e.g. `History\`); (4) always `false` (Windows has no screen-capture permission). An
+existing `settings.json` from any earlier version always has non-tour properties, so every current port
+user classifies as existing.
+
+**Step 2 — ask new users once.** The Welcome window's last page ("You're all set!", with the shortcut
+grid) shows, **only when** `tourAudience == "new"` **and** `tourQuestionAnswered` is not true, this block
+**in place of** the "Start Capturing" button (screenshot: `docs/parity-v3/part7-welcome-question.png`):
+
+- a 300 pt horizontal separator line, 16 pt gap;
+- **"Want a quick tour?"** — 15 pt semibold, centred; 4 pt gap;
+- **"We'll point out each part the first time you use it. You can skip any time."** — 13 pt, secondary
+  label colour, centred, wraps at 360 pt; 16 pt gap;
+- two large rounded buttons side by side, 12 pt apart: **No Thanks** (Esc) · **Show Me Around** (default
+  button, Return).
+
+Page width stays 440 pt; the window grows in height to fit (about 432 pt). Existing users (and new users
+who already answered) see the page exactly as before: "Start Capturing".
+
+| Action | Writes | Then |
+|---|---|---|
+| **Show Me Around** | `firstUseToursEnabled = true`, `tourQuestionAnswered = true` | The page re-renders with "Start Capturing" in place of the question, **then** the Welcome tour starts over this window (re-render first, so the tour's anchors are the final views). If none of its steps can be shown there yet, it waits (queued) for the Welcome window's next appearance. |
+| **No Thanks** | `firstUseToursEnabled = false`, `tourQuestionAnswered = true` | Window closes. |
+| **Closing the window while the question is showing** | same as No Thanks | — |
+| Closing after answering | nothing | — |
+
+**When the Welcome window opens at launch** (unchanged except the last condition): no Screen Recording
+permission → the permission page (as before); else, if we just relaunched after the grant **or** the user
+is new and hasn't answered → straight to the "You're all set!" page (which then asks). The second
+condition catches a new user whose permission got granted outside our flow. On Windows (no permission
+pages): at launch, if `tourAudience == "new"` and not answered → show the Welcome window, which asks.
+
+**After that, what starts by itself.** A tour starts automatically only if `firstUseToursEnabled` is
+`true` (**absent = false**) **and** the user hasn't seen this version of it (`toursSeen[id] < version`, or
+missing). The audience never turns tours on — it only decides whether the question is asked. So existing
+users (flag absent) never get an automatic tour, even after a tour's version is bumped. Everyone can still
+run any tour on purpose from the ⓘ buttons or **Help & Tours** (§7.8), and existing users can opt in with
+Settings → Tours & tips.
+
+**Pure logic to port 1:1** (`Packages/TourKit/Sources/TourKit/TourAudience.swift`, `TourRules.swift`;
+tests `Tests/TourKitTests/TourAudienceTests.swift`, `TourRulesTests.swift`):
+- `classify(signals)` — cases: the owner's real key set (`didRegisterLaunchAtLogin`, `captureSettings`,
+  `hotkeyBindings`, `recordingConfig`, `saveDirectory`, `editorDefaultStyle`, `editorRecentColors`,
+  `windowPlacement.annotate`, `NSStatusItem Preferred Position Item-0`, `NSWindow Frame NSColorPanel`) →
+  existing; same plus the tour keys → existing; nothing → new; only tour keys → new; each single app key
+  (incl. `RelaunchedAfterPermissionGrant`, `windowPlacement.history`, `NSStatusItem VisibleCC Item-0`,
+  any unknown key) → existing; folder content alone → existing; permission alone → existing; bundle id
+  nil / `com.betterscreenshot.app` / `""` → existing.
+- stored parsing — nil → nil; `"new"` → new; `"existing"`, `"New"`, `""` → existing.
+- `shouldAskQuestion(audience, answered)` — true only for (new, false); nil audience → false.
+- `shouldOpenWelcomeOnLaunch(audience, answered, permissionGranted)` — true only for (new, false, true).
+- `shouldAutoStart(tour, firstUseToursEnabled, seen)` — (true, unseen) → true; false or **nil** → false;
+  seen at ≥ version → false; version 2 with seen 1 → true only when the flag is true.
 
 ### 7.2 Engine, catalog format, events, anchors, persistence keys (lane 7A)
-_(pending)_
+
+**Persistence (all five keys, nothing else).** macOS UserDefaults; on Windows add them to `settings.json`
+with the same names.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `tourAudience` | string `"new"` \| `"existing"` | Written once at the first launch with tours (§7.1). Never rewritten — Reset All Tours doesn't touch it. |
+| `tourQuestionAnswered` | bool | The Welcome question was answered (or closed). |
+| `firstUseToursEnabled` | bool, **absent = false** | Tours start by themselves. The Welcome answer or the Settings switch sets it. |
+| `toursSeen` | map tour id → int version | Finished or skipped (Skip tour) at that catalog version. |
+| `toursPaused` | map tour id → int step index | Where to resume; removed when the tour resumes, finishes or is skipped (the key is removed when the map is empty). |
+
+**Data model** (`Packages/TourKit/Sources/TourKit/TourModel.swift`):
+- `TourID` (persisted raw values — never rename): `welcome, quickAccess, editor, text, redaction,
+  highlighter, spotlight, firstRecording, recordingPill, videoEditor, settings, history`.
+- `TourSurface` (a window a tour runs on): `welcome, quickAccess, editor, recordStrip, recordingPill,
+  videoEditor, settings, history`.
+- `Tour { id, version (default 1), surface, trigger, steps, handsOverTo? }`; `trigger` is
+  `surfaceShown(surface)` · `event(TourEvent)` · `startedByApp` (only Welcome: started by Show Me Around,
+  hand-over or replay).
+- `TourStep { anchor, kind, title, body }`; `kind` = **Explain** (advances on Next) or **Try(advanceOn:
+  event)** (advances when that exact event is posted, or on Skip step).
+- `TourEvent`: `captureTaken` · `toolSelected(name)` · `annotationAdded(name)` · `styleChanged(field)` ·
+  `menuOpened(anchor)` · `choiceMade(anchor)` · `action("<surface>.<verb>")` (e.g. `quickAccess.edit`,
+  `video.split`). Two events are equal only if kind and string match exactly.
+- Catalog (`Catalog/*.swift`, one file per area; `TourCatalog.all`) — steps are filled by lanes 7S/7E/7R
+  (§7.4–7.7). Welcome → hands over to Quick Access → hands over to Editor; First recording → Recording pill.
+
+**Anchors.** Every highlighted control carries a stable id `"<surface>.<name>"` (e.g.
+`editor.inspector.colour`). macOS stores it as the view's accessibility identifier (`view.tourAnchor =
+"…"`, SwiftUI `.tourAnchor("…")`) and finds it with `window.view(forTourAnchor:)`, which searches the
+whole window including the title bar and treats hidden views as missing. **WPF:** set
+`AutomationProperties.AutomationId` to the same id and search the window's visual tree; an element that
+isn't `IsVisible` counts as missing.
+
+**Event bus** (`TourEvents.swift`): surfaces call `post(event)` when the user does something,
+`surfaceShown(surface, window)` right after a surface's window is on screen, and `replay(tourID, window?)`
+from an ⓘ (window) or the menu (nil). With no handler installed every call is a no-op. The app's
+coordinator sets the three handlers at launch. **WPF:** a static class with three `Action<…>?` fields.
+
+**Engine — pure state machine, port 1:1** (`TourEngine.swift`; 19 tests in `TourEngineTests.swift`).
+State: `status` (idle · running · paused · finished · skipped), `current` step index, and `observed` —
+every event posted while running. Each call returns an effect for the caller to carry out:
+`none` · `show(step)` · `finished(handsOverTo)` · `skipped` · `paused(at)` · `nothingToShow`.
+- `start(at: i, isPresent)` (idle or paused only): out-of-range `i` → 0; show the first step at or after
+  `i` that is **presentable** — its anchor is present **and** it isn't a Try step whose event is already in
+  `observed`. None → `nothingToShow` and **nothing changes** (a surface without its anchors yet never
+  burns a tour).
+- `next` — only on an Explain step (ignored on Try); advance to the next presentable step; past the end →
+  `finished(handsOverTo)`.
+- `skipStep` — any step; same advance.
+- `handle(event)` — running only; add to `observed`; if the current step is Try and the event equals its
+  `advanceOn` → advance, else `none`.
+- `skipIfAnchorMissing` — current anchor gone → advance, else `none`.
+- `skipTour` (running or paused) → `skipped`. `pause` (running) → `paused(at: current)`. `resume`
+  (paused) → like `start(at: current)`, and stays paused on `nothingToShow`.
+Test cases to port: starts at first step · Next walks Explain steps · Next ignored on Try · Try advances
+only on its exact event (other tool, other event kinds ignored) · events do nothing on Explain steps ·
+event seen during an Explain step makes the later Try step skip silently · Skip step leaves a Try step ·
+missing anchors skipped at start and on Next · anchor vanishing mid-step skips it · nothing present /
+empty tour → `nothingToShow`, status stays idle · Next on last step → `finished(handsOverTo)`, then Next
+does nothing · Try event on last step finishes with hand-over · trailing missing anchors finish · Skip tour
+from running and from paused · pause keeps index, paused ignores events and Next, resume returns there ·
+resume skips steps now missing · resume with nothing present stays paused at the same index · start at a
+persisted index; 99 and -1 → 0 · pause/resume when not running → `none`.
+
+**Shortcut placeholders** (`TourText`): a body may contain `{shortcut:<HotkeyAction raw value>}`
+(`captureArea`, `captureWindow`, `captureFullscreen`, `captureText`, `pinFromClipboard`, `record`,
+`openHistory`, `restoreRecentlyClosed`, `pauseResumeRecording`). The coordinator replaces each with the
+user's **current** combo exactly as the Welcome grid and menus show it (macOS `HotkeyCheatSheet.keys(for:
+in:)` → `HotkeyCombo.displayString`, e.g. `⇧⌘4`; Windows: the port's own combo display string, e.g.
+`Ctrl+Shift+4`); an unbound action shows its title ("Capture Area"). Unknown names or an unclosed
+placeholder are left as typed. Tests: one and two placeholders resolve; no placeholder unchanged;
+`{shortcut:nope}` and `{shortcut:captureArea` (no brace) unchanged; names listed in order.
+
+**Catalog lint** (`CatalogLintTests.swift`, runs on the real catalog + on bad samples so it's known to
+bite): title 1–4 words; body 1–20 words (a "word" is a whitespace token with a letter or digit, so "—"
+doesn't count; a placeholder is one word); body ≤ 2 sentences (split on `. ! ? …`); a Try body must not
+start with `this/these/that/the/your/a/an/here/it/you` (start with a verb); anchor matches
+`^[a-z][A-Za-z0-9]*(\.[a-z][A-Za-z0-9]*)+$`; `menuOpened`/`choiceMade`/`action` names match the same;
+`toolSelected`/`annotationAdded`/`styleChanged` names match `^[a-z][A-Za-z0-9]*$`; every placeholder names
+a real action; no `{`/`}` outside placeholders or in titles; no two Try steps in one tour wait for the
+same event.
+
+**Coordinator behaviour** (`App/Tours/TourCoordinator.swift` — port as the WPF app's `TourCoordinator`):
+- **surfaceShown(surface, window)**: remember the window for that surface; then start, in priority order,
+  (1) a queued tour for that surface (from step 0), else (2) a paused tour for that surface (at its
+  `toursPaused` index), else (3) the first tour triggered by `surfaceShown(surface)` that may auto-start
+  (§7.1). The tour already running is never restarted this way.
+- **post(event)**: feed the running tour; a completed Try step shows the tag's brief "done" state for
+  **0.8 s**, then the next step. If the event didn't complete it, re-check the current anchor on the next
+  UI turn (the action may have hidden it). Then, **only if no tour was running**, start a queued or
+  auto-startable tour whose trigger is `event(thisEvent)`, in the focused window of its surface (else the
+  newest visible one). Event-triggered tours never interrupt a running tour; they stay eligible.
+- **replay(id, window)**: with a window → start there from step 0 (restarting it if it's the running tour);
+  without (menu) → start now if the tour's surface is visible, else queue it and open that surface if the
+  app can (Welcome — permission page if not granted, else the all-set page; Settings; History), otherwise
+  show the HUD note **"<Menu title> starts the next time you use it"** (e.g. "Editor Tour starts the next
+  time you use it"). Replays and hand-overs ignore `firstUseToursEnabled` and `toursSeen`.
+- **One tour on screen.** Starting a tour while another runs pauses the other (persisted in `toursPaused`,
+  remembered with its window) — except that a tour **on its last step** (running or paused) whose
+  `handsOverTo` is the starting tour is marked seen instead (so the capture that ends Welcome and the Quick
+  Access card that follows work in either order). When a tour ends, the newest interrupted tour resumes if
+  its window is still visible.
+- **Host window closed, hidden or minimised → pause** (close notification + a 0.5 s check while a tour
+  runs; macOS panels are ordered out, not closed). The same check skips a step whose anchor disappeared.
+- **Finish** → `toursSeen[id] = max(old, version)`, clear its pause, hide the tag, then the hand-over tour:
+  queued immediately, started now if its surface is visible. **Skip tour** → seen, no hand-over.
+- The tag (lane 7B, §7.3) gets the step, the body with placeholders resolved, and "number of total"
+  (`index + 1` of `steps.count`); its buttons call Next / Skip step / Skip tour.
+- A tour with no presentable step (e.g. empty in the catalog) is never started and never marked seen.
+
+**Where it goes in the port.** Pure logic: a new `BetterScreenshot.Tours` project (no WPF references) with
+`TourModel`, `TourAudience`, `TourRules`, `TourText`, `TourEngine` + a test project with the cases above.
+App side: `windows/src/BetterScreenshot.App/Tours/TourCoordinator.cs`, created in `App.OnStartup` right
+after classification; keys added to `SettingsStore`'s DTO.
 
 ### 7.3 The tag overlay and the ⓘ button — exact layout (lane 7B)
 _(pending)_
@@ -2146,4 +2342,50 @@ _(pending)_
 _(pending)_
 
 ### 7.8 Settings + History tours, Help & Tours menu, Settings row (lanes 7S + 7A)
-_(pending)_
+
+**Settings + History tours (lane 7S):** _(pending)_
+
+**Help & Tours menu (lane 7A).** A submenu in the menu-bar menu (Windows: the tray menu), placed right
+above **Settings…**, after the History group's separator. Every item has an icon (SF Symbol name given —
+map to the port's icon set):
+
+| Item | SF Symbol | Does |
+|---|---|---|
+| **Help & Tours ▸** (parent) | `questionmark.circle` | — |
+| Take the Welcome Tour | `hand.wave` | replay `welcome` (opens the Welcome window: the all-set page, or the permission page if not granted) |
+| — separator — | | |
+| Quick Access Tour | `rectangle.on.rectangle` | replay `quickAccess` |
+| Editor Tour | `pencil.and.outline` | replay `editor` |
+| Text Tool Tour | `textformat` | replay `text` |
+| Blur & Pixelate Tour | `eye.slash` | replay `redaction` |
+| Highlighter Tour | `highlighter` | replay `highlighter` |
+| Spotlight Tour | `flashlight.on.fill` | replay `spotlight` |
+| Recording Setup Tour | `record.circle` | replay `firstRecording` |
+| Recording Controls Tour | `capsule` | replay `recordingPill` |
+| Video Editor Tour | `film` | replay `videoEditor` |
+| Settings Tour | `gearshape` | replay `settings` (opens Settings) |
+| History Tour | `clock.arrow.circlepath` | replay `history` (opens History) |
+| — separator — | | |
+| Reset All Tours | `arrow.counterclockwise` | clears `toursSeen` + `toursPaused`, HUD "Tours reset" |
+
+"Replay" = §7.2 `replay(id, nil)`: start now if that window is open, otherwise wait for it (the HUD says
+"<title> starts the next time you use it" when the app can't open that window itself). Titles and icons
+come from `TourID.menuTitle` / `menuSymbol` (`Packages/TourKit/Sources/TourKit/TourNames.swift`).
+
+**Settings → Startup → "Tours & tips" (lane 7A).** Screenshot: `docs/parity-v3/part7-settings-tours-row.png`.
+Inside the **Startup** card, under "Launch at login", after a 1 pt divider line (same as the Recording
+card's divider), 14 pt row spacing:
+- field label **"Tours & tips"** + ⓘ (same style as "Mouse cursor"); its tip: title "Tours & tips", text
+  "Short guided tours point out each part of the app — the editor, recording, History — the first time you
+  use it. Each one runs once, and you can skip it any time. Reset All Tours lets them show again; Help &
+  Tours in the menu bar replays any one of them.", example "Turn this on, then open the editor to be walked
+  through its tools.";
+- row title **"Show me around the first time I use each part"** (wraps to two lines) with the mono switch
+  on the right — bound to `firstUseToursEnabled` (absent = off; new users see their answer, existing users
+  off). The spec calls it a checkbox; it uses the Settings window's switch like every other boolean there;
+- pill button **Reset All Tours** → clears `toursSeen` and `toursPaused` only (never `tourAudience`,
+  `tourQuestionAnswered` or the switch); a small "Tours reset" note then appears beside the button.
+
+To keep the three columns about equal in height, the Startup card moved to column 1 (under Quick Access
+Overlay) and Pin to Screen to column 2 (under Recording). Columns are now: Capture · Quick Access Overlay ·
+Startup | Recording · Pin to Screen | In the video · History · Save location.

@@ -4,4 +4,8 @@ import TestKit
 // `[TestCase]` array to this concatenation.
 runTests("TourKitTests",
     catalogShapeTests
+    + catalogLintTests
+    + tourAudienceTests
+    + tourRulesTests
+    + tourEngineTests
 )
