@@ -6,9 +6,10 @@ extension TourCatalog {
         TourStep(anchor: "settings.cards", kind: .explain, title: "Your settings",
                  body: "Related settings share a card. Changes apply right away."),
         // `settings.tip` outlines the "After a capture" label with its ⓘ, so the tag can't hide which
-        // setting the tiny ⓘ belongs to (review S2).
+        // setting the tiny ⓘ belongs to (review S2). Above it, over the card's header: below, the tag
+        // covered the next rows of the Capture card.
         TourStep(anchor: "settings.tip", kind: .explain, title: "Tips on every row",
-                 body: "Hover any ⓘ for a plain explanation of that setting and an example."),
+                 body: "Hover any ⓘ for a plain explanation of that setting and an example.", placement: .above),
         TourStep(anchor: "settings.shortcuts", kind: .explain, title: "Keyboard shortcuts",
                  body: "Click any shortcut, then press new keys to change it. Esc cancels."),
     ])
