@@ -48,13 +48,19 @@ Screen recording (ScreenCaptureKit), GIF export, and the on-screen recording ove
     `exportCopy`, atomic `replaceOriginal` (temp in an item-replacement dir + `replaceItemAt`),
     `exportGIF` (temp MP4 → `GIFExporter`). Tested on generated MP4s (frame-exact cuts, 2× length,
     silent muted segment, GIF frame count).
-  - `TrimWindowController.swift` (window, keyboard, export flow) + `CutTimelineView.swift` (filmstrip
-    timeline, edge drags, context menu). Verified with a headless probe (synthetic clicks/keys +
-    snapshots); layout and strings in `docs/MAC-TO-WINDOWS-PARITY-v3.md` Part 6.
+  - `TrimWindowController.swift` (window, keyboard, export flow, error state for a missing/unreadable
+    file, Replace Original enabled only when the video differs from the file) + `CutTimelineView.swift`
+    (time ruler, filmstrip timeline, edge drags, context menu). Verified with a headless probe (synthetic
+    clicks/keys + snapshots); layout and strings in `docs/MAC-TO-WINDOWS-PARITY-v3.md` Part 6.
+  - `TimeRuler.swift` (pure, tested) — the timeline's ruler: round **output** times over kept segments
+    only, label step picked to fit, labels that would touch or clip dropped. `FilmstripFrames.swift`
+    (pure, tested) — how many thumbnails to load (enough for full zoom, 12…400, ≤ 30/s) and in what
+    order (coarse to fine). Probe clips often burn a timestamp into every frame; in snapshots that text
+    shows *inside* the thumbnails and is not an app label (the 2026-09-25 UI review mistook it for one).
 - Recordings are written with a keyframe at least every 0.5 s (`RecordingConfig.keyFrameInterval`) so
   passthrough trims land close to the chosen frame.
 
-`RecorderState`, `RecordingConfig`, `DeviceList`, `MicLevel`, `SilenceFill`, `LetterboxFit`, `CutList`, and the trim/export pieces (except the window) are unit-tested; the AV/overlay pieces are verified manually or with headless probes (retarget, mute, pause sync — see `docs/MAC-TO-WINDOWS-PARITY-v3.md` Part 5; record strip, device menus, window-recording audio — Part 4; the video editor — Part 6).
+`RecorderState`, `RecordingConfig`, `DeviceList`, `MicLevel`, `SilenceFill`, `LetterboxFit`, `CutList`, `TimeRuler`, `FilmstripFrames`, and the trim/export pieces (except the window) are unit-tested; the AV/overlay pieces are verified manually or with headless probes (retarget, mute, pause sync — see `docs/MAC-TO-WINDOWS-PARITY-v3.md` Part 5; record strip, device menus, window-recording audio — Part 4; the video editor — Part 6).
 
 ## Verify
 `swift run --package-path Packages/RecordingKit RecordingKitTests`.
