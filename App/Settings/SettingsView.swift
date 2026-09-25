@@ -12,6 +12,15 @@ struct ShortcutActions {
     var recordingChanged: (Bool) -> Void
 }
 
+/// Settings → Startup → "Tours & tips" (v3 spec §14.9). `TourCoordinator` owns the keys.
+struct TourSettingsActions {
+    /// `firstUseToursEnabled` (absent = off).
+    var isEnabled: () -> Bool
+    var setEnabled: (Bool) -> Void
+    /// Clears which tours were seen or paused — never who counts as a new user.
+    var resetAll: () -> Void
+}
+
 /// The whole Settings screen: a pure-black, 960pt-wide, single-scroll three-column
 /// masonry of titled cards built from the JVoice monochrome controls. Every control
 /// writes straight through to `store` (instant-apply) via the `bind`/`bindRec` helpers.
@@ -19,10 +28,14 @@ struct SettingsView: View {
     @ObservedObject var store: SettingsStore
     let shortcuts: ShortcutActions
     let clearHistory: () -> Void
+    let tours: TourSettingsActions
 
     // Launch-at-login has no store keypath — SMAppService is its source of truth,
     // mirrored into a guarded @State (writes back only on an actual user flip).
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
+    // Tours: same idea — TourCoordinator's UserDefaults key is the source of truth.
+    @State private var toursEnabled = false
+    @State private var toursWereReset = false
     @State private var confirmingClear = false
     // Shortcuts: at most one row records at a time; switching rows re-renders the
     // previous well with isRecording=false, stopping its monitor.
@@ -204,15 +217,58 @@ struct SettingsView: View {
 
     private var startupCard: some View {
         DarkSection("STARTUP") {
-            switchRow("Launch at login", SettingsHelp.launchAtLogin,
-                      sub: "Start BetterScreenshot when you sign in",
-                      isOn: $launchAtLogin)
-                .onChange(of: launchAtLogin) { _, newValue in
-                    guard newValue != LaunchAtLogin.isEnabled else { return }
-                    LaunchAtLogin.setEnabled(newValue)
-                    launchAtLogin = LaunchAtLogin.isEnabled   // revert if it failed
+            VStack(alignment: .leading, spacing: 14) {
+                switchRow("Launch at login", SettingsHelp.launchAtLogin,
+                          sub: "Start BetterScreenshot when you sign in",
+                          isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, newValue in
+                        guard newValue != LaunchAtLogin.isEnabled else { return }
+                        LaunchAtLogin.setEnabled(newValue)
+                        launchAtLogin = LaunchAtLogin.isEnabled   // revert if it failed
+                    }
+                    .onAppear { launchAtLogin = LaunchAtLogin.isEnabled }
+                Rectangle().fill(SettingsTheme.border).frame(height: 1)
+                toursRow
+            }
+        }
+    }
+
+    /// "Tours & tips" (spec §14.9): the switch is `firstUseToursEnabled` (new users: their answer to
+    /// "Want a quick tour?"; everyone else: off until they turn it on here).
+    private var toursRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            fieldLabel("Tours & tips", SettingsHelp.toursAndTips)
+            HStack(alignment: .center, spacing: 8) {
+                Text("Show me around the first time I use each part")
+                    .font(SettingsTheme.Font.rowTitle)
+                    .foregroundColor(SettingsTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                Toggle("", isOn: Binding(get: { toursEnabled },
+                                         set: { toursEnabled = $0; tours.setEnabled($0) }))
+                    .toggleStyle(.mono)
+                    .labelsHidden()
+            }
+            HStack(spacing: 10) {
+                Button("Reset All Tours") {
+                    tours.resetAll()
+                    toursWereReset = true
                 }
-                .onAppear { launchAtLogin = LaunchAtLogin.isEnabled }
+                .buttonStyle(.pill)
+                if toursWereReset {
+                    Text("Tours reset")
+                        .font(SettingsTheme.Font.rowSubLabel)
+                        .foregroundColor(SettingsTheme.label)
+                }
+            }
+            Text("Replay any tour from Help & Tours in the menu bar.")
+                .font(SettingsTheme.Font.rowSubLabel)
+                .foregroundColor(SettingsTheme.subLabel)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .onAppear {
+            toursEnabled = tours.isEnabled()
+            toursWereReset = false
         }
     }
 

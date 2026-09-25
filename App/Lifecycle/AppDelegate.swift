@@ -2,6 +2,7 @@ import AppKit
 import CaptureKit
 import HistoryKit
 import OverlayKit
+import TourKit
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -15,9 +16,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotKeys = HotKeyManager()
     private var history: HistoryService!
     private var tempFiles: TempFileService!
+    private var tours: TourCoordinator!
+    private let hud = HUDController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Guided tours (v3 spec §14.9): decide once, for good, whether this is a new user — before
+        // anything below writes a preference (status item, launch-at-login flag…) that would look like
+        // earlier use. Existing users are never asked and never get a tour by themselves.
+        TourCoordinator.classifyAudienceIfNeeded(
+            screenRecordingGranted: PermissionManager.hasScreenRecordingPermission)
         NSApp.setActivationPolicy(.accessory)
+        tours = TourCoordinator(
+            // Lane 7B's overlay replaces this at merge: `makePresenter: { TagOverlayController() }`.
+            makePresenter: { NoOpTourTagPresenter() },
+            shortcutText: { [weak self] name in
+                guard let action = HotkeyAction(rawValue: name) else { return nil }
+                return HotkeyCheatSheet.keys(for: action, in: self?.settings.bindings ?? .defaults)
+                    ?? action.title
+            })
+        tours.notify = { [weak self] message in self?.hud.show(message, symbol: "questionmark.circle") }
+        tours.install()
         // One stack for screenshot AND recording thumbnails so they never overlap.
         let quickAccess = QuickAccessStackController()
         history = HistoryService(settings: settings)
@@ -52,11 +70,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.settings.failedActions = self.hotKeys.resume()
                 }
             })
+        let tourSettings = TourSettingsActions(
+            isEnabled: { [weak self] in self?.tours.firstUseToursEnabled ?? false },
+            setEnabled: { [weak self] on in self?.tours.firstUseToursEnabled = on },
+            resetAll: { [weak self] in self?.tours.resetAllTours() })
         settingsWindow = SettingsWindowController(store: settings, shortcuts: shortcuts,
                                                   clearHistory: { [weak self] in
             self?.history.clearAll()
-        })
+        }, tours: tourSettings)
         menuBar = MenuBarController(coordinator: coordinator, settingsWindow: settingsWindow)
+        menuBar.onReplayTour = { [weak self] tour in self?.tours.replay(tour, in: nil) }
+        menuBar.onResetTours = { [weak self] in
+            self?.tours.resetAllTours()
+            self?.hud.show("Tours reset", symbol: "arrow.counterclockwise")
+        }
         menuBar.onToggleRecording = { [weak self] in self?.recordingCoordinator.toggle() }
         menuBar.onOpenHistory = { [weak self] in self?.historyWindow.show() }
         menuBar.onRestoreRecentlyClosed = { [weak self] in self?.restoreRecentlyClosed() }
@@ -65,12 +92,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // One-button first-run setup (Screen Recording is the only permission).
         onboarding = OnboardingController(bindings: { [weak self] in self?.settings.bindings ?? .defaults })
+        onboarding.shouldAskTourQuestion = { [weak self] in self?.tours.shouldAskQuestion ?? false }
+        onboarding.onTourAnswer = { [weak self] showMeAround, window in
+            self?.tours.answerQuestion(showMeAround: showMeAround, in: window)
+        }
         coordinator.presentSetup = { [weak self] in self?.onboarding.show(.needsPermission) }
         recordingCoordinator.presentSetup = { [weak self] in self?.onboarding.show(.needsPermission) }
+        // Help & Tours can open these windows so a requested tour starts; the rest wait for the user.
+        tours.openSurface = { [weak self] surface in
+            guard let self else { return false }
+            switch surface {
+            case .welcome:
+                self.onboarding.show(PermissionManager.hasScreenRecordingPermission ? .allSet : .needsPermission)
+            case .settings: self.settingsWindow.show()
+            case .history: self.historyWindow.show()
+            default: return false
+            }
+            return true
+        }
         if !PermissionManager.hasScreenRecordingPermission {
             onboarding.show(.needsPermission)
-        } else if OnboardingController.consumeRelaunchFlag() {
-            onboarding.show(.allSet)   // just relaunched after the grant
+        } else if OnboardingController.consumeRelaunchFlag()   // just relaunched after the grant
+                    || tours.shouldOpenWelcomeOnLaunch(permissionGranted: true) {   // new user, unasked
+            onboarding.show(.allSet)
         }
         // Register as a login item once, by default. One-time so we never
         // fight a user who later disables it (Settings or System Settings).

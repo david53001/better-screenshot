@@ -1,11 +1,13 @@
 import AppKit
 import CaptureKit
+import TourKit
 
 /// First-run setup window. The app needs exactly one permission — Screen
 /// Recording — and a grant only takes effect after a relaunch. This window
 /// collapses that dance into a single button: request → System Settings opens
 /// at the right pane → poll until the switch flips → relaunch automatically →
-/// confirm with a hotkey cheat-sheet (read from the live bindings).
+/// confirm with a hotkey cheat-sheet (read from the live bindings). New users are asked
+/// "Want a quick tour?" on that last page (v3 spec §14.9) — nobody else ever sees the question.
 @MainActor
 final class OnboardingController: NSWindowController {
     enum State { case needsPermission, waiting, allSet }
@@ -15,6 +17,13 @@ final class OnboardingController: NSWindowController {
     /// between steps; a state that needs more (many bound shortcuts) grows it.
     private static let contentHeight: CGFloat = 380
     private let bindings: () -> HotkeyBindings
+    /// True only for a new user who hasn't answered (`TourCoordinator.shouldAskQuestion`).
+    var shouldAskTourQuestion: () -> Bool = { false }
+    /// The answer: true = Show Me Around, false = No Thanks or closed the window on the question.
+    /// Show Me Around passes this window so the Welcome tour runs over the page.
+    var onTourAnswer: ((Bool, NSWindow?) -> Void)?
+    /// The "You're all set!" page on screen is showing the question (so closing it = No Thanks).
+    private var askingTourQuestion = false
 
     /// True exactly once: on the launch right after the permission relaunch.
     static func consumeRelaunchFlag() -> Bool {
@@ -36,6 +45,8 @@ final class OnboardingController: NSWindowController {
         window.titleVisibility = .hidden
         window.isReleasedWhenClosed = false
         super.init(window: window)
+        NotificationCenter.default.addObserver(self, selector: #selector(windowWillClose(_:)),
+                                               name: NSWindow.willCloseNotification, object: window)
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -48,11 +59,15 @@ final class OnboardingController: NSWindowController {
         // Poll from the moment the window is up, so even a user who flips the
         // switch on their own (without our button) gets the auto-relaunch.
         if state != .allSet { startPolling() }
+        if let window { TourEvents.surfaceShown(.welcome, in: window) }
     }
 
     // MARK: - States
 
-    private func render(_ state: State) {
+    /// Builds `state`'s page into the window (internal so probes can render a page without showing it).
+    /// `askTourQuestion` nil = ask if `shouldAskTourQuestion()` says so (the `.allSet` page only).
+    func render(_ state: State, askTourQuestion: Bool? = nil) {
+        askingTourQuestion = state == .allSet && (askTourQuestion ?? shouldAskTourQuestion())
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .centerX
@@ -102,8 +117,12 @@ final class OnboardingController: NSWindowController {
                 stack.addArrangedSubview(shortcutGrid(rows))
                 stack.setCustomSpacing(18, after: stack.arrangedSubviews.last!)
             }
-            stack.addArrangedSubview(primaryButton("Start Capturing",
-                                                   action: #selector(startCapturing)))
+            if askingTourQuestion {
+                addTourQuestion(to: stack)
+            } else {
+                stack.addArrangedSubview(primaryButton("Start Capturing",
+                                                       action: #selector(startCapturing)))
+            }
         }
 
         let content = NSView()
@@ -159,6 +178,33 @@ final class OnboardingController: NSWindowController {
         return b
     }
 
+    /// "Want a quick tour?" + its two buttons, in place of "Start Capturing" (spec §14.9, exact strings).
+    private func addTourQuestion(to stack: NSStackView) {
+        let rule = NSBox()
+        rule.boxType = .separator
+        rule.translatesAutoresizingMaskIntoConstraints = false
+        rule.widthAnchor.constraint(equalToConstant: 300).isActive = true
+        stack.addArrangedSubview(rule)
+        stack.setCustomSpacing(16, after: rule)
+        let title = NSTextField(labelWithString: "Want a quick tour?")
+        title.font = .systemFont(ofSize: 15, weight: .semibold)
+        title.alignment = .center
+        stack.addArrangedSubview(title)
+        stack.setCustomSpacing(4, after: title)
+        stack.addArrangedSubview(bodyLabel(
+            "We'll point out each part the first time you use it. You can skip any time."))
+        stack.setCustomSpacing(16, after: stack.arrangedSubviews.last!)
+        let noThanks = NSButton(title: "No Thanks", target: self, action: #selector(noThanksTapped))
+        noThanks.bezelStyle = .rounded
+        noThanks.controlSize = .large
+        noThanks.keyEquivalent = "\u{1b}"
+        let showMe = primaryButton("Show Me Around", action: #selector(showMeAroundTapped))
+        let buttons = NSStackView(views: [noThanks, showMe])
+        buttons.orientation = .horizontal
+        buttons.spacing = 12
+        stack.addArrangedSubview(buttons)
+    }
+
     /// Two aligned columns: shortcuts right-aligned against descriptions left-aligned.
     private func shortcutGrid(_ rows: [HotkeyCheatSheet.Row]) -> NSGridView {
         let grid = NSGridView(views: rows.map { row -> [NSView] in
@@ -189,6 +235,25 @@ final class OnboardingController: NSWindowController {
     }
 
     @objc private func startCapturing() { close() }
+
+    /// The page swaps the question for "Start Capturing" first, then the Welcome tour starts over it.
+    @objc private func showMeAroundTapped() {
+        render(.allSet, askTourQuestion: false)
+        onTourAnswer?(true, window)
+    }
+
+    @objc private func noThanksTapped() {
+        askingTourQuestion = false
+        onTourAnswer?(false, window)
+        close()
+    }
+
+    /// Closing the window while it asks counts as No Thanks.
+    @objc private func windowWillClose(_ note: Notification) {
+        guard askingTourQuestion else { return }
+        askingTourQuestion = false
+        onTourAnswer?(false, window)
+    }
 
     // MARK: - Poll → relaunch
 
