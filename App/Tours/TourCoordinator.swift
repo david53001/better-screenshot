@@ -420,11 +420,14 @@ final class TourCoordinator {
         { [weak self, weak window] anchor in self?.locate(anchor, in: window) != nil }
     }
 
-    /// `anchor`'s view and the window it's in: the host first, then `extraAnchorWindows`.
+    /// `anchor`'s view and the window it's in: the host first, then `extraAnchorWindows` — only ones
+    /// visible on a screen (a status item hidden by a menu-bar manager, or never placed, counts as
+    /// missing, so its step is skipped instead of pointing at nothing).
     private func locate(_ anchor: String, in window: NSWindow?) -> (NSView, NSWindow)? {
         guard let window else { return nil }
         if let view = window.view(forTourAnchor: anchor) { return (view, window) }
-        for other in extraAnchorWindows() where other !== window {
+        for other in extraAnchorWindows() where other !== window && other.isVisible
+            && NSScreen.screens.contains(where: { $0.frame.intersects(other.frame) }) {
             if let view = other.view(forTourAnchor: anchor) { return (view, other) }
         }
         return nil
