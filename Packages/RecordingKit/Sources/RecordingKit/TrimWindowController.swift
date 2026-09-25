@@ -203,7 +203,6 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
         timeLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 116).isActive = true
         splitButton.target = self; splitButton.action = #selector(splitAtPlayhead)
         splitButton.keyEquivalent = "b"; splitButton.keyEquivalentModifierMask = [.command]
-        splitButton.tourAnchor = "video.split"
         deleteButton.target = self; deleteButton.action = #selector(deleteSelected)
         undoButton.target = self; undoButton.action = #selector(undo)
         undoButton.keyEquivalent = "z"; undoButton.keyEquivalentModifierMask = [.command]
