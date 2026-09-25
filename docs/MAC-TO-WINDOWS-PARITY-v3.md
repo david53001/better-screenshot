@@ -2229,8 +2229,13 @@ with the same names.
 - `Tour { id, version (default 1), surface, trigger, steps, handsOverTo? }`; `trigger` is
   `surfaceShown(surface)` · `event(TourEvent)` · `startedByApp` (only Welcome: started by Show Me Around,
   hand-over or replay).
-- `TourStep { anchor, kind, title, body }`; `kind` = **Explain** (advances on Next) or **Try(advanceOn:
-  event)** (advances when that exact event is posted, or on Skip step).
+- `TourStep { anchor, kind, title, body, requires?, placement }`; `kind` = **Explain** (advances on Next) or
+  **Try(advanceOn: event)** (advances when that exact event is posted, or on Skip Step). `requires` (a
+  `TourEvent`, default none) = show this step only if that event was seen during this run of the tour
+  (e.g. "Resize your text" requires `annotationAdded("text")`; "Delete a part" requires
+  `action("video.split")`) — otherwise it is skipped like a missing anchor (review 2026-09-26, X2/V3).
+  `placement` (default `automatic`) = where the tag goes: `automatic · left · right · above · below ·
+  insideCorner` (§7.3 Placement).
 - `TourEvent`: `captureTaken` · `toolSelected(name)` · `annotationAdded(name)` · `styleChanged(field)` ·
   `menuOpened(anchor)` · `choiceMade(anchor)` · `action("<surface>.<verb>")` (e.g. `quickAccess.edit`,
   `video.split`). Two events are equal only if kind and string match exactly.
@@ -2249,14 +2254,17 @@ isn't `IsVisible` counts as missing.
 from an ⓘ (window) or the menu (nil). With no handler installed every call is a no-op. The app's
 coordinator sets the three handlers at launch. **WPF:** a static class with three `Action<…>?` fields.
 
-**Engine — pure state machine, port 1:1** (`TourEngine.swift`; 19 tests in `TourEngineTests.swift`).
+**Engine — pure state machine, port 1:1** (`TourEngine.swift`; 31 tests in `TourEngineTests.swift`).
 State: `status` (idle · running · paused · finished · skipped), `current` step index, and `observed` —
 every event posted while running. Each call returns an effect for the caller to carry out:
 `none` · `show(step)` · `finished(handsOverTo)` · `skipped` · `paused(at)` · `nothingToShow`.
 - `start(at: i, isPresent)` (idle or paused only): out-of-range `i` → 0; show the first step at or after
-  `i` that is **presentable** — its anchor is present **and** it isn't a Try step whose event is already in
-  `observed`. None → `nothingToShow` and **nothing changes** (a surface without its anchors yet never
-  burns a tour).
+  `i` that is **presentable** — its anchor is present, it isn't a Try step whose event is already in
+  `observed`, **and** its `requires` event (if any) is in `observed`. None → `nothingToShow` and **nothing
+  changes** (a surface without its anchors yet never burns a tour). The engine also records which step
+  indexes it has shown in this run (`shown`) and where the run started (`runStart`).
+- A second initialiser `TourEngine(tour, observed:)` seeds `observed` — the coordinator uses it when it
+  resumes a tour it paused itself (another surface's tour took over), so a `requires` step still shows.
 - `next` — only on an Explain step (ignored on Try); advance to the next presentable step; past the end →
   `finished(handsOverTo)`.
 - `skipStep` — any step; same advance.
@@ -2265,6 +2273,15 @@ every event posted while running. Each call returns an effect for the caller to 
 - `skipIfAnchorMissing` — current anchor gone → advance, else `none`.
 - `skipTour` (running or paused) → `skipped`. `pause` (running) → `paused(at: current)`. `resume`
   (paused) → like `start(at: current)`, and stays paused on `nothingToShow`.
+- **`progress(isPresent)` → `(number, total)`** — the tag's "n of m", counted only over steps that
+  actually show, so the numbers never skip (review T2: the pill used to go 1 → 3 → 4 → 6 of 10). Walk the
+  steps in order and count a step when: **before** the current one — it was shown in this run, or (resumed
+  run) it's before `runStart` and its anchor is present now; **the current one** — always; **after** it —
+  anchor present now, not a Try step whose event is already observed, and `requires` met, where a
+  `requires` also counts as met when a counted Try step before it (the current one included) waits for that
+  event (the user is expected to do it). `number` = how many counted steps are at or before the current
+  one; `total` = all counted. Nil unless running or paused. The total may change while a tour runs (a
+  control appears or goes, or a Try step whose event a later step requires is skipped) — ask again.
 Test cases to port: starts at first step · Next walks Explain steps · Next ignored on Try · Try advances
 only on its exact event (other tool, other event kinds ignored) · events do nothing on Explain steps ·
 event seen during an Explain step makes the later Try step skip silently · Skip step leaves a Try step ·
@@ -2273,7 +2290,14 @@ empty tour → `nothingToShow`, status stays idle · Next on last step → `fini
 does nothing · Try event on last step finishes with hand-over · trailing missing anchors finish · Skip tour
 from running and from paused · pause keeps index, paused ignores events and Next, resume returns there ·
 resume skips steps now missing · resume with nothing present stays paused at the same index · start at a
-persisted index; 99 and -1 → 0 · pause/resume when not running → `none`.
+persisted index; 99 and -1 → 0 · pause/resume when not running → `none`. Added 2026-09-26 (`requires` +
+`progress`): a step whose requirement was never seen is skipped · one whose requirement was seen shows ·
+a requirement seen during an Explain step counts · starting at a requires-step without its event skips it,
+and with `observed` carried in shows it · a trailing unmet requirement finishes the tour · progress 1/5,
+2/5 when all show · a 10-step pill without steps 2 and 5 reads 1/8 … 8/8 · the total follows controls
+appearing/going · a Try step already done isn't counted · a requires-step counted while the Try step that
+meets it is ahead, dropped once that Try step is skipped · a resumed run at step 3 reads 3/5 (2/4 once
+step 1's control is gone) · progress is nil when idle or finished.
 
 **Shortcut placeholders** (`TourText`): a body may contain `{shortcut:<HotkeyAction raw value>}`
 (`captureArea`, `captureWindow`, `captureFullscreen`, `captureText`, `pinFromClipboard`, `record`,
@@ -2317,8 +2341,17 @@ same event.
   runs; macOS panels are ordered out, not closed). The same check skips a step whose anchor disappeared.
 - **Finish** → `toursSeen[id] = max(old, version)`, clear its pause, hide the tag, then the hand-over tour:
   queued immediately, started now if its surface is visible. **Skip tour** → seen, no hand-over.
-- The tag (lane 7B, §7.3) gets the step, the body with placeholders resolved, and "number of total"
-  (`index + 1` of `steps.count`); its buttons call Next / Skip step / Skip tour.
+- **`onFinished(id)`** is reported whenever a *finished* run leaves the screen — after its "Done" state, or
+  when the next tour replaces it during that state (Welcome's last Try step is done by the capture, and the
+  Quick Access card starts its tour in the same moment), or when a tour on its last step is finished by
+  its hand-over. Not on Skip tour. The app uses it for one thing: **the Welcome window closes when the
+  Welcome tour finishes** (review W4 — it used to stay behind the Quick Access and Editor tours).
+- The tag (lane 7B, §7.3) gets the step, the body with placeholders resolved, and "number of total" from
+  the engine's `progress` (never the catalog index); its buttons call Next / Skip Step / Skip Tour. The 0.5 s
+  check also recomputes `progress` and, if it changed, updates the tag's counter in place
+  (`updateProgress(number, total)`, which also turns Next into Done if the step became the last).
+- When the coordinator pauses a tour because another surface's tour starts, it keeps that run's
+  `observed` events with it and seeds the resumed engine with them.
 - A tour with no presentable step (e.g. empty in the catalog) is never started and never marked seen.
 
 **Where it goes in the port.** Pure logic: a new `BetterScreenshot.Tours` project (no WPF references) with
@@ -2342,32 +2375,48 @@ macOS files (all in `Packages/TourKit/Sources/TourKit/`): `Overlay/TagOverlayCon
 controller — implements `TourTagPresenting`, which the tour engine calls), `Overlay/TagViews.swift` (the
 windows + drawing), `Overlay/TagStyle.swift` (**every number, colour and string below**),
 `Overlay/TagLayout.swift` + `Overlay/TagKeys.swift` (pure logic — port 1:1, tests in
-`Tests/TourKitTests/TagLayoutTests.swift`: `tagLayoutTests`, `tagKeysTests`, `tagStyleTests`),
-`Help/InfoButton.swift` (the ⓘ). Snapshots from the headless probe:
+`Tests/TourKitTests/TagLayoutTests.swift`: `tagLayoutTests`, `tagKeysTests`, `tagStyleTests`; the colour
+contrast checks in `TagContrastTests.swift`), `Overlay/TourHostShaping.swift` (the host-shape protocol, Placement
+4), `Help/InfoButton.swift` (the ⓘ). After the 2026-09-26 review fixes:
+`docs/reviews/2026-09-26-tours-fixes/engine-*.jpg` (01 editor canvas step, tag inside the canvas corner ·
+02 video preview, same · 03 Settings cards, same, the Capture card left clear · 04 recording pill with a
+control hovered: tag unmoved, dim only on the capsule, counter 2 of 8 · 05 record strip: the leader runs
+between the pop-ups, new red and contrast · 06 the editor's ⓘ step: tag below, within the window, "Done"
+without "Skip Tour"). Snapshots from the headless probe:
 `docs/reviews/2026-09-25-tours/overlay-*.jpg` (01 the owner's mock — tag left of the editor's Colour row ·
 02 light window, no room on the left → right, Try step · 03 record strip, tag above the whole panel ·
 04 menu-bar icon, tag below · 05 screen corner: last step "Done", then the completed state · 06 the ⓘ in
 the editor's title bar + the Keyboard Shortcuts list).
 
-The engine calls three things: `show(step, body, number, total, anchor, host)` (replaces whatever is
-shown), `showCompleted()` (a Try step was just done), `hide()`. The tag calls back `onNext`, `onSkipStep`,
-`onSkipTour`.
+The engine calls four things: `show(step, body, number, total, anchor, host)` (replaces whatever is
+shown), `showCompleted()` (a Try step was just done), `hide()`, and `updateProgress(number, total)` (the
+same step, a new "n of m" — redo the footer and re-lay out; macOS gives it an empty default so other
+presenters needn't implement it). The tag calls back `onNext`, `onSkipStep`, `onSkipTour`.
 
 #### The tag — exact layout (points = WPF DIPs)
-Tour colour **#FF453A** (sRGB 255, 69, 58) for the box, the leader line and the tag fill.
+Tour colour **#C62D22** (sRGB 198, 45, 34) for the box, the leader line and the tag fill — a deeper shade of
+the owner's mock red #FF453A, chosen (review 2026-09-26, T1) so every piece of text on the tag clears
+WCAG AA 4.5:1. Measured with the WCAG 2.x formula (gamma-expanded relative luminance; test
+`Tests/TourKitTests/TagContrastTests.swift`, port it):
+
+| Text | On | Contrast (old #FF453A) |
+|---|---|---|
+| White title, body, "Skip Step", done label | #C62D22 | **5.53:1** (3.41:1) |
+| 90 % white counter and "Skip Tour" (alpha-blended onto the red) | #C62D22 | **4.73:1** (80 % white: 2.64:1) |
+| #C62D22 "Next" / "Done" label | white capsule | **5.53:1** (3.41:1) |
 
 | Part | Spec |
 |---|---|
 | **Outline box** | Rounded rect = the control's bounds grown by **4** on every side, corner radius **6**; a **2**-thick stroke drawn *outside* that edge (it covers 4–6 from the control; outer corner radius 8). No fill. |
-| **Dim** | Black **20 %** over the host window's **whole frame** (title bar included), clipped to the window's rounded outline, with a hole = the box's outer edge (radius 8). Window corner radius: titled windows 16 on macOS 26 (10 on macOS 14/15) — **on Windows use 8 (Windows 11) or 0 (Windows 10)**; borderless panels use their own background's radius (record strip 12, recording pill 20). No dim when the control is in the menu bar / tray. |
+| **Dim** | Black **20 %** — **35 %** when the highlighted control is dark (its effective appearance is Dark Aqua or vibrant dark: the editor, video editor, record strip, pill and Settings always are, and every window is in system Dark Mode; review T7) — over the host window's **whole frame** (title bar included), clipped to the window's rounded outline, with a hole = the box's outer edge (radius 8). Window corner radius: titled windows 16 on macOS 26 (10 on macOS 14/15) — **on Windows use 8 (Windows 11) or 0 (Windows 10)**; borderless panels use their own background's radius (record strip 12, recording pill 20). A host that reports a **shape** (`TourHostShaping` — the recording pill) is dimmed only inside that shape, not its whole window (see Placement 4). No dim when the control is in the menu bar / tray. WPF: decide dark from the port's theme of that window. |
 | **Leader line** | **2**-thick, round caps, from the tag's edge to the box's outer edge; **24** long when straight. Its end on the tag stays ≥ 12 from the tag's corners, its end on the box ≥ 6 from the box's corners (it goes diagonal only when the tag had to slide along its side to stay on screen). |
-| **Tag bubble** | Filled #FF453A, corner radius **12**, system drop shadow. Width = widest of (title, body on one line, footer) + 24, clamped to **200 … 260**. Padding **12** left/right, **10** top, **10** bottom. |
+| **Tag bubble** | Filled #C62D22, corner radius **12**, system drop shadow. Width = widest of (title, body on one line, footer) + 24, clamped to **200 … 260**. Padding **12** left/right, **10** top, **10** bottom. |
 | Title | **13 pt semibold** white, one line, truncated with "…". |
 | Body | **2** below the title; **12 pt regular** white, wraps, at most **2 lines** (the last one truncated with "…"). The body's `{shortcut:…}` placeholders arrive already replaced. |
-| Footer row | **8** below the body, **20** tall. Left: step counter **"2 of 7"** (11 pt medium, white 80 %). Right-aligned: **"Skip tour"** (plain text link, 11 pt semibold, white 80 %) · gap **4** · the primary button. |
-| Primary button | Height **20**, capsule (radius 10), label **11 pt semibold**, **8** padding each side. **Explain** step: **"Next"** — **"Done"** on the last step — white fill, red (#FF453A) label. **Try** step: **"Skip step"** — no fill, **1**-thick white border, white label. Pressed: 70 % opacity. |
+| Footer row | **8** below the body, **20** tall. Left: step counter **"2 of 7"** (11 pt medium, white **90 %**; numbers from the engine's `progress`, §7.2). Right-aligned: **"Skip Tour"** (plain text link, 11 pt semibold, white 90 %) · gap **4** · the primary button. **"Skip Tour" is left out on the last Explain step** (next to "Done" it did the same thing — review T6); a last *Try* step keeps it, because there the other button is "Skip Step", which also runs the tour's hand-over. Without it the footer is counter + primary button only. |
+| Primary button | Height **20**, capsule (radius 10), label **11 pt semibold**, **8** padding each side. **Explain** step: **"Next"** — **"Done"** on the last step — white fill, tour-red (#C62D22) label. **Try** step: **"Skip Step"** — no fill, **1**-thick white border, white label. Pressed: 70 % opacity. |
 | Done state (`showCompleted`) | Counter and buttons hidden; the footer shows a white **check-in-a-circle** icon (13 pt, in a 16 × 16 box) + **4** gap + **"Done"** (11 pt semibold white). The next step's `show` replaces it. |
-| Strings | `Next`, `Done`, `Skip step`, `Skip tour`, `"<n> of <total>"`, completed `Done`. |
+| Strings | `Next`, `Done`, `Skip Step`, `Skip Tour` (Title Case, like every macOS/Windows button), `"<n> of <total>"`, completed `Done`. |
 
 **Screen reader.** When a tag appears it announces **"<title>. <body> Step <n> of <total>."**; the done
 state announces **"Done"** (macOS: `NSAccessibility` announcement, high priority). The bubble is a group
@@ -2378,6 +2427,10 @@ the tag window's peer.
 #### Placement (`TagLayout.place` — pure, port 1:1)
 Works in screen coordinates. **macOS is y-up** ("below" = smaller y); in WPF (y-down) either flip into a
 y-up space first or swap the below/above arithmetic — the tests say which side each case must pick.
+Inputs: the control's rect, the tag's size, the screen's working area, the side order, an optional
+**keep-out** rect, the screen rect, the step's **placement**, the **host** rect (the host window's frame —
+or its shape, 4 below; none for a menu-bar/tray host) and the host's other controls' rects (**obstacles**,
+for the leader line).
 1. `box` = control rect grown by 4; `outer` = box grown by 2. If the control touches the screen edge (a
    menu-bar/tray icon filling the bar's height), `box` is first clipped to the **screen** bounds shrunk by 2
    so the whole outline stays visible.
@@ -2385,17 +2438,61 @@ y-up space first or swap the below/above arithmetic — the tests say which side
    `Screen.WorkingArea`: minus the taskbar) of the screen containing the control's centre, shrunk by **8**.
 3. **Side order:** left, right, below, above — the owner's mock has the tag on the left. **Vertical first**
    (below, above, left, right) when the control's **direct parent** is a bar at least **3× as wide as
-   tall** (a toolbar row, the record strip, the pill), so the tag doesn't cover the controls beside it.
+   tall** (a toolbar row, the record strip, the pill), **or when the control is in the window's title bar**
+   (entirely above the content area — the ⓘ, the editor's Undo/Redo; review E4), so the tag doesn't cover
+   the controls beside it.
 4. **Keep-out:** when the host window has **no title bar** (record strip, recording pill, status/tray
-   icon) the tag first tries to sit outside the **whole host window**, not just the box — so it never
-   covers the panel's other controls (the leader line then crosses the panel to the box). If nothing fits
-   that way, retry with only the box as keep-out.
-5. For each side in order: put the tag **24** beyond the keep-out on that side, centred on the box along the
-   other axis, then slide it along that axis to stay inside `area`. The side **fits** if the tag is fully
-   inside `area` *and* still overlaps the box's span on the sliding axis (so the leader stays short).
-   First side that fits wins. Round the tag's origin to whole points.
-6. Nothing fits (a huge control on a full-screen window) → **over**: the tag sits inside the box's top-left
-   corner (inset 12), kept inside `area`, no leader line.
+   icon) the tag first tries to sit outside the **whole host**, not just the box — so it never covers the
+   panel's other controls (the leader line then crosses the panel to the box). If nothing fits that way,
+   retry with only the box as keep-out. **Host shape:** a host whose window is bigger than what the user
+   sees reports a shape instead (macOS protocol `TourHostShaping` → `TourHostShape { frame, cornerRadius,
+   keepOut? }`): the recording pill's window grows 30 pt while a control is hovered, for its hint bubble,
+   so it reports the capsule (radius 20) as `frame` and the capsule grown by 30 pt up and down (the hint
+   band) as `keepOut`. The tag keeps clear of `keepOut` (else `frame`), the dim covers only `frame`, and the
+   big-control rule (step B) uses `frame` as the host — so hovering neither moves the tag nor dims the
+   window's transparent part as a square band (review T4). WPF: the pill window's code-behind exposes the
+   same three values.
+5. **Fitting a side:** put the tag **24** beyond the keep-out on that side, centred on the box along the
+   other axis, then slide it along that axis to stay inside `area` — **and inside the host's extent on that
+   axis when the tag fits within it** (a tag below the editor's title-bar ⓘ ends at the window's right edge
+   instead of hanging 170 past it). The side **fits** if the tag is fully inside `area` *and* still overlaps
+   the box's span on the sliding axis (so the leader stays short). Round the tag's origin to whole points.
+6. **Order of attempts** (first that fits wins):
+   A. The step's **placement**, if not `automatic`: `left/right/above/below` → that one side (outside the
+      keep-out, then outside just the box); `insideCorner` → the inside corner (C). If it doesn't fit, carry
+      on as automatic.
+   B. **Big control** — what's visible of it (∩ host) spans at least **60 %** of the host's width **and**
+      60 % of its height (the editor canvas, the video preview, the Settings cards; *not* the Settings
+      Keyboard Shortcuts card — half the window's area but a wide strip): first the sides in order with the
+      **whole host** (∪ keep-out) as keep-out — beside the window if the screen has room (History's grid
+      gets its tag left of the window) — else the **inside corner** (C). Never "beside the control", which
+      for a control filling its window means over the window's other controls (review T3 → E1, X1, V1, S1).
+   C. *(used by A and B)* **Inside corner:** the tag inside the top-right corner of the visible part of the
+      control (control ∩ area ∩ host), **16** from its top and right edges, **no leader line**; it fits
+      only if that region is at least tag + 32 in both directions.
+   D. The sides in order, outside the keep-out; then the sides in order, outside just the box.
+   E. Nothing fits (a huge control on a full-screen window) → **over**: the tag sits inside the box's
+      top-left corner (inset 12), kept inside `area`, no leader line.
+7. **Leader line** (sides only): straight across when the tag's side and the box's side overlap (ends kept
+   ≥ 12 from the tag's corners and ≥ 6 from the box's). Within that overlap it takes the position nearest
+   the box's middle that **crosses the fewest obstacles** — candidates are the middle and 3 pt past each
+   obstacle's two edges; ties go to the one nearest the middle (review T5: on the record strip it now runs
+   through the gap between the System audio and Camera columns instead of across a pop-up). Obstacles =
+   every visible control (macOS: `NSControl` — buttons, pop-ups, labels, image views) in the host window,
+   except the highlighted control, its subviews and its ancestors, each clipped to its own bounds (WPF:
+   every visible `Control`/`TextBlock`/`Image` with `IsVisible`, via `TransformToAncestor`). No overlap
+   (the tag had to slide) → a diagonal line, as before.
+
+Tests to port (`TagLayoutTests.swift`, `tagLayoutTests`): the existing side/keep-out/menu-bar cases plus,
+added 2026-09-26: a step's side wins when it fits · a side that doesn't fit falls back to automatic · a
+step's side still keeps off a small panel · inside corner = control's top-right, inset 16, no leader · a too
+small control's inside corner falls back · the inside corner uses the visible part of a scrolled control ·
+big = 60 % both ways (Settings cards yes, Shortcuts card no, canvas and preview yes) · the editor canvas gets
+the inside corner · History's grid goes beside the whole window · a small control ignores its window · a
+step's placement beats the big-control rule · title-bar anchors go below · a tag slides to stay within its
+window · the leader slides into a gap between controls · stays in the middle when nothing is in the way ·
+keeps the middle when a crossing is unavoidable · a side leader avoids a label · never off screen for every
+placement with a host.
 
 #### Windows and focus (the risky part — proven on macOS by probes, see below)
 Two borderless, transparent windows per tag, both **owned by / children of the host window** so they move,
@@ -2441,6 +2538,18 @@ menu-bar/tray icon), and only while a tag is showing and not in the done state:
   a search box…). Caps Lock / numpad flags don't count as modifiers.
 - **Esc is left to the host while it claims it** (the editor: while it's on a drawing tool or has a
   selection, Esc goes back to Select / clears it first — details §7.5; macOS `TourEscapeClaiming`).
+- **Return and Esc are both left alone while the window — or its focused control — claims them** (macOS
+  `TourKeysClaiming.claimsTourKeys`; review S3). Settings claims them while any shortcut well is recording:
+  the next key press is the new shortcut and Esc cancels it, so neither may become Next / Skip Tour. This
+  matters because the tag's key handler is usually installed *before* the well's (local monitors run in
+  the order they were added, and the first to swallow a key hides it from the rest). WPF: the Settings
+  window's `PreviewKeyDown` for the tag must return early (`e.Handled = false`) while a recorder control
+  is in recording mode; a generic way is an interface on the window or the focused element.
+- **Panel-hosted tours take no keys** (Quick Access card, record strip, recording pill): those windows
+  never become key/active — by design, so recording or dragging never takes keyboard focus from the app the
+  user is working in — so Return/Esc never reach the tag there; the mouse is the only way to press Next /
+  Skip Step / Skip Tour. There is no keyboard shortcut for Skip Step on any step (review T8 — documented,
+  not changed).
 - A key is swallowed only when it did something. macOS: a local key-down monitor (sees the app's events
   without being focused). **WPF:** a `PreviewKeyDown` handler on the host window (`e.Handled = true` only
   when acted on); editable = focused element is a `TextBox`/`RichTextBox`/`PasswordBox` with
@@ -2520,6 +2629,9 @@ Help & Tours → Take the Welcome Tour, or a replay), hands over to `quickAccess
   wins on Explain steps because the tag's key handler runs first (§7.3 Keys). Closing the window pauses the
   tour (§7.2); the first screenshot card then finishes it anyway if it was on step 3 (the "last step
   hands over" rule), else it simply stays paused and the Quick Access tour starts by itself.
+- **When the Welcome tour finishes, the Welcome window closes** (`TourCoordinator.onFinished` →
+  `AppDelegate` closes `OnboardingController`'s window; review W4). In the normal flow that's the moment
+  the first screenshot card appears. Skip Tour leaves the window open.
 
 **Quick Access tour** — id `quickAccess`, version 1, surface `quickAccess`, trigger
 `surfaceShown(quickAccess)` (the first screenshot card, or a hand-over/replay), hands over to `editor`.
@@ -2609,7 +2721,7 @@ marked seen, card gone. Menu replay with no card → HUD note "Quick Access Tour
 it", starts on the next card. A 1 s auto-dismiss card outlived 2.5 s of tour and closed within a second of
 Skip tour (a card without a tour closed after 1 s). Exclusion, with the Welcome tour's step-3 tag up: a
 control capture (other apps' windows left out so the parked windows show, tag windows kept) had 91 120
-tour-red (#FF453A) pixels; the same full-screen and area captures with the tag windows excluded had **0**
+tour-red (#FF453A — the tour colour then; #C62D22 since 2026-09-26) pixels; the same full-screen and area captures with the tag windows excluded had **0**
 at the tag's position and in the whole image, with the Welcome window intact; a window capture of the
 Welcome window had 44 671 red pixels before the child-window fix and **0** after.
 
@@ -2959,7 +3071,7 @@ listed in §7.3). Every capture that goes through the Desktop Window Manager (DW
 it — Desktop Duplication (ffmpeg's `ddagrab` input), Windows.Graphics.Capture, and ffmpeg's `gdigrab` (a GDI
 BitBlt copy of the screen) — so no filter bookkeeping is needed. It needs Windows 10 version 2004 or later; on
 older builds hide the tags while a recording runs instead. Verify with a probe like the one below: record a
-clip while a tag is up and check the decoded frames for tour red (#FF453A) where the tag is.
+clip while a tag is up and check the decoded frames for tour red (#C62D22 since 2026-09-26) where the tag is.
 
 **How it was verified on macOS (lane probe, 2026-09-25; the probe lived in a scratch folder, not the repo).**
 A probe compiled from the real App sources
@@ -3110,7 +3222,7 @@ map to the port's icon set):
 | Settings Tour | `gearshape` | replay `settings` (opens Settings) |
 | History Tour | `clock.arrow.circlepath` | replay `history` (opens History) |
 | — separator — | | |
-| Reset All Tours | `arrow.counterclockwise` | clears `toursSeen` + `toursPaused`, HUD "Tours reset" |
+| Reset All Tours | `arrow.counterclockwise` | clears `toursSeen` + `toursPaused`; HUD **"Tours reset"** — or, when first-use tours are off (so nothing will start by itself), **"Tours reset — turn on Tours & tips to see them again"** (`TourRules.resetConfirmation(firstUseToursEnabled:)`; review I1) |
 
 "Replay" = §7.2 `replay(id, nil)`: start now if that window is open, otherwise wait for it (the HUD says
 "<title> starts the next time you use it" when the app can't open that window itself). Titles and icons
@@ -3128,7 +3240,9 @@ card's divider), 14 pt row spacing:
   on the right — bound to `firstUseToursEnabled` (absent = off; new users see their answer, existing users
   off). The spec calls it a checkbox; it uses the Settings window's switch like every other boolean there;
 - pill button **Reset All Tours** → clears `toursSeen` and `toursPaused` only (never `tourAudience`,
-  `tourQuestionAnswered` or the switch); a small "Tours reset" note then appears beside the button.
+  `tourQuestionAnswered` or the switch); a small note then appears beside the button, wrapping onto a
+  second line if needed: "Tours reset", or "Tours reset — turn on Tours & tips to see them again" while
+  the switch above is off (same function as the menu's HUD; it follows the switch live).
 
 To keep the three columns about equal in height, the Startup card moved to column 1 (under Quick Access
 Overlay) and Pin to Screen to column 2 (under Recording). Columns are now: Capture · Quick Access Overlay ·
