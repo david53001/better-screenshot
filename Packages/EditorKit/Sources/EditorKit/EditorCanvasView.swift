@@ -249,11 +249,21 @@ public final class EditorCanvasView: NSView {
                                imageSize: document.size)
         // The live text's box / outline, behind the editor's NSTextView (which draws the letters),
         // laid out at the editor's width so it matches what the text view shows.
-        if let field = activeField {
-            TextAnnotation(text: field.string, origin: textImageOrigin, style: style,
-                           wrapWidth: field.frame.width * scale).drawDecorations()
+        let liveText = activeField.map {
+            TextAnnotation(text: $0.string, origin: textImageOrigin, style: style, wrapWidth: $0.frame.width * scale)
         }
+        liveText?.drawDecorations()
         NSGraphicsContext.restoreGraphicsState()
+
+        // Edit mode: a dashed frame around the text being typed (its box, or the bare letters).
+        if let live = liveText, let field = activeField {
+            let bb = live.boundingBox()
+            let vr = NSRect(x: bb.minX / scale, y: bb.minY / scale, width: bb.width / scale, height: bb.height / scale)
+                .union(field.frame)
+            NSColor.systemBlue.setStroke()
+            let p = NSBezierPath(rect: vr.insetBy(dx: -3, dy: -3))
+            p.lineWidth = 1; p.setLineDash([4, 3], count: 2, phase: 0); p.stroke()
+        }
 
         // Live marquee for region tools (blur/pixelate/crop) that have no shape preview.
         if let m = regionMarquee {
