@@ -206,7 +206,7 @@ final class OnboardingController: NSWindowController {
     }
 
     /// Two aligned columns: shortcuts right-aligned against descriptions left-aligned.
-    /// Tour anchors: the whole grid (`welcome.shortcuts`) and Capture Area's keys (`welcome.captureArea`).
+    /// Tour anchors: the capture rows (`welcome.shortcuts`) and Capture Area's keys (`welcome.captureArea`).
     private func shortcutGrid(_ rows: [HotkeyCheatSheet.Row]) -> NSGridView {
         let areaKeys = HotkeyCheatSheet.keys(for: .captureArea, in: bindings())
         let grid = NSGridView(views: rows.map { row -> [NSView] in
@@ -224,7 +224,26 @@ final class OnboardingController: NSWindowController {
         grid.rowSpacing = 7
         // Without this the grid's width is ambiguous and it sometimes lands off-centre.
         grid.setContentHuggingPriority(.required, for: .horizontal)
-        grid.tourAnchor = "welcome.shortcuts"
+        // `welcome.shortcuts`: an empty view over just the area / window / full-screen rows — the ones the
+        // Welcome tour's step names (Capture Text and Record stay outside the outline).
+        let named = Set(HotkeyCheatSheet.entries
+            .filter { [HotkeyAction.captureArea, .captureWindow, .captureFullscreen].contains($0.action) }
+            .map(\.description))
+        let covered = rows.indices.filter { named.contains(rows[$0].description) }
+        if let first = covered.first, let last = covered.last,
+           let top = grid.cell(atColumnIndex: 0, rowIndex: first).contentView,
+           let bottom = grid.cell(atColumnIndex: 0, rowIndex: last).contentView {
+            let span = NSView()
+            span.translatesAutoresizingMaskIntoConstraints = false
+            span.tourAnchor = "welcome.shortcuts"
+            grid.addSubview(span)
+            NSLayoutConstraint.activate([
+                span.leadingAnchor.constraint(equalTo: grid.leadingAnchor),
+                span.trailingAnchor.constraint(equalTo: grid.trailingAnchor),
+                span.topAnchor.constraint(equalTo: top.topAnchor),
+                span.bottomAnchor.constraint(equalTo: bottom.bottomAnchor),
+            ])
+        }
         return grid
     }
 

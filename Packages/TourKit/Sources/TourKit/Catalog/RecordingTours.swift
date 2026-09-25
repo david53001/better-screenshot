@@ -14,17 +14,15 @@ extension TourCatalog {
         TourStep(anchor: "strip.output", kind: .explain, title: "Format and frame rate",
                  body: "MP4 has sound; GIF is a silent loop. 60 FPS is smoother, 30 makes smaller files."),
         // Mic is Off by default and its level meter needs the permission first, so the meter is promised
-        // only "once it's on" (review R1). Left of the strip: from above, the leader crossed its top row.
+        // only "once it's on" (review R1). The column = caption, meter or "Allow…" link, and the menu.
         TourStep(anchor: "strip.microphoneColumn", kind: .tryIt(advanceOn: .menuOpened("strip.microphone")),
                  title: "Pick a microphone",
-                 body: "Click Microphone, then pick a mic or Off. Once it’s on, a meter shows it hears you.",
-                 placement: .left),
+                 body: "Click Microphone, then pick a mic or Off. Once it’s on, a meter shows it hears you."),
         TourStep(anchor: "strip.systemAudio", kind: .tryIt(advanceOn: .menuOpened("strip.systemAudio")),
                  title: "Record your Mac’s sound",
                  body: "Click System audio to choose: Off, all apps, or all but BetterScreenshot."),
         TourStep(anchor: "strip.hint", kind: .explain, title: "Camera, cursor and hints",
-                 body: "Point at any control — Camera, Mouse cursor — and this line explains it.",
-                 placement: .left),
+                 body: "Point at any control — Camera, Mouse cursor — and this line explains it."),
         TourStep(anchor: "strip.targets", kind: .tryIt(advanceOn: .choiceMade("strip.targets")),
                  title: "Start recording",
                  body: "Click Full Screen, Area or Window to start. The recording controls come next."),

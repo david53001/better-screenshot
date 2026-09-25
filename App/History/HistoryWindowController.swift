@@ -92,7 +92,9 @@ struct HistoryView: View {
                 .tourAnchor("history.grid")
             }
         }
-        .safeAreaInset(edge: .bottom) { actionBar.tourAnchor("history.actions") }
+        // No anchor while History is empty: the tour's "Actions" step would describe a selection that
+        // can't exist, over disabled buttons.
+        .safeAreaInset(edge: .bottom) { actionBar.tourAnchor(history.entries.isEmpty ? "" : "history.actions") }
         // Wide enough for every action-bar label at its full length (they never truncate).
         .frame(minWidth: Self.minWidth, minHeight: 360)
     }

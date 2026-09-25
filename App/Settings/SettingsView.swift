@@ -485,17 +485,20 @@ struct SettingsView: View {
     // MARK: - Row idioms
 
     /// Field label ("11.5 semibold") + its ⓘ tip, for the "label above a control" idiom.
-    /// `tipAnchor`: a tour anchor on this row's ⓘ (the Settings tour points at one of them).
+    /// `tipAnchor`: a tour anchor on this label + ⓘ (the Settings tour points at one of them — the whole
+    /// label, so its tag can't hide which setting the tiny ⓘ belongs to).
+    @ViewBuilder
     private func fieldLabel(_ text: String, _ help: HelpText, tipAnchor: String? = nil) -> some View {
-        HStack(spacing: 6) {
+        let label = HStack(spacing: 6) {
             Text(text)
                 .font(SettingsTheme.Font.fieldLabel)
                 .foregroundColor(SettingsTheme.label)
-            if let tipAnchor {
-                InfoTip(help: help).tourAnchor(tipAnchor)
-            } else {
-                InfoTip(help: help)
-            }
+            InfoTip(help: help)
+        }
+        if let tipAnchor {
+            label.tourAnchor(tipAnchor)
+        } else {
+            label
         }
     }
 

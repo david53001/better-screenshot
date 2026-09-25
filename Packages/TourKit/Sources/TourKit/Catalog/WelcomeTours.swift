@@ -26,11 +26,11 @@ extension TourCatalog {
                  title: "Drag it anywhere",
                  body: "Drag the card into any app — a chat, an email, a folder."),
         // Save writes to the macOS screenshot location (`SettingsStore.systemScreenshotLocation`), not
-        // Settings' Save location.
+        // Settings' Save location. Steps 3–4 sit left of the card like 1–2: "automatic" puts them above
+        // (the buttons sit in a wide, short row), with the leader across the screenshot (review Q1).
         TourStep(anchor: "quickAccess.actions", kind: .explain, title: "Copy, Edit, Save",
-                 body: "Copy it, Edit it, or Save it where macOS keeps screenshots, usually the Desktop."),
-        // Left of the card like steps 1–3: "automatic" put it above (the button row is a wide bar), with
-        // the leader across the screenshot.
+                 body: "Copy it, Edit it, or Save it where macOS keeps screenshots, usually the Desktop.",
+                 placement: .left),
         TourStep(anchor: "quickAccess.edit", kind: .tryIt(advanceOn: .action("quickAccess.edit")), title: "Mark it up",
                  body: "Click Edit to draw arrows, add text or blur things out.", placement: .left),
     ], handsOverTo: .editor)

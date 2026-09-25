@@ -150,12 +150,15 @@ public final class QuickAccessOverlayController: NSObject {
         }
         switch kind {
         case .screenshot:
-            stack.addArrangedSubview(button("doc.on.doc", "Copy") { [weak self] in self?.copyAction() })
+            let copy = button("doc.on.doc", "Copy") { [weak self] in self?.copyAction() }
             let edit = button("pencil.tip.crop.circle", "Edit") { [weak self] in self?.annotateAction() }
             edit.tourAnchor = "quickAccess.edit"
-            stack.addArrangedSubview(edit)
-            stack.addArrangedSubview(button("square.and.arrow.down", "Save to screenshots") { [weak self] in self?.saveAction() })
-            stack.tourAnchor = "quickAccess.actions"
+            let save = button("square.and.arrow.down", "Save to screenshots") { [weak self] in self?.saveAction() }
+            // Grouped only so the tour outlines Copy · Edit · Save without ✕; same 4 pt spacing as the row.
+            let group = NSStackView(views: [copy, edit, save])
+            group.spacing = stack.spacing
+            group.tourAnchor = "quickAccess.actions"
+            stack.addArrangedSubview(group)
         case .recording:
             stack.addArrangedSubview(button("doc.on.doc", "Copy file") { [weak self] in self?.copyAction() })
             if actions.onTrim != nil {
