@@ -66,6 +66,31 @@ in `docs/superpowers/specs/2026-09-24-betterscreenshot-editor-recording-v3-desig
    `shortcutKey` (Part 3: H highlighter, S spotlight); the toolbar groups are `toolGroups` in the controller.
 5. New style fields go on `AnnotationStyle` with `decodeIfPresent` defaults + a legacy-decode test.
 
+## Guided tours (v3 Part 7 — anchors and events)
+The editor's five tours (Editor, Text, Redaction, Highlighter, Spotlight) are data in
+`Packages/TourKit/Sources/TourKit/Catalog/EditorTours.swift`; every step, trigger, anchor and event is listed
+in `docs/MAC-TO-WINDOWS-PARITY-v3.md` §7.5. EditorKit only marks controls and reports actions — no tour
+logic, no UI added for tours:
+- **Anchors** (`view.tourAnchor = "editor.…"`, TourKit): `editor.toolbar`, `editor.tool.<EditorTool raw value>`,
+  `editor.canvas` (the **scroll view** — the canvas itself outgrows the window when zoomed), `editor.inspector`,
+  `editor.inspector.<InspectorSection raw value>` (each section box, set in `rebuild`; the Arrange footer is
+  `editor.inspector.arrange`), `editor.hint`, `editor.zoom`, `editor.imageSize`, `editor.actions`,
+  `editor.done/stack/save/copy`, `editor.undo/redo/panelToggle`, `editor.info` (the ⓘ). A new section or
+  control gets its anchor the same way; renaming one silently skips the tour steps that name it.
+- **Events** (`TourEvents.post`): `EditorWindowController.selectTool` → `.toolSelected(tool.rawValue)` for the
+  user's tool changes (not the Arrow chosen in `init`), plus `.action("editor.redactionToolChosen")` for Blur
+  or Pixelate; `EditorCanvasView.insert` → `.annotationAdded(<maker tool raw value>)`, plus
+  `.action("editor.redactionAdded")` for any redaction; `mouseUp` after a text-corner drag →
+  `.action("editor.textScaled")`; every side-panel edit → `.styleChanged(<field>)` via
+  `EditorInspectorView.tourEdited` (sliders only when released). A **Try step** (a tour step that advances
+  when the user does the thing, rather than on Next) can only wait for an event that is actually posted here.
+- **ⓘ**: `InfoButton.install` in `buildTitlebarButtons` (rightmost), with `keyboardShortcuts` — update that
+  list when a key is added.
+- **Esc**: `EditorWindow` adopts `TourEscapeClaiming` (`escapeInUse` = not on Select, or something selected),
+  so a tour tag leaves Esc-to-Select alone and Esc only skips a tour once the editor has nothing to do with it.
+- Tests: `Tests/EditorKitTests/EditorTourTests.swift` (anchors exist per tour, events, ⓘ, Esc, and every
+  editor-tour body fits the tag's 2 lines — the 20-word lint alone doesn't guarantee that).
+
 ## Invariants (do not break)
 - Annotations live in **base-image pixel space, top-left origin**.
 - The renderer draws into a **flipped `NSGraphicsContext`** so AppKit drawing (incl. text) is
