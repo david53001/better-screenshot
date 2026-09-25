@@ -27,9 +27,14 @@ let recordingTourTests: [TestCase] = [
         MainActor.assumeIsolated {
             for id in recordingTours {
                 for step in TourCatalog.tour(id).steps {
-                    let full = tagBodyHeight(step.body, maxLines: 0)
-                    let shown = tagBodyHeight(step.body, maxLines: TagStyle.bodyMaxLines)
-                    t.isTrue(full <= shown, "\(id)/\(step.title): body needs \(full) pt, the tag shows \(shown)")
+                    // A `{shortcut:…}` shows the user's own combo: measure the default look and the longest
+                    // (same list as TourKit's TagFitTests).
+                    for keys in ["⇧⌘4", "⌃⌥⇧⌘4", "⌃⌥⇧⌘F12"] {
+                        let body = TourText.resolvingShortcuts(in: step.body) { _ in keys }
+                        let full = tagBodyHeight(body, maxLines: 0)
+                        let shown = tagBodyHeight(body, maxLines: TagStyle.bodyMaxLines)
+                        t.isTrue(full <= shown, "\(id)/\(step.title) [\(keys)]: body needs \(full) pt, the tag shows \(shown)")
+                    }
                 }
             }
         }
@@ -74,7 +79,13 @@ let recordingTourTests: [TestCase] = [
         for id in recordingTours {
             for step in TourCatalog.tour(id).steps {
                 if case .tryIt(let event) = step.kind { t.isTrue(posted.contains(event), "\(id): \(event)") }
+                if let needed = step.requires { t.isTrue(posted.contains(needed), "\(id): requires \(needed)") }
             }
+        }
+        // The pill tour runs over a live recording: no Try step may change it (a "Mute the mic" Try step
+        // completed on mute and left the mic muted — review P2). Only Stop, which ends it anyway.
+        for step in TourCatalog.tour(.recordingPill).steps {
+            if case .tryIt(let event) = step.kind { t.equal(event, .action("recording.stopped"), step.title) }
         }
     },
 ]
