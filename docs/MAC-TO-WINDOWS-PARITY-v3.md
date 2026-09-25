@@ -2327,7 +2327,154 @@ App side: `windows/src/BetterScreenshot.App/Tours/TourCoordinator.cs`, created i
 after classification; keys added to `SettingsStore`'s DTO.
 
 ### 7.3 The tag overlay and the ⓘ button — exact layout (lane 7B)
-_(pending)_
+
+**What it is.** While a tour runs, the control a step talks about gets a **red outline box**, a **red tag
+bubble** next to it says what it is (or what to do), a **leader line** joins the two, and the rest of the
+window is dimmed slightly. A tour step is either **Explain** ("this is X" — the user presses **Next**)
+or **Try** ("do X" — it advances by itself when the user does it; **Skip step** is offered). The user keeps
+using the real window underneath — clicks go straight through the dim and the box to the real controls
+(that's how Try steps work: the user clicks the real thing). Only the tag bubble takes clicks, and nothing
+about the overlay ever takes keyboard focus: the host stays the **key window** (macOS term for the window
+receiving keystrokes — Windows: the active/foreground window) and its **first responder** (the control
+with keyboard focus) is untouched. Every window also gets a small **ⓘ** button that replays its tour and
+lists its keyboard shortcuts.
+macOS files (all in `Packages/TourKit/Sources/TourKit/`): `Overlay/TagOverlayController.swift` (the
+controller — implements `TourTagPresenting`, which the tour engine calls), `Overlay/TagViews.swift` (the
+windows + drawing), `Overlay/TagStyle.swift` (**every number, colour and string below**),
+`Overlay/TagLayout.swift` + `Overlay/TagKeys.swift` (pure logic — port 1:1, tests in
+`Tests/TourKitTests/TagLayoutTests.swift`: `tagLayoutTests`, `tagKeysTests`, `tagStyleTests`),
+`Help/InfoButton.swift` (the ⓘ). Snapshots from the headless probe:
+`docs/reviews/2026-09-25-tours/overlay-*.jpg` (01 the owner's mock — tag left of the editor's Colour row ·
+02 light window, no room on the left → right, Try step · 03 record strip, tag above the whole panel ·
+04 menu-bar icon, tag below · 05 screen corner: last step "Done", then the completed state · 06 the ⓘ in
+the editor's title bar + the Keyboard Shortcuts list).
+
+The engine calls three things: `show(step, body, number, total, anchor, host)` (replaces whatever is
+shown), `showCompleted()` (a Try step was just done), `hide()`. The tag calls back `onNext`, `onSkipStep`,
+`onSkipTour`.
+
+#### The tag — exact layout (points = WPF DIPs)
+Tour colour **#FF453A** (sRGB 255, 69, 58) for the box, the leader line and the tag fill.
+
+| Part | Spec |
+|---|---|
+| **Outline box** | Rounded rect = the control's bounds grown by **4** on every side, corner radius **6**; a **2**-thick stroke drawn *outside* that edge (it covers 4–6 from the control; outer corner radius 8). No fill. |
+| **Dim** | Black **20 %** over the host window's **whole frame** (title bar included), clipped to the window's rounded outline, with a hole = the box's outer edge (radius 8). Window corner radius: titled windows 16 on macOS 26 (10 on macOS 14/15) — **on Windows use 8 (Windows 11) or 0 (Windows 10)**; borderless panels use their own background's radius (record strip 12, recording pill 20). No dim when the control is in the menu bar / tray. |
+| **Leader line** | **2**-thick, round caps, from the tag's edge to the box's outer edge; **24** long when straight. Its end on the tag stays ≥ 12 from the tag's corners, its end on the box ≥ 6 from the box's corners (it goes diagonal only when the tag had to slide along its side to stay on screen). |
+| **Tag bubble** | Filled #FF453A, corner radius **12**, system drop shadow. Width = widest of (title, body on one line, footer) + 24, clamped to **200 … 260**. Padding **12** left/right, **10** top, **10** bottom. |
+| Title | **13 pt semibold** white, one line, truncated with "…". |
+| Body | **2** below the title; **12 pt regular** white, wraps, at most **2 lines** (the last one truncated with "…"). The body's `{shortcut:…}` placeholders arrive already replaced. |
+| Footer row | **8** below the body, **20** tall. Left: step counter **"2 of 7"** (11 pt medium, white 80 %). Right-aligned: **"Skip tour"** (plain text link, 11 pt semibold, white 80 %) · gap **4** · the primary button. |
+| Primary button | Height **20**, capsule (radius 10), label **11 pt semibold**, **8** padding each side. **Explain** step: **"Next"** — **"Done"** on the last step — white fill, red (#FF453A) label. **Try** step: **"Skip step"** — no fill, **1**-thick white border, white label. Pressed: 70 % opacity. |
+| Done state (`showCompleted`) | Counter and buttons hidden; the footer shows a white **check-in-a-circle** icon (13 pt, in a 16 × 16 box) + **4** gap + **"Done"** (11 pt semibold white). The next step's `show` replaces it. |
+| Strings | `Next`, `Done`, `Skip step`, `Skip tour`, `"<n> of <total>"`, completed `Done`. |
+
+**Screen reader.** When a tag appears it announces **"<title>. <body> Step <n> of <total>."**; the done
+state announces **"Done"** (macOS: `NSAccessibility` announcement, high priority). The bubble is a group
+labelled "Tour: <title>"; its buttons carry their visible labels. **WPF:** `AutomationPeer.RaiseNotificationEvent(
+AutomationNotificationKind.Other, AutomationNotificationProcessing.ImportantMostRecent, text, "TourTag")` on
+the tag window's peer.
+
+#### Placement (`TagLayout.place` — pure, port 1:1)
+Works in screen coordinates. **macOS is y-up** ("below" = smaller y); in WPF (y-down) either flip into a
+y-up space first or swap the below/above arithmetic — the tests say which side each case must pick.
+1. `box` = control rect grown by 4; `outer` = box grown by 2. If the control touches the screen edge (a
+   menu-bar/tray icon filling the bar's height), `box` is first clipped to the **screen** bounds shrunk by 2
+   so the whole outline stays visible.
+2. `area` = the **working area** (macOS `visibleFrame`: screen minus menu bar and Dock; Windows
+   `Screen.WorkingArea`: minus the taskbar) of the screen containing the control's centre, shrunk by **8**.
+3. **Side order:** left, right, below, above — the owner's mock has the tag on the left. **Vertical first**
+   (below, above, left, right) when the control's **direct parent** is a bar at least **3× as wide as
+   tall** (a toolbar row, the record strip, the pill), so the tag doesn't cover the controls beside it.
+4. **Keep-out:** when the host window has **no title bar** (record strip, recording pill, status/tray
+   icon) the tag first tries to sit outside the **whole host window**, not just the box — so it never
+   covers the panel's other controls (the leader line then crosses the panel to the box). If nothing fits
+   that way, retry with only the box as keep-out.
+5. For each side in order: put the tag **24** beyond the keep-out on that side, centred on the box along the
+   other axis, then slide it along that axis to stay inside `area`. The side **fits** if the tag is fully
+   inside `area` *and* still overlaps the box's span on the sliding axis (so the leader stays short).
+   First side that fits wins. Round the tag's origin to whole points.
+6. Nothing fits (a huge control on a full-screen window) → **over**: the tag sits inside the box's top-left
+   corner (inset 12), kept inside `area`, no leader line.
+
+#### Windows and focus (the risky part — proven on macOS by probes, see below)
+Two borderless, transparent windows per tag, both **owned by / children of the host window** so they move,
+minimise, hide and z-order with it (and never float over *other* apps covering the host):
+- **decor** — the dim, box and leader line; spans the host frame ∪ box ∪ tag (+2). **Ignores the mouse
+  entirely**: every click, scroll and hover goes to whatever is under it.
+- **tag** — just the bubble. Takes clicks. **Can never become the key/active window**, and clicking it never
+  activates the app or moves keyboard focus.
+
+Order: host < decor < tag. The overlay follows the host when it moves or resizes (immediately on resize),
+and re-checks the control's position/visibility every **100 ms** (also while menus are open); if the
+control or window goes hidden/closed/minimised, both windows hide, and come back when it's visible again.
+A control in the **menu bar** (status item; on Windows the **tray icon**, via `Shell_NotifyIconGetRect`)
+gets top-level windows at the menu-bar/topmost level instead of owned ones, and no dim.
+
+**WPF recipe:**
+- Both windows: `WindowStyle=None`, `AllowsTransparency=True`, `Background=Transparent`,
+  `ShowInTaskbar=False`, **`ShowActivated=False`**, `Focusable=False`, `ResizeMode=NoResize`; never call
+  `Activate()`/`Focus()`. `Owner = host` for the decor, and **`Owner = decor` for the tag** (an owned
+  window always stays above its owner, so the chain gives host < decor < tag). In `SourceInitialized`, add
+  extended styles with `SetWindowLongPtr(hwnd, GWL_EXSTYLE, …)`: **`WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW`** on
+  both, plus **`WS_EX_TRANSPARENT | WS_EX_LAYERED`** on the decor (that's what makes it click-through; also
+  set `IsHitTestVisible=False` on its content).
+- Tag window: also handle `WM_MOUSEACTIVATE` in an `HwndSource` hook and return **`MA_NOACTIVATE`**, so a
+  click on Next doesn't activate it; buttons `Focusable=False`. Its fully transparent corners are
+  click-through automatically (layered window).
+- Owned windows **don't move with their owner on Windows** (unlike macOS child windows): subscribe to the
+  host's `LocationChanged` / `SizeChanged` / `StateChanged` and re-run the layout; a 100 ms
+  `DispatcherTimer` covers the control moving inside the window. Tray host: `Topmost=True`, no owner.
+- Keep tags out of the user's screenshots/recordings: `SetWindowDisplayAffinity(hwnd,
+  WDA_EXCLUDEFROMCAPTURE)` on both windows (Windows 10 2004+). (macOS: the controller exposes
+  `windowNumbers` for the capture filter's exclusion list — wiring that into capture is a follow-up.)
+
+#### Keys (`TagKeys.action` — pure, port 1:1)
+Handled only for key-downs aimed at the **host window** (any of the app's windows when the host is the
+menu-bar/tray icon), and only while a tag is showing and not in the done state:
+- **Return** (and numpad **Enter**) = **Next**, on **Explain** steps only (on Try steps it passes through).
+- **Esc** = **Skip tour**.
+- Everything passes through untouched when: any modifier is held (⌘ ⌥ ⌃ ⇧ / Ctrl Alt Shift Win), the key
+  is an auto-repeat, or the focused control is an **editable text field** (typing a label in the editor,
+  a search box…). Caps Lock / numpad flags don't count as modifiers.
+- A key is swallowed only when it did something. macOS: a local key-down monitor (sees the app's events
+  without being focused). **WPF:** a `PreviewKeyDown` handler on the host window (`e.Handled = true` only
+  when acted on); editable = focused element is a `TextBox`/`RichTextBox`/`PasswordBox` with
+  `IsReadOnly=False`.
+
+#### The ⓘ button (`InfoButton`)
+- **Look:** borderless icon button, **26 × 22**, the system "info in a circle" glyph (macOS SF Symbol
+  `info.circle`; Windows Segoe Fluent Icons **Info**, U+E946), default title-bar icon colour; tooltip and
+  accessible name **"Tour & Keyboard Shortcuts"**.
+- **Titled windows** (`InfoButton.install(in: window, tour:, shortcuts:)`): its own title-bar accessory at
+  the **top-right**, **6** from the window's right edge, vertically centred in the title bar, and the
+  **rightmost** item — the editor's existing Undo · Redo · panel-toggle group stays to its left (that group
+  ends with a 10 inset, so the gap is ~10). Installing twice updates and returns the same button.
+  **Windows:** the caption buttons (– □ ×) own the top-right corner, so put the ⓘ **immediately left of
+  the caption buttons** (right of any other title-bar buttons), same size, vertically centred.
+- **Untitled panels** (the record strip): the same 26 × 22 button placed by the surface (next to its ✕),
+  tinted to match the dark HUD.
+- **Press → menu** (opens on mouse-down, **4** below the button), every item with an icon:
+  **Replay Tour** (icon: play in a circle; SF `play.circle`, Segoe **Play** U+E768) → asks the tour system
+  to replay this window's tour now (`TourEvents.replay(tour, in: window)`); **Keyboard Shortcuts** (icon:
+  keyboard; SF `keyboard`, Segoe **KeyboardClassic** U+E765) — shown only when the window has shortcuts.
+- **Keyboard Shortcuts** opens a small transient popover (WPF: `Popup` with `StaysOpen=False`) anchored
+  below the ⓘ: title **"Keyboard Shortcuts"** 13 pt semibold; then one row per shortcut — the **action**
+  on the left (12 pt regular, secondary text colour), the **keys** on the right, right-aligned (12 pt
+  medium, primary colour); rows **6** apart, **24** between the columns, **10** between title and rows;
+  insets **12** top/bottom, **14** left/right; sized to fit. Each window passes its own (keys, action)
+  list; on Windows write keys the Windows way ("Ctrl+Z").
+
+#### How it was verified on macOS (probe, 2026-09-25)
+A headless probe (synthetic events, windows parked behind the owner's) checked: clicks on the boxed
+control, on a control under the dim and on the leader line are all routed by the window server to the
+**host** window and its real button (never the overlay); clicks on the tag's Next / Skip step / Skip tour
+reach the tag and fire the callbacks; the host keeps its key status and first responder and the app is
+never activated; the same over a non-activating floating panel (record strip), where the real button's
+action also fired; the menu-bar case puts the tag below the icon with no dim; a pop-up menu opened on the
+boxed control and closed again leaves the tag in place, and `menuOpened`/`choiceMade` can be posted from
+the menu; moving/resizing the host, hiding the control and closing/reopening the host all behave as above;
+Return/Esc and every pass-through case in the key table.
 
 ### 7.4 Welcome + Quick Access tours (lane 7S)
 _(pending)_

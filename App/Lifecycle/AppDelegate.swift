@@ -27,8 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             screenRecordingGranted: PermissionManager.hasScreenRecordingPermission)
         NSApp.setActivationPolicy(.accessory)
         tours = TourCoordinator(
-            // Lane 7B's overlay replaces this at merge: `makePresenter: { TagOverlayController() }`.
-            makePresenter: { NoOpTourTagPresenter() },
+            makePresenter: { TagOverlayController() },
             shortcutText: { [weak self] name in
                 guard let action = HotkeyAction(rawValue: name) else { return nil }
                 return HotkeyCheatSheet.keys(for: action, in: self?.settings.bindings ?? .defaults)
