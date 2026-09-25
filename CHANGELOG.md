@@ -82,6 +82,22 @@ Windows-port notes: `docs/MAC-TO-WINDOWS-PARITY-v3.md` Part 7; snapshots in `doc
   showing a tag, and tags that appear mid-recording).
 - While a tour explains the Quick Access card it stays up (no auto-dismiss). Settings: Startup and Pin to
   Screen swapped columns to keep them even.
+- **Polished after an independent review** (`docs/reviews/2026-09-26-tours-review.md`, 6/10 before;
+  after-shots in `docs/reviews/2026-09-26-tours-fixes/`):
+  - Shorter tours: the first screenshot's chain is 12 tags instead of 16, First recording 6 steps instead
+    of 11, and the tour over your first recording 5 instead of 10 — it no longer asks you to mute the mic.
+  - Easier to read: a deeper red (#C62D22) and brighter secondary text, so every label passes WCAG AA;
+    "Skip Step" / "Skip Tour", and no "Skip Tour" next to "Done".
+  - "n of m" counts only the steps you'll actually see (no more 1 → 3 jumps).
+  - Tags for big areas (the editor canvas, the video preview, the Settings cards) sit inside the area's
+    corner instead of over the side panel or timeline; side tags slide off nearby controls and text;
+    hovering a recording-pill button no longer makes its tag jump; leader lines avoid other controls.
+  - A step never waits for something you skipped ("Resize your text" needs a text, "Delete a part" a split).
+  - Tags outline exactly what they describe (the three capture shortcuts; Copy, Edit and Save; a Settings
+    label with its ⓘ); corrected text (the mic meter, where Save puts screenshots, History's actions); a
+    cleared shortcut reads "(not set)"; typographic apostrophes.
+  - Esc and Return reach the Settings shortcut recorder while it's recording; the Welcome window closes when
+    its tour ends; Reset All Tours says how to turn tours back on.
 
 ### UI polish — fixes from the independent UI review
 Review: `docs/reviews/2026-09-25-ui-review.md` (5/10 before these fixes); after-screenshots in
