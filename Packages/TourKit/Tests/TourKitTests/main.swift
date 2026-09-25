@@ -8,6 +8,6 @@ runTests("TourKitTests",
     + tourAudienceTests
     + tourRulesTests
     + tourEngineTests
-    + tagLayoutTests + tagKeysTests + tagStyleTests
+    + tagLayoutTests + tagKeysTests + tagStyleTests + tagContrastTests
     + tagFitTests
 )

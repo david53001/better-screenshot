@@ -97,9 +97,9 @@ final class TagButton: NSButton {
     func setLabel(_ text: String) {
         let colour: NSColor
         switch style {
-        case .filled: colour = TagStyle.tourRed
-        case .outline: colour = .white
-        case .link: colour = NSColor.white.withAlphaComponent(TagStyle.secondaryTextAlpha)
+        case .filled: colour = TagStyle.filledButtonText
+        case .outline: colour = TagStyle.textColour
+        case .link: colour = TagStyle.secondaryTextColour
         }
         attributedTitle = NSAttributedString(string: text, attributes: [
             .font: TagStyle.buttonFont, .foregroundColor: colour,
@@ -115,9 +115,9 @@ final class TagButton: NSButton {
 
     private func restyle() {
         layer?.cornerRadius = TagStyle.buttonHeight / 2
-        layer?.backgroundColor = style == .filled ? NSColor.white.cgColor : NSColor.clear.cgColor
+        layer?.backgroundColor = style == .filled ? TagStyle.filledButtonFill.cgColor : NSColor.clear.cgColor
         layer?.borderWidth = style == .outline ? 1 : 0
-        layer?.borderColor = NSColor.white.cgColor
+        layer?.borderColor = TagStyle.textColour.cgColor
         setLabel(attributedTitle.string)
     }
 }
@@ -135,6 +135,8 @@ final class TagBubbleView: NSView {
 
     var onPrimary: (() -> Void)?
     var onSkipTour: (() -> Void)?
+    /// False on the last Explain step ("Done" alone — `TagStyle.showsSkipTour`).
+    private var offersSkipTour = true
 
     override var isFlipped: Bool { true }
 
@@ -147,24 +149,24 @@ final class TagBubbleView: NSView {
         setAccessibilityRole(.group)
 
         titleLabel.font = TagStyle.titleFont
-        titleLabel.textColor = .white
+        titleLabel.textColor = TagStyle.textColour
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.maximumNumberOfLines = 1
 
         bodyLabel.font = TagStyle.bodyFont
-        bodyLabel.textColor = .white
+        bodyLabel.textColor = TagStyle.textColour
         bodyLabel.maximumNumberOfLines = TagStyle.bodyMaxLines
         bodyLabel.cell?.truncatesLastVisibleLine = true
         bodyLabel.lineBreakMode = .byWordWrapping
 
         counterLabel.font = TagStyle.footerFont
-        counterLabel.textColor = NSColor.white.withAlphaComponent(TagStyle.secondaryTextAlpha)
+        counterLabel.textColor = TagStyle.secondaryTextColour
 
         doneIcon.image = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)?
             .withSymbolConfiguration(.init(pointSize: 13, weight: .semibold))
-        doneIcon.contentTintColor = .white
+        doneIcon.contentTintColor = TagStyle.textColour
         doneLabel.font = TagStyle.buttonFont
-        doneLabel.textColor = .white
+        doneLabel.textColor = TagStyle.textColour
 
         skipTourButton.setLabel(TagStyle.skipTourTitle)
         skipTourButton.target = self
@@ -190,6 +192,7 @@ final class TagBubbleView: NSView {
         primaryButton.style = isExplain ? .filled : .outline
         primaryButton.setLabel(isExplain ? TagStyle.nextButtonTitle(number: number, total: total)
                                          : TagStyle.skipStepTitle)
+        offersSkipTour = TagStyle.showsSkipTour(number: number, total: total, isExplain: isExplain)
         setAccessibilityLabel("Tour: \(title)")
         setDone(false)
         return relayout()
@@ -203,7 +206,7 @@ final class TagBubbleView: NSView {
 
     private func setDone(_ done: Bool) {
         counterLabel.isHidden = done
-        skipTourButton.isHidden = done
+        skipTourButton.isHidden = done || !offersSkipTour
         primaryButton.isHidden = done
         doneIcon.isHidden = !done
         doneLabel.isHidden = !done
@@ -212,7 +215,8 @@ final class TagBubbleView: NSView {
     private func relayout() -> NSSize {
         let padX = TagStyle.tagPaddingX
         let counterW = ceil(counterLabel.attributedStringValue.size().width) + 4
-        let footerW = counterW + 12 + skipTourButton.fittingWidth + TagStyle.buttonGap + primaryButton.fittingWidth
+        let skipW = offersSkipTour ? skipTourButton.fittingWidth + TagStyle.buttonGap : 0
+        let footerW = counterW + 12 + skipW + primaryButton.fittingWidth
         let titleW = ceil(titleLabel.attributedStringValue.size().width) + 4
         let bodyW = ceil(bodyLabel.attributedStringValue.size().width) + 4
         let width = min(max(max(titleW, bodyW, footerW) + 2 * padX, TagStyle.tagMinWidth), TagStyle.tagMaxWidth)

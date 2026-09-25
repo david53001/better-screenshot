@@ -201,17 +201,27 @@ let tagStyleTests: [TestCase] = [
         t.equal(TagStyle.counter(2, of: 7), "2 of 7")
         t.equal(TagStyle.nextButtonTitle(number: 2, total: 7), "Next")
         t.equal(TagStyle.nextButtonTitle(number: 7, total: 7), "Done")
-        t.equal(TagStyle.skipStepTitle, "Skip step")
-        t.equal(TagStyle.skipTourTitle, "Skip tour")
+        t.equal(TagStyle.skipStepTitle, "Skip Step")
+        t.equal(TagStyle.skipTourTitle, "Skip Tour")
+    },
+    TestCase("skipTourIsLeftOutOnlyNextToTheLastStepsDone") { t in
+        t.isTrue(TagStyle.showsSkipTour(number: 2, total: 7, isExplain: true))
+        t.isFalse(TagStyle.showsSkipTour(number: 7, total: 7, isExplain: true))
+        // A last Try step reads "Skip Step" (which also hands over): Skip Tour stays.
+        t.isTrue(TagStyle.showsSkipTour(number: 3, total: 3, isExplain: false))
+    },
+    TestCase("dimIsDeeperOverDarkHosts") { t in
+        t.equal(TagStyle.dimAlpha(hostIsDark: false), 0.2)
+        t.equal(TagStyle.dimAlpha(hostIsDark: true), 0.35)
     },
     TestCase("voiceOverReadsTitleBodyAndPosition") { t in
         t.equal(TagStyle.announcement(title: "Colours", body: "Pick a colour.", number: 2, total: 7),
                 "Colours. Pick a colour. Step 2 of 7.")
     },
-    TestCase("tourRedIsFF453A") { t in
+    TestCase("tourRedIsC62D22") { t in
         let c = TagStyle.tourRed.usingColorSpace(.sRGB)!
-        t.equal(Int((c.redComponent * 255).rounded()), 0xFF)
-        t.equal(Int((c.greenComponent * 255).rounded()), 0x45)
-        t.equal(Int((c.blueComponent * 255).rounded()), 0x3A)
+        t.equal(Int((c.redComponent * 255).rounded()), 0xC6)
+        t.equal(Int((c.greenComponent * 255).rounded()), 0x2D)
+        t.equal(Int((c.blueComponent * 255).rounded()), 0x22)
     },
 ]
