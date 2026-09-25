@@ -121,12 +121,12 @@ final class HistoryService: ObservableObject {
             var objects: [NSPasteboardWriting] = [img]
             if let url = store.imageURL(for: entry) { objects.append(url as NSURL) }
             NSPasteboard.general.writeObjects(objects)
-            hud.show("Copied")
+            hud.show("Copied", symbol: "doc.on.doc")
         case .recording:
             guard let url = savedFileURL(for: entry) else { return }
             NSPasteboard.general.clearContents()
             NSPasteboard.general.writeObjects([url as NSURL])
-            hud.show("File copied")
+            hud.show("File copied", symbol: "doc.on.doc")
         }
     }
 
@@ -139,7 +139,7 @@ final class HistoryService: ObservableObject {
         guard !urls.isEmpty else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.writeObjects(urls.map { $0 as NSURL })
-        hud.show("\(urls.count) files copied")
+        hud.show("\(urls.count) files copied", symbol: "doc.on.doc")
     }
 
     /// Show in Finder targets the saved recording file, or the history-owned

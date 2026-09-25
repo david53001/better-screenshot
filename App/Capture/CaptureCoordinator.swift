@@ -114,10 +114,10 @@ final class CaptureCoordinator {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(payload, forType: .string)
             }
-            hud.show(recognition.hudMessage, on: screen(for: result.displayID))
+            hud.show(recognition.hudMessage, symbol: "text.viewfinder", on: screen(for: result.displayID))
         } catch {
             NSLog("Capture Text failed: \(error)")
-            hud.show("Capture Text failed", on: screen(for: result.displayID))
+            hud.show("Capture Text failed", symbol: "exclamationmark.triangle", on: screen(for: result.displayID))
         }
         // Focus goes back last, so the recognized text can be pasted straight
         // into the app the user was already in.
@@ -137,7 +137,7 @@ final class CaptureCoordinator {
             handle(image, sourceRect: sourceRect)
         } catch {
             NSLog("Capture failed: \(error)")
-            hud.show("Capture failed")
+            hud.show("Capture failed", symbol: "exclamationmark.triangle")
             restoreFrontmostApp()
         }
     }
@@ -162,7 +162,7 @@ final class CaptureCoordinator {
                               size: NSSize(width: image.width, height: image.height))
         guard let screen = NSScreen.main else { copy(image); save(image); return }
         let actions = QuickAccessActions(
-            onCopy: { [weak self] in self?.copy(image); self?.hud.show("Copied") },
+            onCopy: { [weak self] in self?.copy(image); self?.hud.show("Copied", symbol: "doc.on.doc") },
             // The overlay's download button always lands in the macOS screenshot folder.
             onSave: { [weak self] in self?.save(image, to: SettingsStore.systemScreenshotLocation()) },
             onAnnotate: { [weak self] in self?.annotate(image) },
@@ -209,7 +209,7 @@ final class CaptureCoordinator {
                 self?.copy(image)
                 // Re-resolve at click time: the original display may be gone.
                 let liveScreen = NSScreen.screens.first { $0 === screen } ?? NSScreen.main
-                self?.hud.show("Copied", on: liveScreen)
+                self?.hud.show("Copied", symbol: "doc.on.doc", on: liveScreen)
             },
             onSave: { [weak self] in self?.save(image) })
         pins.pin(image: nsImage,
@@ -221,7 +221,7 @@ final class CaptureCoordinator {
         guard let ns = NSPasteboard.general.readObjects(forClasses: [NSImage.self],
                                                         options: nil)?.first as? NSImage,
               let cg = ns.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            hud.show("No image on clipboard", on: NSScreen.main)
+            hud.show("No image on clipboard", symbol: "exclamationmark.triangle", on: NSScreen.main)
             return
         }
         pin(cg)
@@ -252,7 +252,7 @@ final class CaptureCoordinator {
         let isPNG = settings.settings.format == .png
         let format: ImageFormat = isPNG ? .png : .jpg(quality: 0.9)
         guard let data = ImageEncoder.encode(image, as: format) else {
-            hud.show("Couldn't save — image encoding failed")
+            hud.show("Couldn't save — image encoding failed", symbol: "exclamationmark.triangle")
             return
         }
         let name = FileNamer.fileName(for: Date(), ext: isPNG ? "png" : "jpg")
@@ -262,7 +262,7 @@ final class CaptureCoordinator {
             try data.write(to: dir.appendingPathComponent(name))
         } catch {
             NSLog("Save failed: \(error)")
-            hud.show("Couldn't save screenshot")
+            hud.show("Couldn't save screenshot", symbol: "exclamationmark.triangle")
         }
     }
 

@@ -665,7 +665,7 @@ final class RecordingCoordinator {
             onCopy: { [weak self] in
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.writeObjects([url as NSURL])
-                self?.hud.show("File copied")
+                self?.hud.show("File copied", symbol: "doc.on.doc")
             },
             onOpen: { NSWorkspace.shared.open(url) },
             onReveal: { NSWorkspace.shared.activateFileViewerSelecting([url]) },
@@ -680,14 +680,20 @@ final class RecordingCoordinator {
         // visibleFrame excludes the Dock and menu bar, so the overlay sits above
         // the Dock instead of being tucked into the very bottom corner behind it.
         let frame = screen.visibleFrame
-        quickAccess.present(image: image, kind: .recording, actions: actions,
-                            autoDismissSeconds: settings.settings.overlayAutoDismissSeconds,
-                            corner: corner, screenFrame: frame, margin: 24,
-                            onDismissed: { [weak self] reason in
-            if reason == .closed || reason == .evicted {
-                self?.history?.noteOverlayClosed(historyID: historyID)
-            }
-        })
+        Task { [weak self] in
+            // "0:42 · MP4" badge, so a recording card doesn't look like a screenshot's.
+            let badge = MediaInfoText.recordingBadge(seconds: await MediaDuration.seconds(of: url),
+                                                     fileExtension: url.pathExtension)
+            guard let self else { return }
+            self.quickAccess.present(image: image, kind: .recording, actions: actions,
+                                     autoDismissSeconds: self.settings.settings.overlayAutoDismissSeconds,
+                                     corner: corner, screenFrame: frame, margin: 24, badge: badge,
+                                     onDismissed: { [weak self] reason in
+                if reason == .closed || reason == .evicted {
+                    self?.history?.noteOverlayClosed(historyID: historyID)
+                }
+            })
+        }
     }
 
     /// Re-presents the card the trim window replaced, with a fresh thumbnail — after
