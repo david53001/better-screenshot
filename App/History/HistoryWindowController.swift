@@ -51,9 +51,9 @@ struct HistoryView: View {
     var body: some View {
         Group {
             if history.entries.isEmpty {
-                Text("No captures yet")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
+                let empty = history.emptyState
+                ContentUnavailableView(empty.title, systemImage: "photo.on.rectangle.angled",
+                                       description: Text(empty.detail))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
@@ -74,8 +74,11 @@ struct HistoryView: View {
             }
         }
         .safeAreaInset(edge: .bottom) { actionBar }
-        .frame(minWidth: 520, minHeight: 360)
+        // Wide enough for every action-bar label at its full length (they never truncate).
+        .frame(minWidth: Self.minWidth, minHeight: 360)
     }
+
+    static let minWidth: CGFloat = 660
 
     /// The selected entries, in displayed order.
     private var selectedEntries: [HistoryEntry] {
@@ -120,27 +123,40 @@ struct HistoryView: View {
         HStack(spacing: 8) {
             Text(countLabel)
                 .font(.caption).foregroundStyle(.secondary)
-            Button("Clear All…") { confirmingClear = true }
-                .disabled(history.entries.isEmpty)
-            Spacer()
-            Button("Copy") { history.copyToClipboard(selectedEntries) }
-                .disabled(selectedEntries.isEmpty)
-            Button("Annotate") { if let e = soleSelection { annotate(e) } }
-                .disabled(soleSelection?.kind != .screenshot)
-            Button("Pin") { if let e = soleSelection { pin(e) } }
-                .disabled(soleSelection?.kind != .screenshot)
-            Button("Edit Video…") { if let url = soleSelection.flatMap(trimmableURL) { actions.trim(url) } }
-                .disabled(soleSelection.flatMap(trimmableURL) == nil)
-            Button("Show in Finder") { history.revealInFinder(selectedEntries) }
-                .disabled(!selectedEntries.contains { history.canReveal($0) })
-            Button("Delete") { delete(selectedEntries) }
-                .disabled(selectedEntries.isEmpty)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Group {
+                Button("Copy") { history.copyToClipboard(selectedEntries) }
+                    .disabled(selectedEntries.isEmpty)
+                Button("Annotate") { if let e = soleSelection { annotate(e) } }
+                    .disabled(soleSelection?.kind != .screenshot)
+                Button("Pin") { if let e = soleSelection { pin(e) } }
+                    .disabled(soleSelection?.kind != .screenshot)
+                Button("Edit Video…") { if let url = soleSelection.flatMap(trimmableURL) { actions.trim(url) } }
+                    .disabled(soleSelection.flatMap(trimmableURL) == nil)
+                Button("Show in Finder") { history.revealInFinder(selectedEntries) }
+                    .disabled(!selectedEntries.contains { history.canReveal($0) })
+                Button("Delete") { delete(selectedEntries) }
+                    .disabled(selectedEntries.isEmpty)
+            }
+            .fixedSize()
+            // Wiping the whole history is kept out of the row of everyday actions.
+            Menu {
+                Button("Clear All History…", role: .destructive) { confirmingClear = true }
+                    .disabled(history.entries.isEmpty)
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("More")
         }
         .padding(10)
         .background(.bar)
         .confirmationDialog("Clear all capture history?",
                             isPresented: $confirmingClear, titleVisibility: .visible) {
-            Button("Clear All", role: .destructive) {
+            Button("Clear All History", role: .destructive) {
                 selection = HistorySelectionState()
                 history.clearAll()
             }
@@ -235,6 +251,8 @@ private struct HistoryCell: View {
     let entry: HistoryEntry
     let history: HistoryService
     let isSelected: Bool
+    /// "1600 × 1000" or "0:42", read once the cell appears.
+    @State private var detail: String?
 
     private static let relative: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
@@ -255,6 +273,16 @@ private struct HistoryCell: View {
             .frame(maxWidth: .infinity)
             .frame(height: 110)
             .background(Color.gray.opacity(0.12))
+            .overlay {
+                // Recordings are told apart at a glance, not only by the tiny film icon.
+                if entry.kind == .recording {
+                    Image(systemName: "play.circle.fill")
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, .black.opacity(0.5))
+                        .font(.system(size: 30))
+                        .shadow(radius: 2)
+                }
+            }
             .clipShape(RoundedRectangle(cornerRadius: 6))
             HStack(spacing: 4) {
                 Image(systemName: entry.kind == .recording ? "film" : "camera")
@@ -263,14 +291,22 @@ private struct HistoryCell: View {
                 Text(Self.relative.localizedString(for: entry.date, relativeTo: Date()))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
                 if entry.kind == .recording && !history.savedFileExists(entry) {
                     Label("file missing", systemImage: "exclamationmark.triangle")
                         .font(.caption2)
                         .foregroundStyle(.orange)
                 }
-                Spacer(minLength: 0)
+                Spacer(minLength: 4)
+                if let detail {
+                    Text(detail)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
         }
+        .task(id: entry.id) { detail = await history.detail(for: entry) }
         .padding(6)
         .background(RoundedRectangle(cornerRadius: 8)
             .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.clear))

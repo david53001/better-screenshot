@@ -93,10 +93,19 @@ struct ShortcutRecorderField: NSViewRepresentable {
 }
 
 /// The visual well: rounded rect + centered label; click reports to the field.
+/// It is the only control for changing a shortcut, so it outlines on hover and
+/// carries a tooltip to read as clickable rather than as a static label.
 final class RecorderWell: NSView {
     var onClick: (() -> Void)?
     var label: String = "—" { didSet { needsDisplay = true } }
     var active: Bool = false { didSet { needsDisplay = true } }
+    private var hovered = false { didSet { needsDisplay = true } }
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        toolTip = "Click, then press a new shortcut"
+    }
+    required init?(coder: NSCoder) { fatalError("not used") }
 
     override var intrinsicContentSize: NSSize { NSSize(width: 130, height: 22) }
 
@@ -104,13 +113,25 @@ final class RecorderWell: NSView {
 
     override func mouseDown(with event: NSEvent) { onClick?() }
 
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(rect: bounds,
+            options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self, userInfo: nil))
+    }
+    override func mouseEntered(with event: NSEvent) { hovered = true }
+    override func mouseExited(with event: NSEvent) { hovered = false }
+    override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
+
     override func draw(_ dirtyRect: NSRect) {
         let r = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5),
                              xRadius: 5, yRadius: 5)
         (active ? NSColor.controlAccentColor.withAlphaComponent(0.15)
                 : NSColor.controlBackgroundColor).setFill()
         r.fill()
-        (active ? NSColor.controlAccentColor : NSColor.separatorColor).setStroke()
+        (active ? NSColor.controlAccentColor
+                : hovered ? NSColor.secondaryLabelColor : NSColor.separatorColor).setStroke()
         r.stroke()
         let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),

@@ -9,7 +9,7 @@ public enum HotkeyAction: String, CaseIterable, Hashable {
         switch self {
         case .captureArea:           return "Capture Area"
         case .captureWindow:         return "Capture Window"
-        case .captureFullscreen:     return "Capture Fullscreen"
+        case .captureFullscreen:     return "Capture Full Screen"
         case .captureText:           return "Capture Text"
         case .pinFromClipboard:      return "Pin from Clipboard"
         case .record:                return "Start/Stop Recording"

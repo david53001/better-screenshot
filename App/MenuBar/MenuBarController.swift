@@ -20,36 +20,40 @@ final class MenuBarController: NSObject {
     private var recordItem: NSMenuItem?
     private var pauseItem: NSMenuItem?
 
+    /// Every item carries an SF Symbol. macOS 26 adds a gear to "Settings…" on its
+    /// own, which pushed Settings and Quit out of line with the rest; with an icon on
+    /// every item the titles line up on every macOS version.
+    private static func icon(_ symbol: String) -> NSImage? {
+        NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+    }
+
     private func buildMenu() {
         let menu = NSMenu()
-        func add(_ title: String, _ sel: Selector, _ action: HotkeyAction?) {
-            let item = menu.addItem(withTitle: title, action: sel, keyEquivalent: "")
+        @discardableResult
+        func add(_ title: String, _ symbol: String, _ sel: Selector, _ action: HotkeyAction?,
+                 key: String = "") -> NSMenuItem {
+            let item = menu.addItem(withTitle: title, action: sel, keyEquivalent: key)
             item.target = self
+            item.image = Self.icon(symbol)
             if let action { actionItems[action] = item }
+            return item
         }
-        add("Capture Area", #selector(area), .captureArea)
-        add("Capture Window", #selector(window), .captureWindow)
-        add("Capture Fullscreen", #selector(full), .captureFullscreen)
-        add("Capture Text", #selector(captureText), .captureText)
-        recordItem = menu.addItem(withTitle: "Record Screen…",
-                                  action: #selector(toggleRecording), keyEquivalent: "")
-        recordItem?.target = self
-        if let recordItem { actionItems[.record] = recordItem }
-        let pause = menu.addItem(withTitle: "Pause Recording",
-                                 action: #selector(togglePauseResume), keyEquivalent: "")
-        pause.target = self
+        add("Capture Area", "rectangle.dashed", #selector(area), .captureArea)
+        add("Capture Window", "macwindow", #selector(window), .captureWindow)
+        add("Capture Full Screen", "display", #selector(full), .captureFullscreen)
+        add("Capture Text", "text.viewfinder", #selector(captureText), .captureText)
+        recordItem = add("Record Screen…", "record.circle", #selector(toggleRecording), .record)
+        let pause = add("Pause Recording", "pause.circle", #selector(togglePauseResume), .pauseResumeRecording)
         pause.isHidden = true
         pauseItem = pause
-        if let pauseItem { actionItems[.pauseResumeRecording] = pauseItem }
         menu.addItem(.separator())
-        add("Pin from Clipboard", #selector(pinClipboard), .pinFromClipboard)
+        add("Pin from Clipboard", "pin", #selector(pinClipboard), .pinFromClipboard)
         menu.addItem(.separator())
-        add("History…", #selector(openHistory), .openHistory)
-        add("Restore Recently Closed", #selector(restoreClosed), .restoreRecentlyClosed)
+        add("History…", "clock.arrow.circlepath", #selector(openHistory), .openHistory)
+        add("Restore Recently Closed", "arrow.uturn.backward", #selector(restoreClosed), .restoreRecentlyClosed)
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
-            .target = self
-        menu.addItem(withTitle: "Quit", action: #selector(quit), keyEquivalent: "q").target = self
+        add("Settings…", "gearshape", #selector(openSettings), nil, key: ",")
+        add("Quit", "power", #selector(quit), nil, key: "q")
         statusItem.menu = menu
     }
 
@@ -87,6 +91,7 @@ final class MenuBarController: NSObject {
     func setPauseItem(active: Bool, paused: Bool) {
         pauseItem?.isHidden = !active
         pauseItem?.title = paused ? "Resume Recording" : "Pause Recording"
+        pauseItem?.image = Self.icon(paused ? "play.circle" : "pause.circle")
     }
 
     /// Red stop icon + elapsed timer while recording; normal icon otherwise.
@@ -100,12 +105,14 @@ final class MenuBarController: NSObject {
             statusItem.button?.font = .monospacedDigitSystemFont(
                 ofSize: NSFont.systemFontSize, weight: .regular)
             recordItem?.title = "Stop Recording"
+            recordItem?.image = Self.icon("stop.circle")
         } else {
             statusItem.button?.image = NSImage(systemSymbolName: "camera.viewfinder",
                                                accessibilityDescription: "BetterScreenshot")
             statusItem.button?.contentTintColor = nil
             statusItem.button?.title = ""
             recordItem?.title = "Record Screen…"
+            recordItem?.image = Self.icon("record.circle")
         }
     }
 

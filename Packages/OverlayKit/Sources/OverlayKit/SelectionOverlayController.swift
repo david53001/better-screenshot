@@ -85,9 +85,24 @@ final class SelectionView: NSView {
     override var acceptsFirstResponder: Bool { true }
     override func resetCursorRects() { addCursorRect(bounds, cursor: .crosshair) }
 
+    /// "400 × 176" on a dark HUD chip just outside the selection's corner, so it stays
+    /// readable over light pages and never covers what is being selected.
+    private let sizeChip = SelectionSizeChip()
+
     override func mouseDown(with event: NSEvent) { start = convert(event.locationInWindow, from: nil) }
     override func mouseDragged(with event: NSEvent) {
         current = convert(event.locationInWindow, from: nil); needsDisplay = true
+        updateSizeChip()
+    }
+
+    private func updateSizeChip() {
+        guard let s = start, let c = current else { sizeChip.isHidden = true; return }
+        let sel = rectBetween(s, c)
+        if sizeChip.superview == nil { addSubview(sizeChip) }
+        sizeChip.setText("\(Int(sel.width)) × \(Int(sel.height))")
+        sizeChip.setFrameOrigin(OverlayLabelLayout.selectionChipOrigin(
+            selection: sel, chipSize: sizeChip.frame.size, bounds: bounds))
+        sizeChip.isHidden = false
     }
     override func mouseUp(with event: NSEvent) {
         guard let s = start, let c = current else { onCancel?(); return }
@@ -117,19 +132,36 @@ final class SelectionView: NSView {
         sel.fill(using: .copy)
         NSColor.white.setStroke()
         let path = NSBezierPath(rect: sel); path.lineWidth = 1; path.stroke()
-        // Dimensions label — above the selection, but tucked just inside the
-        // top edge when the selection sits too close to the top of the screen,
-        // so it never clips off-screen.
-        let label = "\(Int(sel.width)) × \(Int(sel.height))"
-        let attrs: [NSAttributedString.Key: Any] = [
-            .foregroundColor: NSColor.white,
-            .font: NSFont.systemFont(ofSize: 12, weight: .medium)
-        ]
-        let labelSize = (label as NSString).size(withAttributes: attrs)
-        let aboveY = sel.maxY + 4
-        let labelY = aboveY + labelSize.height <= bounds.maxY
-            ? aboveY
-            : sel.maxY - labelSize.height - 4
-        label.draw(at: NSPoint(x: sel.minX, y: labelY), withAttributes: attrs)
+    }
+}
+
+/// The selection's size readout: white monospaced digits on the shared dark HUD chip.
+final class SelectionSizeChip: NSView {
+    private let label = NSTextField(labelWithString: "")
+    private let background: NSVisualEffectView
+    private static let height: CGFloat = 22
+    private static let padX: CGFloat = 8
+
+    init() {
+        background = HUDStyle.makeBackground(frame: NSRect(x: 0, y: 0, width: 60, height: Self.height),
+                                             cornerRadius: 6)
+        super.init(frame: background.frame)
+        background.autoresizingMask = [.width, .height]
+        label.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+        label.textColor = HUDStyle.primaryText
+        addSubview(background)
+        background.addSubview(label)
+    }
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    // The chip is a readout, not a control: clicks and drags go to the overlay.
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    func setText(_ text: String) {
+        guard label.stringValue != text else { return }
+        label.stringValue = text
+        label.sizeToFit()
+        setFrameSize(NSSize(width: ceil(label.frame.width) + Self.padX * 2, height: Self.height))
+        label.frame.origin = NSPoint(x: Self.padX, y: ((Self.height - label.frame.height) / 2).rounded())
     }
 }

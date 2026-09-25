@@ -117,17 +117,23 @@ private final class WindowPickerView: NSView {
         let stroke = NSBezierPath(rect: local); stroke.lineWidth = 3; stroke.stroke()
 
         guard let title = current.title, !title.isEmpty else { return }
+        // Long titles are cut with "…" so the chip never runs past the window's edges.
+        let para = NSMutableParagraphStyle()
+        para.lineBreakMode = .byTruncatingTail
         let attrs: [NSAttributedString.Key: Any] = [
             .foregroundColor: NSColor.white,
-            .font: NSFont.systemFont(ofSize: 13, weight: .semibold)]
+            .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+            .paragraphStyle: para]
         let size = (title as NSString).size(withAttributes: attrs)
-        let pad: CGFloat = 6
-        let cap = CGRect(x: local.midX - size.width / 2 - pad,
-                         y: local.midY - size.height / 2 - pad,
-                         width: size.width + pad * 2, height: size.height + pad * 2)
+        guard let chip = OverlayLabelLayout.titleChip(window: local, textSize: size,
+                                                      padding: 6, margin: 12) else { return }
+        let cap = NSBezierPath(roundedRect: chip.chip, xRadius: 6, yRadius: 6)
         NSColor.black.withAlphaComponent(0.6).setFill()
-        NSBezierPath(roundedRect: cap, xRadius: 6, yRadius: 6).fill()
-        (title as NSString).draw(at: CGPoint(x: local.midX - size.width / 2,
-                                             y: local.midY - size.height / 2), withAttributes: attrs)
+        cap.fill()
+        NSColor.white.withAlphaComponent(HUDStyle.borderAlpha).setStroke()
+        cap.lineWidth = 1
+        cap.stroke()
+        (title as NSString).draw(with: chip.text, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine],
+                                 attributes: attrs)
     }
 }

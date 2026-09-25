@@ -64,7 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBar.canRestore = { [weak self] in self?.history.canRestore ?? false }
 
         // One-button first-run setup (Screen Recording is the only permission).
-        onboarding = OnboardingController()
+        onboarding = OnboardingController(bindings: { [weak self] in self?.settings.bindings ?? .defaults })
         coordinator.presentSetup = { [weak self] in self?.onboarding.show(.needsPermission) }
         recordingCoordinator.presentSetup = { [weak self] in self?.onboarding.show(.needsPermission) }
         if !PermissionManager.hasScreenRecordingPermission {

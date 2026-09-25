@@ -11,6 +11,9 @@ final class PinView: NSView {
     private let onClose: () -> Void
 
     private let closeButton = NSButton()
+    /// Dark HUD circle behind the ✕ so it reads on light pins too; shown on hover.
+    private let closeBacking = HUDStyle.makeBackground(frame: NSRect(x: 0, y: 0, width: 22, height: 22),
+                                                       cornerRadius: 11, blending: .withinWindow)
     private enum DragMode { case none, move, resize }
     private var dragMode: DragMode = .none
     private var dragStartMouse = CGPoint.zero    // screen coords
@@ -27,16 +30,20 @@ final class PinView: NSView {
         wantsLayer = true
         layer?.masksToBounds = true
 
-        closeButton.image = NSImage(systemSymbolName: "xmark.circle.fill",
-                                    accessibilityDescription: "Close pin")
+        closeButton.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close pin")?
+            .withSymbolConfiguration(.init(pointSize: 10, weight: .bold))
         closeButton.isBordered = false
         closeButton.imagePosition = .imageOnly
         closeButton.setAccessibilityLabel("Close pin")
-        closeButton.contentTintColor = .white
+        closeButton.toolTip = "Close pin"
+        closeButton.contentTintColor = HUDStyle.primaryText
         closeButton.target = self
         closeButton.action = #selector(closeTapped)
-        closeButton.isHidden = true
-        addSubview(closeButton)
+        closeButton.frame = closeBacking.bounds
+        closeButton.autoresizingMask = [.width, .height]
+        closeBacking.addSubview(closeButton)
+        closeBacking.isHidden = true
+        addSubview(closeBacking)
     }
 
     required init?(coder: NSCoder) { fatalError("unsupported") }
@@ -49,7 +56,7 @@ final class PinView: NSView {
 
     override func layout() {
         super.layout()
-        closeButton.frame = NSRect(x: 6, y: bounds.height - 26, width: 20, height: 20)
+        closeBacking.frame = NSRect(x: 6, y: bounds.height - 28, width: 22, height: 22)
     }
 
     override func updateTrackingAreas() {
@@ -59,8 +66,8 @@ final class PinView: NSView {
             options: [.mouseEnteredAndExited, .activeAlways], owner: self, userInfo: nil))
     }
 
-    override func mouseEntered(with event: NSEvent) { closeButton.isHidden = false }
-    override func mouseExited(with event: NSEvent) { closeButton.isHidden = true }
+    override func mouseEntered(with event: NSEvent) { closeBacking.isHidden = false }
+    override func mouseExited(with event: NSEvent) { closeBacking.isHidden = true }
 
     override func mouseDown(with event: NSEvent) {
         guard let window else { return }
