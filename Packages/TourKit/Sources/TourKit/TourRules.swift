@@ -40,6 +40,11 @@ public enum TourRules {
 /// `{shortcut:<HotkeyAction raw value>}` placeholders in step bodies (spec §14.3: shortcuts show the
 /// user's **current** keys).
 public enum TourText {
+    /// What a `{shortcut:…}` placeholder shows when the user has cleared that shortcut — short enough that
+    /// every body still fits the tag's two lines (`TagFitTests`), instead of the action's name
+    /// ("Capture Area area…", review W3).
+    public static let unboundShortcut = "(not set)"
+
     /// Replaces every `{shortcut:name}` with `lookup(name)`. A nil lookup leaves that placeholder as is
     /// (the catalog lint tests make sure every name is a real action).
     public static func resolvingShortcuts(in text: String, _ lookup: (String) -> String?) -> String {

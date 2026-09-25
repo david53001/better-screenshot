@@ -29,7 +29,7 @@ let recordingTourTests: [TestCase] = [
                 for step in TourCatalog.tour(id).steps {
                     // A `{shortcut:…}` shows the user's own combo: measure the default look and the longest
                     // (same list as TourKit's TagFitTests).
-                    for keys in ["⇧⌘4", "⌃⌥⇧⌘4", "⌃⌥⇧⌘F12"] {
+                    for keys in ["⇧⌘4", "⌃⌥⇧⌘4", "⌃⌥⇧⌘F12", TourText.unboundShortcut] {
                         let body = TourText.resolvingShortcuts(in: step.body) { _ in keys }
                         let full = tagBodyHeight(body, maxLines: 0)
                         let shown = tagBodyHeight(body, maxLines: TagStyle.bodyMaxLines)

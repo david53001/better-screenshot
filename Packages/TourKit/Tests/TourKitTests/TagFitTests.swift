@@ -15,8 +15,9 @@ import TestKit
 }
 
 /// Combos a `{shortcut:…}` placeholder is measured with: the default look, and the longest a user can
-/// bind (every modifier + F12). The editor and recording fit tests (EditorKit, RecordingKit) use the same.
-let tagFitKeys = ["⇧⌘4", "⌃⌥⇧⌘4", "⌃⌥⇧⌘F12"]
+/// bind (every modifier + F12), and what an unbound shortcut shows. The editor and recording fit tests
+/// (EditorKit, RecordingKit) use the same.
+let tagFitKeys = ["⇧⌘4", "⌃⌥⇧⌘4", "⌃⌥⇧⌘F12", TourText.unboundShortcut]
 
 /// The tours lane 7S wrote (Welcome, Quick Access, Settings, History). The word limit alone doesn't
 /// guarantee a body fits the tag's two lines (lane 7E had an 18-word body cut off with "…").

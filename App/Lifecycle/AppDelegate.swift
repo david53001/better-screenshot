@@ -32,7 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             shortcutText: { [weak self] name in
                 guard let action = HotkeyAction(rawValue: name) else { return nil }
                 return HotkeyCheatSheet.keys(for: action, in: self?.settings.bindings ?? .defaults)
-                    ?? action.title
+                    ?? TourText.unboundShortcut
             })
         tours.notify = { [weak self] message in self?.hud.show(message, symbol: "questionmark.circle") }
         tours.install()
