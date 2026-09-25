@@ -42,10 +42,8 @@ public final class EditorWindowController: NSWindowController {
         [.crop],
     ]
 
-    private lazy var backdrop = NSColor(name: nil) { ap in
-        ap.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            ? NSColor(white: 0.12, alpha: 1) : NSColor(white: 0.90, alpha: 1)
-    }
+    /// The neutral backdrop around the canvas. The window is always dark (see `init`).
+    private let backdrop = NSColor(white: 0.12, alpha: 1)
 
     /// `recentColors`: the persisted Recent colours (newest first); changes come back
     /// through `onRecentColorsChanged`.
@@ -70,6 +68,9 @@ public final class EditorWindowController: NSWindowController {
             backing: .buffered, defer: false)
         window.title = "Annotate"
         window.titlebarAppearsTransparent = true
+        // Always dark, like the video editor: the dark HUD panels are vibrant and blend with
+        // the window behind them, so in Light mode they washed out to mid-grey.
+        window.appearance = NSAppearance(named: .darkAqua)
         window.minSize = NSSize(width: Self.minWidthWithPanel, height: 440)
         super.init(window: window)
 
