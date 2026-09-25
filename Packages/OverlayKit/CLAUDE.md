@@ -13,10 +13,19 @@ Quick Access thumbnail (and its stack), and pin-to-screen panels. Imported by th
 - `QuickAccessContrast.swift`, `SRGB.swift`, `BandLuminance.swift`, `AspectFillMap.swift` — pure,
   unit-tested contrast math for the card's overlaid buttons: WCAG luminance, p10/p90 band percentiles,
   the aspect-fill card→image pixel mapping, and the tone + scrim-alpha solver that guarantees 4.5:1.
-- `HUDController.swift` — transient on-screen HUD.
+- `DraggableImageView.swift` — the card's drag source. A plain `NSView`, **not** an `NSImageView`: on
+  macOS 26 `NSImageView` adds its own image subview above every sublayer, which covered the card's
+  aspect-fill picture and contrast scrim (doubled images, illegible buttons). Its `image` is only the
+  drag preview.
+- `HUDController.swift` — transient on-screen toast (optional SF Symbol).
+- `HUDStyle.swift` — the one shared dark HUD look (`.hudWindow` blur, `.vibrantDark`, `.active`, 40% black
+  tint, 1px 10% white border). Toasts, the selection size chip, the pin close button and the Quick
+  Access badge use it; new small floating surfaces should too.
+- `OverlayLabelLayout.swift` (selection size chip placement, window-picker title chip truncation) and
+  `MediaInfoText.swift` ("1600 × 1000", "0:42", "0:42 · MP4") — pure and unit-tested.
 
-`PinGeometry` and the four contrast files above are pure and unit-tested; the controllers are AppKit UI
-verified manually.
+`PinGeometry`, the four contrast files, `OverlayLabelLayout` and `MediaInfoText` are pure and
+unit-tested; the controllers are AppKit UI verified manually.
 
 ## Verify
 `swift run --package-path Packages/OverlayKit OverlayKitTests`.

@@ -101,7 +101,7 @@ a box's width equals its `wrapWidth`; a 3-line wrapped text renders its first in
 its origin and its last ink row inside its box. `AnnotationStyleCodableTests` — legacy JSON without the
 font keys decodes to System / bold / not italic / left; all four font fields round-trip.
 
-### A.2 Floating recording pill (compact v1) + "Show stop button in recording"
+### A.2 Floating recording pill (compact v1) + "Show recording controls in the video"
 
 (Part 5 turns this into the expanded pill — port Part 5's layout; the rules here still hold.)
 - **When:** shown on the recording screen as soon as a recording is started — **before** the countdown —
@@ -114,10 +114,12 @@ font keys decodes to System / bold / not italic / left; all four font fields rou
   app (macOS `acceptsFirstMouse`; WPF: `ShowActivated=false` + `WS_EX_NOACTIVATE`).
 - **Paused:** the time freezes and turns secondary grey; Pause becomes `play.fill` "Resume recording".
   Tooltips: "Pause recording" / "Resume recording" / "Stop recording".
-- **Setting:** Settings → Recording → **"Show stop button in recording"**, default **off**, persisted key
+- **Setting:** Settings → In the video → **"Show recording controls in the video"** (renamed from "Show
+  stop button in recording" by the fixes for `docs/reviews/2026-09-25-ui-review.md` item T6), default
+  **off**, persisted key
   `controlsInRecording` ("true"/"false" in the recording-config dictionary). Help text (verbatim):
-  "While recording, a floating pill with the timer, Pause and Stop is always on screen. Off: it's hidden
-  from the video itself. On: it's recorded like any other window." Example line: "Leave off for clean
+  "While recording, a floating pill with the timer, Pause and Stop is always on screen. Off: it's left
+  out of the video itself. On: it's recorded like any other window." Example line: "Leave off for clean
   tutorials; window recordings never include it either way."
 - **macOS mechanism:** the pill's window is passed to ScreenCaptureKit's exclusion list
   (`SCContentFilter(display:excludingWindows:)`), after waiting briefly until the new window shows up in
@@ -1154,16 +1156,22 @@ idle. With no hover, a **keyboard-focused** control (Tab) shows its hint. Hover 
   It reads the device's average power per audio buffer (~47 updates/s) through `MicLevel`.
 - **Long device names** truncate with "…" at the end; hovering the dropdown then shows the full name
   as a tooltip (only when truncated).
-- **Show mouse cursor / Cursor = Hidden** records without the pointer.
+- **Mouse cursor = Hidden** records without the pointer.
 
-### Settings window — Recording card (same choices, same stored values)
+### Settings window — Recording + In the video cards (same choices, same stored values)
 
-Rows in order: Format · Frame rate · divider · **Microphone** (dropdown: Off + mics) · **System audio**
-(dropdown: the three modes; when Format = GIF both audio dropdowns are dimmed/disabled and a sub-label
-reads "GIFs have no sound. Switch Format to MP4 to record audio.") · **Camera** (dropdown: Off +
-cameras) · Camera size [Small | Medium] (disabled while Camera = Off) · **Show mouse cursor** (switch,
-new) · Highlight mouse clicks · Show keystrokes · Countdown before recording · Show stop button in
-recording. The three old switches ("Record system audio", "Record microphone", "Show camera bubble")
+Since the fixes for the 2026-09-25 UI review (`docs/reviews/2026-09-25-ui-review.md`, items T3/T5) the
+old single Recording card is two cards, and the Settings window's three columns are
+**Capture · Quick Access Overlay · Pin to Screen** | **Recording · Startup** | **In the video · History ·
+Save location** (so the three columns end at about the same height).
+
+**RECORDING** rows in order: Format · Frame rate · Countdown before recording · divider · **Microphone**
+(dropdown: Off + mics) · **System audio** (dropdown: the three modes; when Format = GIF both audio
+dropdowns are dimmed/disabled and a sub-label reads "GIFs have no sound. Switch Format to MP4 to record
+audio.") · **Camera** (dropdown: Off + cameras) · Camera size [Small | Medium] (disabled while Camera =
+Off). **IN THE VIDEO** rows: **Mouse cursor** (dropdown: Shown | Hidden — the record strip's name and
+choices) · Highlight mouse clicks · Show keystrokes · Show recording controls in the video.
+The three old switches ("Record system audio", "Record microphone", "Show camera bubble")
 are gone. Dropdowns are full-width, label above (the existing "field label + ⓘ" idiom). ⓘ texts
 (title — explanation — example, verbatim):
 - **Microphone** — "Which microphone records your voice, or Off for none. If the chosen mic is
@@ -1175,8 +1183,9 @@ are gone. Dropdowns are full-width, label above (the existing "field label + ⓘ
 - **Camera** — "Shows your webcam in a round bubble on screen while you record, so it ends up in the
   video. Pick which camera (including an iPhone via Continuity Camera), or Off." — "Turn on for a
   face-cam picture-in-picture during a walkthrough video."
-- **Show mouse cursor** — "Draws the mouse pointer into the recording. Turn off for a clean video
-  without the pointer." — "Turn off when recording a slideshow or video you won't be clicking through."
+- **Mouse cursor** — "Shown draws the mouse pointer into the recording as it moves. Hidden gives a clean
+  video without the pointer." — "Choose Hidden when recording a slideshow or video you won't be clicking
+  through."
 
 (macOS also fixed the shared `MonoComboField` so dropdowns draw as the styled full-width field — the
 port's ComboBox style already does.)
@@ -1192,7 +1201,7 @@ port's ComboBox style already does.)
 | `camera` | `true`/`false` | `false` | Unchanged. |
 | `cameraDeviceID` | device id string | absent | **New**, same rules as the mic id. |
 | `cameraSize` | `small`/`medium` | `small` | Unchanged; now set from the Bubble Size submenu too. |
-| `showsCursor` | `true`/`false` | `true` | **New** ("Show mouse cursor"). |
+| `showsCursor` | `true`/`false` | `true` | **New** ("Mouse cursor": Shown = `true`, Hidden = `false`). |
 
 Device ids are platform-specific (macOS: `AVCaptureDevice.uniqueID`; Windows: see Platform notes) —
 never compare them across platforms.
@@ -1261,7 +1270,8 @@ Tests (`Packages/RecordingKit/Tests/RecordingKitTests/DeviceChoiceTests.swift`,
 - Camera: `windows/src/BetterScreenshot.App/Recording/CameraBubbleWindow.xaml.cs` — pass the chosen
   camera as `MediaCaptureInitializationSettings.VideoDeviceId` (today it takes the first colour source).
 - Settings: `windows/src/BetterScreenshot.App/Settings/SettingsWindow.xaml(.cs)` — replace the
-  `SysAudioCheck` / mic / camera switches with ComboBoxes + the "Show mouse cursor" switch.
+  `SysAudioCheck` / mic / camera switches with ComboBoxes + the "Mouse cursor" (Shown | Hidden) ComboBox,
+  split into the Recording + In the video cards described above.
 
 ### Platform notes
 
@@ -1578,8 +1588,8 @@ segments with `-c copy` at stop**. A running ffmpeg can't change its inputs or r
   session on the same region/config (countdown again). **Discard** = stop, delete segments, no concat,
   no history, no card, HUD "Recording discarded".
 - **Excluding the pill from the video.** `gdigrab` captures the desktop DC, so the pill needs
-  `SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)` (Windows 10 2004+) unless "Show stop button in
-  recording" is on — verify with a probe recording that it hides the window from `gdigrab`; if not, fall
+  `SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)` (Windows 10 2004+) unless "Show recording
+  controls in the video" is on — verify with a probe recording that it hides the window from `gdigrab`; if not, fall
   back to `ddagrab` (Desktop Duplication honours it). It's per-window, so it survives a switch.
 - **Focus.** The pill must never activate (`WS_EX_NOACTIVATE`, `ShowActivated=false`, handle
   `WM_MOUSEACTIVATE` → `MA_NOACTIVATE`). Test that its tooltips and hover highlights still appear while
