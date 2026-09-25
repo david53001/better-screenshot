@@ -345,6 +345,13 @@ let tagKeysTests: [TestCase] = [
         t.equal(TagKeys.action(keyCode: TagKeys.returnKey, modifiers: [], isRepeat: false, isExplainStep: true,
                                isEditingText: false, hostClaimsEscape: true), .next)
     },
+    TestCase("aControlRecordingKeysGetsReturnAndEscape") { t in
+        // Settings while a shortcut well records: Esc cancels it, Return is just another key press.
+        for code in [TagKeys.returnKey, TagKeys.keypadEnter, TagKeys.escape] {
+            t.isNil(TagKeys.action(keyCode: code, modifiers: [], isRepeat: false, isExplainStep: true,
+                                   isEditingText: false, hostClaimsKeys: true))
+        }
+    },
     TestCase("typingInATextViewPassesThrough") { t in
         t.isNil(TagKeys.action(keyCode: TagKeys.returnKey, modifiers: [], isRepeat: false, isExplainStep: true, isEditingText: true))
         t.isNil(TagKeys.action(keyCode: TagKeys.escape, modifiers: [], isRepeat: false, isExplainStep: true, isEditingText: true))

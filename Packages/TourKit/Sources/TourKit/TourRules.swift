@@ -29,6 +29,12 @@ public enum TourRules {
     public static func tours(triggeredBy trigger: TourTrigger, in catalog: [Tour]) -> [Tour] {
         catalog.filter { $0.trigger == trigger }
     }
+
+    /// What Reset All Tours confirms (the Help & Tours menu's HUD, Settings → Tours & tips). With first-use
+    /// tours off (absent = off) nothing starts by itself afterwards, so it says how to get them (review I1).
+    public static func resetConfirmation(firstUseToursEnabled: Bool?) -> String {
+        (firstUseToursEnabled ?? false) ? "Tours reset" : "Tours reset — turn on Tours & tips to see them again"
+    }
 }
 
 /// `{shortcut:<HotkeyAction raw value>}` placeholders in step bodies (spec §14.3: shortcuts show the

@@ -69,4 +69,11 @@ let tourRulesTests: [TestCase] = [
             t.isFalse(id.menuSymbol.isEmpty)
         }
     },
+    TestCase("resetSaysHowToSeeToursWhenTheyAreOff") { t in
+        t.equal(TourRules.resetConfirmation(firstUseToursEnabled: true), "Tours reset")
+        for off in [false, nil] as [Bool?] {
+            t.equal(TourRules.resetConfirmation(firstUseToursEnabled: off),
+                    "Tours reset — turn on Tours & tips to see them again")
+        }
+    },
 ]

@@ -220,8 +220,16 @@ final class RecordingControlsController {
         root.addSubview(capsule)
         root.addSubview(bubble)
 
-        let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 200, height: Metric.height),
-                        styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        let p = PillPanel(contentRect: NSRect(x: 0, y: 0, width: 200, height: Metric.height),
+                          styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        // A tour tag dims and keeps clear of the capsule (plus the hint band above and below it), not the
+        // window, which grows while a control is hovered.
+        p.shape = { [weak self] in
+            guard let self else { return nil }
+            let band = Metric.hintGap + Metric.hintHeight
+            return TourHostShape(frame: self.pillFrame, cornerRadius: Metric.height / 2,
+                                 keepOut: self.pillFrame.insetBy(dx: 0, dy: -band))
+        }
         p.level = .statusBar
         p.isOpaque = false
         p.backgroundColor = .clear
@@ -639,4 +647,10 @@ private final class PillButton: NSButton {
 
     override func mouseEntered(with event: NSEvent) { hovering = true; applyBackground(); onHover?(self, true) }
     override func mouseExited(with event: NSEvent) { hovering = false; applyBackground(); onHover?(self, false) }
+}
+
+/// The pill's window: tells a tour tag what's visible of it (`TourHostShaping`).
+private final class PillPanel: NSPanel, TourHostShaping {
+    var shape: (() -> TourHostShape?)?
+    var tourHostShape: TourHostShape? { shape?() }
 }

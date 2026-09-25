@@ -40,7 +40,7 @@ final class SettingsWindowController {
                                 tours: tours)
         let hosting = NSHostingController(rootView: view)
         hosting.view.appearance = NSAppearance(named: .darkAqua)
-        let w = NSWindow(contentViewController: hosting)
+        let w = SettingsWindow(contentViewController: hosting)
         w.styleMask = [.titled, .closable, .miniaturizable]
         w.title = "Settings"
         w.appearance = NSAppearance(named: .darkAqua)
@@ -59,6 +59,12 @@ final class SettingsWindowController {
             info?.shortcuts = Self.infoShortcuts(bindings)
         }
         return w
+    }
+
+    /// The Settings window. While a shortcut well is recording, Return and Esc belong to it (Esc cancels,
+    /// anything else is the new shortcut), not to a tour tag's "Next" / "Skip Tour" (review S3).
+    final class SettingsWindow: NSWindow, TourKeysClaiming {
+        var claimsTourKeys: Bool { contentView.map(RecorderWell.anyRecording(in:)) ?? false }
     }
 
     /// The ⓘ's Keyboard Shortcuts list: every bound action (as the Keyboard Shortcuts card shows it),

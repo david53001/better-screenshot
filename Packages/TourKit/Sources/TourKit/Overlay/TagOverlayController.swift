@@ -12,9 +12,11 @@ import AppKit
 /// An anchor in the menu bar (the status item) gets top-level panels instead, with the tag below it.
 ///
 /// Keys (local monitor, only for the host window, never swallowing anything else): Return = Next on
-/// Explain steps, Esc = Skip tour — both ignored while a text view is being edited (`TagKeys`); Esc
+/// Explain steps, Esc = Skip tour — both ignored while a text view is being edited or the window (or its
+/// first responder) claims them (`TourKeysClaiming` — Settings' shortcut recorder) (`TagKeys`); Esc
 /// also while the host window claims it (`TourEscapeClaiming` — the editor's Esc-to-Select).
-/// Call `hide()` before dropping the controller.
+/// A host that shows less than its window (`TourHostShaping` — the pill) is dimmed and kept clear of by
+/// that shape. Call `hide()` before dropping the controller.
 @MainActor
 public final class TagOverlayController: TourTagPresenting {
     public var onNext: (() -> Void)?
@@ -54,11 +56,15 @@ public final class TagOverlayController: TourTagPresenting {
 
     private weak var host: NSWindow?
     private weak var anchor: NSView?
+    /// The step on screen and its resolved body (to redo the counter in `updateProgress`).
+    private var shown: (step: TourStep, body: String)?
     private var isExplain = true
     private var isDone = false
     private var isMenuBarHost = false
     private var tagSize = NSSize.zero
-    private var laidOut: (anchor: CGRect, host: CGRect, tag: NSSize)?
+    /// What the last layout was computed from, and the frames it gave the two panels (a host resizing
+    /// itself can move its child panels without the anchor moving).
+    private var laidOut: (anchor: CGRect, host: CGRect, tag: NSSize, decor: CGRect, tagFrame: CGRect)?
     private var keyMonitor: Any?
     private var resizeObserver: NSObjectProtocol?
     private var followTimer: Timer?
@@ -76,6 +82,7 @@ public final class TagOverlayController: TourTagPresenting {
         if self.host !== host { detach() }
         self.host = host
         self.anchor = anchor
+        shown = (step, body)
         isExplain = step.kind == .explain
         isDone = false
         tagSize = bubble.configure(title: step.title, body: body, number: number, total: total,
@@ -84,6 +91,14 @@ public final class TagOverlayController: TourTagPresenting {
         laidOut = nil
         refresh()
         announce(TagStyle.announcement(title: step.title, body: body, number: number, total: total))
+    }
+
+    public func updateProgress(number: Int, total: Int) {
+        guard host != nil, !isDone, let shown else { return }
+        tagSize = bubble.configure(title: shown.step.title, body: shown.body, number: number, total: total,
+                                   isExplain: isExplain)
+        laidOut = nil
+        refresh()
     }
 
     public func showCompleted() {
@@ -100,6 +115,7 @@ public final class TagOverlayController: TourTagPresenting {
         orderOutWindows()
         host = nil
         anchor = nil
+        shown = nil
         laidOut = nil
     }
 
@@ -157,29 +173,38 @@ public final class TagOverlayController: TourTagPresenting {
             return
         }
         let anchorRect = host.convertToScreen(anchor.convert(anchor.bounds, to: nil))
-        if let l = laidOut, l.anchor == anchorRect, l.host == host.frame, l.tag == tagSize,
-           decor.isVisible, tagPanel.isVisible { return }
-        laidOut = (anchorRect, host.frame, tagSize)
+        // What the user sees of the host: the pill's capsule, not its window grown for a hover hint.
+        let shape = (host as? TourHostShaping)?.tourHostShape
+        let hostRect = shape?.frame ?? host.frame
+        if let l = laidOut, l.anchor == anchorRect, l.host == hostRect, l.tag == tagSize,
+           decor.isVisible, tagPanel.isVisible, decor.frame == l.decor, tagPanel.frame == l.tagFrame { return }
 
         let centre = CGPoint(x: anchorRect.midX, y: anchorRect.midY)
         let screen = NSScreen.screens.first { $0.frame.contains(centre) } ?? host.screen ?? NSScreen.main
         isMenuBarHost = Self.isMenuBarHost(host, screen: screen)
-        let vertical = TagLayout.prefersVertical(containerSize: anchor.superview?.bounds.size ?? .zero)
+        let titled = host.styleMask.contains(.titled)
+        let inTitleBar = titled && TagLayout.isInTitleBar(
+            anchor: anchorRect, contentLayout: host.convertToScreen(host.contentLayoutRect))
+        let vertical = inTitleBar || TagLayout.prefersVertical(containerSize: anchor.superview?.bounds.size ?? .zero)
         // A borderless host (record strip, pill, status item) is small: keep the tag off it entirely.
         let p = TagLayout.place(anchor: anchorRect, tagSize: tagSize,
                                 visible: screen?.visibleFrame ?? host.frame,
                                 order: TagLayout.order(verticalFirst: vertical),
-                                keepOut: host.styleMask.contains(.titled) ? nil : host.frame,
-                                screen: screen?.frame)
+                                keepOut: titled ? nil : (shape?.keepOut ?? hostRect),
+                                screen: screen?.frame,
+                                preferred: shown?.step.placement ?? .automatic,
+                                host: isMenuBarHost ? nil : hostRect,
+                                obstacles: Self.obstacles(around: anchor, in: host))
 
         // The decor spans the host (for the dim), the box and the tag (for the leader line).
         var frame = p.outer.union(p.tag)
-        if !isMenuBarHost { frame = frame.union(host.frame) }
+        if !isMenuBarHost { frame = frame.union(hostRect) }
         frame = frame.insetBy(dx: -2, dy: -2).integral
         let o = frame.origin
         func local(_ r: CGRect) -> CGRect { r.offsetBy(dx: -o.x, dy: -o.y) }
         func local(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x - o.x, y: p.y - o.y) }
-        decorView.dim = isMenuBarHost ? nil : (local(host.frame), Self.cornerRadius(of: host))
+        decorView.dim = isMenuBarHost ? nil : (local(hostRect), shape?.cornerRadius ?? Self.cornerRadius(of: host))
+        decorView.dimAlpha = TagStyle.dimAlpha(hostIsDark: Self.isDark(anchor.effectiveAppearance))
         decorView.box = local(p.box)
         decorView.outer = local(p.outer)
         decorView.leader = p.leader.map { (local($0.from), local($0.to)) }
@@ -188,6 +213,30 @@ public final class TagOverlayController: TourTagPresenting {
         decorView.needsDisplay = true
         tagPanel.setFrame(p.tag, display: true)
         orderIn(host: host)
+        laidOut = (anchorRect, hostRect, tagSize, decor.frame, tagPanel.frame)
+    }
+
+    /// Dark Aqua (or vibrant dark — the HUD panels): the dim goes to `TagStyle.darkHostDimAlpha`.
+    static func isDark(_ appearance: NSAppearance) -> Bool {
+        appearance.bestMatch(from: [.aqua, .darkAqua, .vibrantLight, .vibrantDark]).map {
+            $0 == .darkAqua || $0 == .vibrantDark
+        } ?? false
+    }
+
+    /// The host's other visible controls (buttons, pop-ups, labels…) in screen coordinates — what the leader
+    /// line tries not to cross. The anchor, its subviews and its ancestors are left out.
+    static func obstacles(around anchor: NSView, in window: NSWindow) -> [CGRect] {
+        guard let root = window.contentView?.superview ?? window.contentView else { return [] }
+        var rects: [CGRect] = []
+        func walk(_ v: NSView) {
+            if v.isHidden || v === anchor { return }
+            if let c = v as? NSControl, !anchor.isDescendant(of: c), !c.visibleRect.isEmpty {
+                rects.append(window.convertToScreen(c.convert(c.visibleRect, to: nil)))
+            }
+            v.subviews.forEach(walk)
+        }
+        walk(root)
+        return rects
     }
 
     private func orderIn(host: NSWindow) {
@@ -225,11 +274,16 @@ public final class TagOverlayController: TourTagPresenting {
     func handleKey(_ event: NSEvent) -> Bool {
         guard let host, tagPanel.isVisible, !isDone,
               event.window === host || isMenuBarHost else { return false }
-        let editing = (event.window?.firstResponder as? NSTextView)?.isEditable == true
+        let responder = event.window?.firstResponder
+        let editing = (responder as? NSTextView)?.isEditable == true
+        // Settings while a shortcut well records (the window claims), or any control that says so itself.
+        let claimants: [AnyObject?] = [host, event.window, responder]
+        let claimsKeys = claimants.contains { ($0 as? TourKeysClaiming)?.claimsTourKeys == true }
         guard let action = TagKeys.action(keyCode: event.keyCode, modifiers: event.modifierFlags,
                                           isRepeat: event.isARepeat, isExplainStep: isExplain,
                                           isEditingText: editing,
-                                          hostClaimsEscape: (host as? TourEscapeClaiming)?.claimsEscape == true)
+                                          hostClaimsEscape: (host as? TourEscapeClaiming)?.claimsEscape == true,
+                                          hostClaimsKeys: claimsKeys)
         else { return false }
         switch action {
         case .next: onNext?()

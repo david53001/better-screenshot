@@ -19,6 +19,9 @@ final class TourCoordinator {
     var openSurface: ((TourSurface) -> Bool)?
     /// A short confirmation for the user (the app shows it in its HUD).
     var notify: ((String) -> Void)?
+    /// A tour was finished (its last step done or handed over — not Skip tour). The app closes the Welcome
+    /// window when the Welcome tour ends, so it isn't left behind the tours that follow (review W4).
+    var onFinished: ((TourID) -> Void)?
     /// Windows besides a tour's host where a step's anchor may live, searched after the host: the
     /// menu-bar status item's window (the Welcome tour's first step points at the icon). The tag then
     /// attaches to that window; the host still decides pausing.
@@ -37,6 +40,8 @@ final class TourCoordinator {
     private struct Suspended {
         let id: TourID
         weak var window: NSWindow?
+        /// What the paused run had seen, so a step that `requires` one of those events still shows on resume.
+        let observed: Set<TourEvent>
     }
 
     private var running: Session?
@@ -49,6 +54,8 @@ final class TourCoordinator {
     /// Bumped on every presentation change so a delayed "show next step" can tell it's stale.
     private var generation = 0
     private var showingCompleted = false
+    /// The "n of m" on screen — redone by the watchdog when a later step's control appears or goes.
+    private var shownProgress: (number: Int, total: Int)?
     private var closeObserver: NSObjectProtocol?
     private var watchdog: Timer?
 
@@ -214,10 +221,11 @@ final class TourCoordinator {
     /// shown there yet. One tour on screen at a time: a running one is paused — or, if it was on its
     /// last step and hands over to `id`, finished.
     @discardableResult
-    private func start(_ id: TourID, in window: NSWindow, from index: Int, restart: Bool = false) -> Bool {
+    private func start(_ id: TourID, in window: NSWindow, from index: Int, restart: Bool = false,
+                       observed: Set<TourEvent> = []) -> Bool {
         guard let tour = tour(id) else { return false }
         if !restart, let current = running, current.engine.tour.id == id, current.window === window { return true }
-        var engine = TourEngine(tour: tour)
+        var engine = TourEngine(tour: tour, observed: observed)
         let effect = engine.start(at: index, isPresent: presence(in: window))
         guard case .show = effect else { return false }
 
@@ -229,7 +237,8 @@ final class TourCoordinator {
                 var engine = current.engine
                 if case .paused(let at) = engine.pause() {
                     setPausedIndex(at, for: current.engine.tour.id)
-                    suspended.append(Suspended(id: current.engine.tour.id, window: current.window))
+                    suspended.append(Suspended(id: current.engine.tour.id, window: current.window,
+                                               observed: engine.observed))
                 }
                 stopRunning()
             }
@@ -278,6 +287,7 @@ final class TourCoordinator {
             let end = { [weak self] in
                 guard let self else { return }
                 self.stopRunning()
+                self.onFinished?(tour.id)
                 if let next { self.handOver(to: next) }
                 self.resumeSuspended()
             }
@@ -307,8 +317,21 @@ final class TourCoordinator {
         generation += 1
         showingCompleted = false
         let body = TourText.resolvingShortcuts(in: step.body, shortcutText)
-        tagPresenter.show(step: step, body: body, number: index + 1,
-                          total: session.engine.tour.steps.count, anchor: anchor, host: anchorWindow)
+        // Counted over the steps that actually show (anchor present, precondition met) — never 1 → 3.
+        let progress = session.engine.progress(isPresent: presence(in: window))
+            ?? (index + 1, session.engine.tour.steps.count)
+        shownProgress = progress
+        tagPresenter.show(step: step, body: body, number: progress.number,
+                          total: progress.total, anchor: anchor, host: anchorWindow)
+    }
+
+    /// Redoes "n of m" for the step on screen; the tag is told only when it changed.
+    private func refreshProgress() {
+        guard let session = running, !showingCompleted, let shown = shownProgress,
+              let now = session.engine.progress(isPresent: presence(in: session.window)),
+              now != shown else { return }
+        shownProgress = now
+        presenter?.updateProgress(number: now.number, total: now.total)
     }
 
     /// The Try step's brief "done" state, then `then` (unless something else was shown meanwhile).
@@ -327,6 +350,7 @@ final class TourCoordinator {
     private func stopRunning() {
         generation += 1
         showingCompleted = false
+        shownProgress = nil
         running = nil
         presenter?.hide()
         if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
@@ -352,8 +376,10 @@ final class TourCoordinator {
             if let current = running, current.engine.tour.id == tour.id, current.engine.current == last {
                 markSeen(tour)
                 stopRunning()
+                onFinished?(tour.id)
             } else if paused[tour.id.rawValue] == last {
                 markSeen(tour)
+                onFinished?(tour.id)
             }
         }
     }
@@ -364,7 +390,7 @@ final class TourCoordinator {
         let paused = pausedIndexes
         while let entry = suspended.popLast() {
             guard let window = entry.window, window.isVisible, let index = paused[entry.id.rawValue] else { continue }
-            if start(entry.id, in: window, from: index) { return }
+            if start(entry.id, in: window, from: index, observed: entry.observed) { return }
         }
     }
 
@@ -393,6 +419,7 @@ final class TourCoordinator {
         let effect = session.engine.skipIfAnchorMissing(isPresent: presence(in: window))
         running = session
         apply(effect)
+        if effect == .none { refreshProgress() }
     }
 
     private func pauseRunning() {

@@ -144,4 +144,5 @@ final class RecordingSafeTagPresenter: TourTagPresenting {
 
     func showCompleted() { tag.showCompleted() }
     func hide() { tag.hide() }
+    func updateProgress(number: Int, total: Int) { tag.updateProgress(number: number, total: total) }
 }

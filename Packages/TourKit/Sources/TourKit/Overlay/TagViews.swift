@@ -23,11 +23,13 @@ final class TagPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-/// Draws the 20% dim over the host window (with a hole at the box), the outline box and the
+/// Draws the dim over the host window (with a hole at the box), the outline box and the
 /// leader line. Local coordinates of the decor panel.
 final class TagDecorView: NSView {
     /// The host window's outline (rounded rect) to dim, or nil for no dim.
     var dim: (rect: CGRect, radius: CGFloat)?
+    /// 20 %, or 35 % over a dark host (`TagStyle.dimAlpha(hostIsDark:)`).
+    var dimAlpha = TagStyle.dimAlpha
     /// Outline's inner edge (anchor + padding) and outer edge (inner + stroke).
     var box: CGRect = .zero
     var outer: CGRect = .zero
@@ -44,7 +46,7 @@ final class TagDecorView: NSView {
             let outerRadius = TagStyle.boxRadius + TagStyle.boxStroke
             path.append(NSBezierPath(roundedRect: outer, xRadius: outerRadius, yRadius: outerRadius))
             path.windingRule = .evenOdd
-            NSColor.black.withAlphaComponent(TagStyle.dimAlpha).setFill()
+            NSColor.black.withAlphaComponent(dimAlpha).setFill()
             path.fill()
             NSGraphicsContext.restoreGraphicsState()
         }

@@ -109,6 +109,12 @@ final class RecorderWell: NSView {
 
     override var intrinsicContentSize: NSSize { NSSize(width: 130, height: 22) }
 
+    /// A well under `view` is waiting for a key press (its window then leaves Return/Esc to it).
+    static func anyRecording(in view: NSView) -> Bool {
+        if let well = view as? RecorderWell, well.active { return true }
+        return view.subviews.contains { anyRecording(in: $0) }
+    }
+
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func mouseDown(with event: NSEvent) { onClick?() }
