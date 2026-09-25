@@ -10,8 +10,10 @@ import CoreGraphics
 ///    preview, the Settings cards) — gets the tag beside the *whole window* if there's room on screen,
 ///    else inside its own top-right corner: "beside" it would mean over the window's other controls.
 /// 3. The first side in the preference order where the tag fits inside the visible frame (minus
-///    `screenMargin`) at `leaderLength` from the outline, slid along that side to stay on screen but
-///    still overlapping the box's span so the leader line stays short. With a `keepOut` rect (a small
+///    `screenMargin`) at `leaderLength` from the outline, slid along that side to stay on screen — and
+///    within the host window's extent on that axis when it fits there, so it doesn't hang past the
+///    window's edge (the ⓘ at a window's far right) — but still overlapping the box's span so the leader
+///    line stays short. With a `keepOut` rect (a small
 ///    borderless host — the record strip, the pill) the tag first tries to sit outside all of it, so it
 ///    never covers that panel's other controls; if nothing fits there it may overlap it.
 /// 4. Nothing fits at all → the tag sits *over* the control's top-left corner.
@@ -83,7 +85,8 @@ enum TagLayout {
         let outer = box.insetBy(dx: -TagStyle.boxStroke, dy: -TagStyle.boxStroke)
         let area = visible.insetBy(dx: TagStyle.screenMargin, dy: TagStyle.screenMargin)
         func fit(_ sides: [Side], clear: CGRect) -> Placement? {
-            firstFit(sides, clear: clear, box: box, outer: outer, size: tagSize, area: area, obstacles: obstacles)
+            firstFit(sides, clear: clear, box: box, outer: outer, size: tagSize, area: area, within: host,
+                     obstacles: obstacles)
         }
         func corner() -> Placement? {
             insideCorner(anchor: anchor, host: host, box: box, outer: outer, size: tagSize, area: area)
@@ -138,20 +141,31 @@ enum TagLayout {
     /// The first side where the tag fits `leaderLength` outside `clear`, inside `area`, overlapping
     /// the box's span.
     private static func firstFit(_ order: [Side], clear: CGRect, box: CGRect, outer: CGRect,
-                                 size: CGSize, area: CGRect, obstacles: [CGRect]) -> Placement? {
+                                 size: CGSize, area: CGRect, within host: CGRect?,
+                                 obstacles: [CGRect]) -> Placement? {
         let w = size.width, h = size.height, gap = TagStyle.leaderLength
+        /// Where the tag's origin may slide on one axis: the screen, narrowed to the host when it fits.
+        func slide(_ lo: CGFloat, _ hi: CGFloat, _ hostLo: CGFloat?, _ hostHi: CGFloat?, _ len: CGFloat)
+            -> (CGFloat, CGFloat) {
+            if let hostLo, let hostHi, min(hi, hostHi) - max(lo, hostLo) >= len {
+                return (max(lo, hostLo), min(hi, hostHi) - len)
+            }
+            return (lo, hi - len)
+        }
+        let ys = slide(area.minY, area.maxY, host?.minY, host?.maxY, h)
+        let xs = slide(area.minX, area.maxX, host?.minX, host?.maxX, w)
         for side in order {
             var tag: CGRect
             switch side {
             case .left, .right:
                 let x = side == .left ? clear.minX - gap - w : clear.maxX + gap
-                let y = clamp(box.midY - h / 2, area.minY, area.maxY - h)
+                let y = clamp(box.midY - h / 2, ys.0, ys.1)
                 tag = CGRect(x: x, y: y, width: w, height: h)
                 guard tag.minX >= area.minX, tag.maxX <= area.maxX, h <= area.height,
                       tag.minY < box.maxY, tag.maxY > box.minY else { continue }
             case .below, .above:
                 let y = side == .below ? clear.minY - gap - h : clear.maxY + gap
-                let x = clamp(box.midX - w / 2, area.minX, area.maxX - w)
+                let x = clamp(box.midX - w / 2, xs.0, xs.1)
                 tag = CGRect(x: x, y: y, width: w, height: h)
                 guard tag.minY >= area.minY, tag.maxY <= area.maxY, w <= area.width,
                       tag.minX < box.maxX, tag.maxX > box.minX else { continue }

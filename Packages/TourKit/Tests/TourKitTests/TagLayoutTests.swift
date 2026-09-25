@@ -264,6 +264,22 @@ let tagLayoutTests: [TestCase] = [
         t.equal(p.side, .below)
     },
 
+    TestCase("aTagSlidesToStayWithinItsWindow") { t in
+        // The editor's ⓘ, 6 pt from the window's right edge, with screen room to its right: the tag below it
+        // ends at the window's edge instead of hanging past it — and the leader still drops straight down.
+        let window = CGRect(x: 100, y: 84, width: 1000, height: 708)
+        let info = CGRect(x: 1068, y: 766, width: 26, height: 22)
+        let p = TagLayout.place(anchor: info, tagSize: tagSize, visible: screen,
+                                order: TagLayout.order(verticalFirst: true), host: window)
+        t.equal(p.side, .below)
+        t.equal(p.tag.maxX, window.maxX)
+        t.equal(p.leader?.from.x, p.leader?.to.x)
+        // Without a host it's centred on the ⓘ, as before.
+        let free = TagLayout.place(anchor: info, tagSize: tagSize, visible: screen,
+                                   order: TagLayout.order(verticalFirst: true))
+        t.equal(free.tag.midX, free.box.midX)
+    },
+
     // MARK: Leader routing (review T5)
 
     TestCase("theLeaderSlidesIntoAGapBetweenControls") { t in
