@@ -56,22 +56,28 @@ struct InfoTip: View {
             }
     }
 
+    /// Fixed width + vertical fixedSize on every Text: a popover proposes no width of
+    /// its own, so without them each line was cut to one row with "…".
     private var tooltipCard: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(SettingsTheme.Font.tooltipTitle)
                 .foregroundColor(SettingsTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
             Text(explanation)
                 .font(SettingsTheme.Font.tooltipBody)
                 .foregroundColor(SettingsTheme.label)
+                .fixedSize(horizontal: false, vertical: true)
             if let example {
                 Text("e.g. " + example)
                     .font(SettingsTheme.Font.tooltipExample)
                     .italic()
                     .foregroundColor(SettingsTheme.subLabel)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .multilineTextAlignment(.leading)
+        .frame(width: 280, alignment: .leading)
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(SettingsTheme.card)
@@ -80,6 +86,5 @@ struct InfoTip: View {
                 .stroke(SettingsTheme.border, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 6))
-        .frame(maxWidth: 300)
     }
 }
