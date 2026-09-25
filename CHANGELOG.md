@@ -61,6 +61,28 @@ port notes: `docs/MAC-TO-WINDOWS-PARITY-v3.md`.
   Edit Video and History reopen the way you last closed them — same size, covering the whole screen, or
   in full screen.
 
+### Guided tours (Part 7) — new users only, and only if they say yes
+Design: spec §14 + §14.9 (`docs/superpowers/specs/2026-09-24-betterscreenshot-editor-recording-v3-design.md`);
+Windows-port notes: `docs/MAC-TO-WINDOWS-PARITY-v3.md` Part 7; snapshots in `docs/reviews/2026-09-25-tours/`.
+- **Existing users are never prompted.** On the first launch of this version the app decides once whether
+  you're new — any saved setting, anything in `~/Library/Application Support/BetterScreenshot/`, or Screen
+  Recording already granted means *existing* — and stores it (`tourAudience`). Existing users never see the
+  question or an automatic tour, not after later updates either.
+- **New users are asked once**, on the Welcome window's last page: "Want a quick tour?" — **Show Me Around**
+  turns on first-use tours; **No Thanks** (or closing the window) keeps them off for good.
+- **Interactive tours on the real UI:** a red outline around the real control and a red tag with a leader
+  line (Return = Next, Esc = Skip tour); clicks go straight through to the app, and "Try" steps finish when
+  you actually do the thing. Tours: Welcome → Quick Access card → Editor (plus Text, Blur/Pixelate,
+  Highlighter, Spotlight the first time you use them) · First recording (every choice on the record strip)
+  → recording pill · Video editor · Settings · History.
+- **ⓘ button** on the editor, video editor, Settings, History windows and the record strip: Replay Tour and
+  that window's Keyboard Shortcuts. Menu bar → **Help & Tours** (take/replay any tour, Reset All Tours);
+  Settings → Startup → **Tours & tips** (turn first-use tours on or off).
+- Tour tags never appear in your screenshots or screen recordings (including Capture Window on a window
+  showing a tag, and tags that appear mid-recording).
+- While a tour explains the Quick Access card it stays up (no auto-dismiss). Settings: Startup and Pin to
+  Screen swapped columns to keep them even.
+
 ### UI polish — fixes from the independent UI review
 Review: `docs/reviews/2026-09-25-ui-review.md` (5/10 before these fixes); after-screenshots in
 `docs/reviews/2026-09-25-ui-fixes/`.

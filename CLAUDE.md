@@ -142,8 +142,11 @@ outline/presets), redaction strength (+ fix: blur/pixelate patches are baked at 
 resizing shows stale content), labelled recording strip with device menus, expanded live recording
 pill (mute mic/system audio, switch window), and a cut/split video editor. Built straight from the
 spec (owner: no per-part plan documents); UI-review fixes (`docs/reviews/2026-09-25-ui-review.md`, 5/10 before) merged 2026-09-25 — lane "UI fixes" in the
-progress file, leftovers under its Known follow-ups. **Next:** **Part 7** (spec §14 — interactive, action-driven guided tours on the real UI, ⓘ help
-on every window; demo videos considered and dropped) — approved 2026-09-25, deferred by the owner to later. Every part must also update `docs/MAC-TO-WINDOWS-PARITY-v3.md` (exact layout/behaviour for the
+progress file, leftovers under its Known follow-ups. **Part 7** (spec §14 + §14.9 — interactive guided tours on the real UI, ⓘ on every window; **only
+ever offered to new users, and only after they say "Show Me Around"**) built and merged 2026-09-26: `Packages/TourKit`
+(model, engine, audience classifier, catalog, tag overlay, ⓘ) + `App/Tours/TourCoordinator.swift`; status and
+follow-ups in `docs/PROGRESS-v3.md` (lane "Tours & help"). Never weaken the new-user rule — existing users must
+never be prompted. Every part must also update `docs/MAC-TO-WINDOWS-PARITY-v3.md` (exact layout/behaviour for the
 `windows-port` C#/WPF port — spec §12).
 
 (Recording Controls — countdown · window target · pause/resume — shipped as `v2.4.0` on 2026-06-25.)

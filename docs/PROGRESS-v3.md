@@ -25,7 +25,7 @@ keep the Mac responsive.
 | 1 | Live pill | Part 5 | **merged** into `main` (`85b214b`) — also fixed a pre-existing A/V drift after pausing on a static screen | `f88cf6c`…`82fc870` |
 | 2 | Text | Part 2 | **merged** into `main` (`4347104`) | `c206a2f`, `0b324b9`, `f275179` |
 | 2 | Redaction + tools | Part 3 | **merged** into `main` (`dc1c11e`) | `9b40dfe`…`fc056b0` |
-| 3 | Tours & help | Part 7 (spec §14 + **§14.9: new users only, asked first**) | **building since 2026-09-25**. Skeleton `Packages/TourKit` on `main` (model, events, anchors, per-area catalog files). **Phase 1** (parallel, launched 2026-09-25 from `2f71020`): 7A engine + audience + coordinator + Welcome question + menu + Settings row (branch `worktree-agent-a8c573db1d6780e35`) · 7B tag overlay + ⓘ button (branch `worktree-agent-a1d952b222380083b`). Both **merged** (`6b70d65` 7A, then 7B + switch to the real `TagOverlayController`; `6823daa` adds `TagOverlayController.allWindowNumbers` for capture/recording exclusion). **Phase 2** launched 2026-09-25 from `6823daa`: 7E editor tours (branch `worktree-agent-aa508fb108265626b`) · 7R strip/pill/video-editor tours + tags kept out of recordings (`worktree-agent-ab386e5bf97e4086d`) · 7S Welcome/Quick Access/Settings/History tours + tags kept out of screenshots (`worktree-agent-a177f0cfd3d2ba68f`). After merge: full tests, release build, CHANGELOG, root CLAUDE.md, owner's manual pass (real clicks in titled windows, real menu-bar icon step). **Phase 2** (after 7A/7B merge, parallel): 7E editor tours · 7R strip/pill/video-editor tours · 7S Welcome/Quick Access/Settings/History tours. Each lane: own worktree, fast-forward to local `main` first, `-j 2`, probes behind the owner's windows, updates its Part 7 subsection of the parity doc | — |
+| 3 | Tours & help | Part 7 (spec §14 + **§14.9: new users only, asked first**) | **merged** into `main` 2026-09-26: skeleton `c297463`/`2f71020` · 7A engine + audience + coordinator + question + menu + Settings row (`6b70d65`) · 7B tag overlay + ⓘ (merged with the switch to the real overlay) · `6823daa` tag windows list · 7E editor tours (`04da849`) · 7S Welcome/Quick Access/Settings/History + screenshot exclusion · 7R strip/pill/video-editor tours + recording exclusion (`2e2d21a`). 537 tests pass. **Needs the owner's manual pass** — see follow-ups | — |
 | 4 | UI fixes | Fix the independent UI review's issues (`docs/reviews/2026-09-25-ui-review.md`, overall 5/10): editor · recording strip/pill/countdown · video editor · app shell (Settings, History, Welcome, menu, Quick Access, overlays) | **merged** into `main` 2026-09-25 (`e85734a` video, `45dfd46` editor, `0584da9` strip/pill/countdown, `76a2a57` app shell) — all review items fixed except C2 (partly: Settings keeps its own dropdown style) and V6/Q3 (judged acceptable). After-screenshots: `docs/reviews/2026-09-25-ui-fixes/`. 433 tests pass | `674ae95`…`1fced9b` |
 | — | Coordinator | Windows doc §A (`6a1304e`), all merges, CHANGELOG/README/CLAUDE.md, full verification | **done** 2026-09-24 | `main` |
 
@@ -33,6 +33,16 @@ keep the Mac responsive.
 - Mid-recording microphone device switch from the live pill (needs Part 4's device catalog + Part 5's
   pill) — spec §8.
 - History thumbnail isn't regenerated after the video editor's Replace Original (pre-existing).
+- Part 7 leftovers (2026-09-26): (a) **manual checks in the real app** — a real click on an outlined
+  button in a titled window (synthetic clicks can't prove it), and the Welcome tour's menu-bar-icon step
+  with the real status item (only tested with a stand-in); (b) the tag body can be cut off if it exceeds 2
+  lines — fit tests cover all tours now, keep them passing when editing copy; (c) scrolling Settings while
+  a step shows can put the box outside the window (overlay doesn't clip to the scroll view); (d) on a
+  1470-pt screen some tags fall back to covering part of the panel/card they explain; (e) replaying a tool
+  tour from the menu while another tool is active starts on a "drag" step with the wrong tool; (f) Help &
+  Tours → Recording Setup Tour only queues until the strip next opens; (g) Capture Window child-window
+  exclusion needs macOS 14.2+; (h) `App/Tours/NoOpTourTagPresenter.swift` is unused by the app (probes
+  only); (i) re-run the `reviewer` skill for a post-fix score.
 - UI-fix leftovers (2026-09-25): (a) two copies of the shared dark HUD style —
   `Packages/OverlayKit/Sources/OverlayKit/HUDStyle.swift` and
   `Packages/RecordingKit/Sources/RecordingKit/RecordingHUDStyle.swift` (same values; RecordingKit doesn't
