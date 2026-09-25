@@ -9,7 +9,8 @@
   Guided tour (v3 Part 7): `makeWindow()` (internal, for probes) installs the title-bar ⓘ (Replay Tour +
   the grid's modifier clicks); `show()` posts `TourEvents.surfaceShown(.history)`. Anchors:
   `history.grid` (grid scroll view, or the empty state), `history.item` (the newest cell only),
-  `history.actions` (bottom bar). Events: `action("history.selected")` after a click changes the
+  `history.actions` (bottom bar; no anchor while History is empty, so the tour's "Actions" step is
+  skipped there). Events: `action("history.selected")` after a click changes the
   selection, `action("history.dragged")` when a drag starts. Steps: `docs/MAC-TO-WINDOWS-PARITY-v3.md` §7.8.
 - `MediaDuration.swift` — a recording's length (MP4 header via AVFoundation, GIF frame delays via
   ImageIO); also used by `RecordingCoordinator` for the Quick Access card's "0:42 · MP4" badge.

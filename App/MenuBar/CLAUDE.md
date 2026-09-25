@@ -17,7 +17,8 @@
   Show Me Around re-renders the page without the question, then `onTourAnswer(true, window)` starts the
   Welcome tour over it; No Thanks or closing the window on the question → `onTourAnswer(false, …)`.
   Everyone else sees the page exactly as before. `show(_:)` posts `TourEvents.surfaceShown(.welcome)`.
-  Welcome tour anchors: the shortcut grid (`welcome.shortcuts`) and Capture Area's keys label
+  Welcome tour anchors: an empty view over just the grid's area / window / full-screen rows — the ones
+  the tour's body names (`welcome.shortcuts`, added in `shortcutGrid`) — and Capture Area's keys label
   (`welcome.captureArea`); steps in `docs/MAC-TO-WINDOWS-PARITY-v3.md` §7.4.
   `render(_:askTourQuestion:)` is internal so probes can draw a page without showing the window.
 

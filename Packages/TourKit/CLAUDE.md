@@ -54,12 +54,25 @@ Status + lanes: `docs/PROGRESS-v3.md` (lane "Tours & help"). Windows-port notes:
   1–2 sentences; Try bodies start with a verb (not "The/This/Your/…"); anchors and `menuOpened`/
   `choiceMade`/`action` names are `<surface>.<name>`; no two Try steps in a tour wait for the same event;
   shortcuts written as `{shortcut:<HotkeyAction raw value>}` so they show the user's own keys (the valid
-  names are listed in the test — add one there when `HotkeyAction` gains a case).
+  names are listed in the test — add one there when `HotkeyAction` gains a case); apostrophes are
+  typographic (’, never '); a step's `requires` must be the event an **earlier Try step of the same tour**
+  waits for (the setup step whose Skip step would otherwise leave it a dead end — "Resize your text" needs
+  "Click to type", "Delete a part" needs "Split the clip"). Glue a `{shortcut:…}` to its word with a
+  non-breaking space (U+00A0) when a line mustn't end on a bare combo (Welcome step 2).
+- Keep tours short (`docs/reviews/2026-09-26-tours-review.md`, issues E2/R2/P1): the best in-product
+  coach marks run ~3–5 steps in a row — Welcome 3 →
+  Quick Access 4 → Editor 5; First recording 6 → Recording pill 5. A tour that runs over something live
+  (the pill, during the user's first recording) has no Try step that changes it (Stop only). Use
+  `placement` only where the automatic side was seen to cover something; every hint in the catalog has a
+  comment saying why.
 - A tour's steps can be shown only once its surface calls `TourEvents.surfaceShown` and its anchors
   exist; until then starting it is a no-op (`.nothingToShow`), not "seen".
 - Word limits don't guarantee a body fits the tag's **two lines**: measure it in the tag's body label at
   236 pt (`Tests/TourKitTests/TagFitTests.swift` for Welcome/Quick Access/Settings/History; lane 7E's
-  `EditorKit/Tests/EditorKitTests/EditorTourTests.swift` for the editor tours).
+  `EditorKit/Tests/EditorKitTests/EditorTourTests.swift` for the editor tours;
+  `RecordingKit/Tests/RecordingKitTests/RecordingTourTests.swift` for strip, pill and video editor). Each
+  resolves `{shortcut:…}` with "⇧⌘4", "⌃⌥⇧⌘4" and the longest bindable "⌃⌥⇧⌘F12". An *unbound* action
+  resolves to its title ("Capture Area"), which can still overflow Welcome step 2 — known, not tested.
 - `TagOverlayController.allWindowNumbers` must be left out of every screenshot/recording — the app passes it
   to `CaptureService.capture(_:excludingWindowIDs:)`. Tags are **child windows** of their host, so a
   single-window capture includes them unless it drops child windows (CaptureKit does, macOS 14.2+).

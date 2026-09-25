@@ -51,7 +51,8 @@ and the exclusion mechanism are written up in `docs/MAC-TO-WINDOWS-PARITY-v3.md`
 sequence of **steps**, each outlining one control (its **anchor**, `view.tourAnchor = "…"`) with a red tag;
 an Explain step advances on Next, a **Try** step when the app posts the matching `TourEvents` event.
 - **Strip** (`First recording` tour): anchors `strip.targets` (the three target buttons, grouped in their own
-  stack just for this), `strip.format`, `strip.fps`, `strip.microphone`, `strip.microphoneColumn`,
+  stack just for this), `strip.format`, `strip.fps`, `strip.output` (Format + FPS, grouped in their own stack
+  just for the tour's merged step — frames unchanged), `strip.microphone`, `strip.microphoneColumn`,
   `strip.systemAudio`, `strip.camera`, `strip.cursor`, `strip.hint`. The mic/system-audio anchors are removed
   in GIF mode (their menus are disabled), so those steps skip. Events: `menuOpened` from each dropdown menu's
   `menuWillOpen` (the strip is the menus' delegate), `choiceMade` from every choice, `choiceMade("strip.targets")`
@@ -62,6 +63,10 @@ an Explain step advances on Next, a **Try** step when the app posts the matching
   `action("pill.micMuted")` when muting; `show()` ends with `surfaceShown(.recordingPill)`. No ⓘ.
 - **Coordinator:** `stop()` posts `action("recording.stopped")` first (every stop path); `begin` posts
   `action("recording.started")` once the engine runs.
+- **Since the tours review (`docs/reviews/2026-09-26-tours-review.md`):** First recording is 6 steps and the pill tour 5 (4 without a mic
+  track); the pill tour runs over a live recording, so its only Try step is Stop — "Mute the mic" is an
+  Explain step and nothing waits for `pill.micMuted` any more. `pill.camera`, like `pill.mic`, is set in
+  `render` only while the control can be used (no camera or no camera access → no anchor).
 - **Tags are never recorded** (owner: not even one frame) — `TourTagRecordingGate.swift`: every display filter
   is built by `tagGate.displayFilter(…)`, which leaves out every tag window that exists (content fetched with
   `onScreenWindowsOnly: false`, so hidden ones are listed too); a tag window first shown after the filter was

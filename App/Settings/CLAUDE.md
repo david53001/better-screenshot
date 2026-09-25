@@ -25,7 +25,8 @@
   (internal, so probes can build it without showing it) installs the title-bar ⓘ (TourKit `InfoButton`:
   Replay Tour + the bound shortcuts and Esc, kept current by observing `store.$bindings`); `show()` posts
   `TourEvents.surfaceShown(.settings)`. Settings tour anchors in `SettingsView`: `settings.cards` (the
-  three columns), `settings.tip` (the "After a capture" ⓘ, via `segmentedField(…, tipAnchor:)`),
+  three columns), `settings.tip` (the "After a capture" label together with its ⓘ, via
+  `segmentedField(…, tipAnchor:)` → `fieldLabel`),
   `settings.shortcuts` (Keyboard Shortcuts card). Steps: `docs/MAC-TO-WINDOWS-PARITY-v3.md` §7.8.
 
 Verify: change a setting in the built app, confirm it persists across relaunch; for the editor default,
