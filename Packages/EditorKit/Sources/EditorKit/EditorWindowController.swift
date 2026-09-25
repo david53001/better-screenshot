@@ -308,6 +308,9 @@ public final class EditorWindowController: NSWindowController {
         stack.spacing = 2
         stack.setCustomSpacing(10, after: redoButton)
         stack.edgeInsets = NSEdgeInsets(top: 0, left: 6, bottom: 0, right: 10)
+        // A trailing accessory takes its width from the view's frame, which is zero until set —
+        // without this the buttons sit past the window's right edge, clipped away.
+        stack.frame = NSRect(origin: .zero, size: stack.fittingSize)
 
         let accessory = NSTitlebarAccessoryViewController()
         accessory.layoutAttribute = .trailing
