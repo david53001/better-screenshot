@@ -85,6 +85,41 @@ final class HistoryService: ObservableObject {
         NSImage(contentsOf: store.thumbURL(for: entry))
     }
 
+    // MARK: - Cell details + empty state
+
+    /// Cached per entry: the grid recreates cells as it scrolls.
+    private var detailCache: [UUID: String] = [:]
+
+    /// "1600 × 1000" for a screenshot (PNG header only), "0:42" for a recording.
+    /// nil when the file is missing or unreadable (not cached, so it can recover).
+    func detail(for entry: HistoryEntry) async -> String? {
+        if let cached = detailCache[entry.id] { return cached }
+        let text: String?
+        switch entry.kind {
+        case .screenshot:
+            text = store.imageURL(for: entry).flatMap(Self.pixelSizeText)
+        case .recording:
+            guard let url = savedFileURL(for: entry), savedFileExists(entry) else { return nil }
+            text = await MediaDuration.seconds(of: url).flatMap(MediaInfoText.duration)
+        }
+        if let text { detailCache[entry.id] = text }
+        return text
+    }
+
+    private static func pixelSizeText(_ url: URL) -> String? {
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
+              let w = props[kCGImagePropertyPixelWidth] as? Int,
+              let h = props[kCGImagePropertyPixelHeight] as? Int else { return nil }
+        return MediaInfoText.pixelSize(width: w, height: h)
+    }
+
+    /// What the window shows with no entries (uses the live Capture Area shortcut).
+    var emptyState: HistoryEmptyState.Message {
+        HistoryEmptyState.message(historyEnabled: settings.settings.historyEnabled,
+                                  captureShortcut: settings.bindings.combo(for: .captureArea)?.displayString)
+    }
+
     /// Full-resolution stored screenshot (nil for recordings).
     func image(for entry: HistoryEntry) -> CGImage? {
         guard let url = store.imageURL(for: entry),
