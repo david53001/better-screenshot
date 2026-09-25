@@ -29,6 +29,11 @@ Screen recording (ScreenCaptureKit), GIF export, and the on-screen recording ove
 - `MicCapturer.swift` — microphone audio from a chosen device (`start(deviceID:)`, falls back to the
   default), per-buffer power via `onLevel`; start/stop serialized on one queue so a quick start→stop
   can't orphan a running session.
+- `RecordingHUDStyle.swift` — the shared dark HUD look (`.hudWindow`, vibrant dark, 40% black tint,
+  1px 10% white border; text white / white 60%) used by the countdown, the record strip and the live
+  pill. `RecordingPillLayout.swift` (pure, tested) — the pill's confirm-slot widths and hover-hint
+  bubble placement. `CountdownOverlayController.swift` — the pre-record countdown (digit centred by
+  its baseline, "Click to start now").
 - `CameraBubbleController.swift`, `KeystrokeOverlayController.swift`, `ClickHighlighter.swift` —
   camera bubble (`show(…deviceID:)`) + keystroke/click visualizers shown during recording. The
   bubble's `setHidden(_:)` hides/re-shows it in place (live pill's Camera toggle).
@@ -60,7 +65,7 @@ Screen recording (ScreenCaptureKit), GIF export, and the on-screen recording ove
 - Recordings are written with a keyframe at least every 0.5 s (`RecordingConfig.keyFrameInterval`) so
   passthrough trims land close to the chosen frame.
 
-`RecorderState`, `RecordingConfig`, `DeviceList`, `MicLevel`, `SilenceFill`, `LetterboxFit`, `CutList`, `TimeRuler`, `FilmstripFrames`, and the trim/export pieces (except the window) are unit-tested; the AV/overlay pieces are verified manually or with headless probes (retarget, mute, pause sync — see `docs/MAC-TO-WINDOWS-PARITY-v3.md` Part 5; record strip, device menus, window-recording audio — Part 4; the video editor — Part 6).
+`RecorderState`, `RecordingConfig`, `DeviceList`, `MicLevel`, `SilenceFill`, `LetterboxFit`, `RecordingPillLayout`, `RecordingHUDStyle`, `CutList`, `TimeRuler`, `FilmstripFrames`, and the trim/export pieces (except the window) are unit-tested; the AV/overlay pieces are verified manually or with headless probes (retarget, mute, pause sync — see `docs/MAC-TO-WINDOWS-PARITY-v3.md` Part 5; record strip, device menus, window-recording audio — Part 4; the video editor — Part 6).
 
 ## Verify
 `swift run --package-path Packages/RecordingKit RecordingKitTests`.

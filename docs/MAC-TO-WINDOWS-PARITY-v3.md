@@ -112,8 +112,9 @@ font keys decodes to System / bold / not italic / left; all four font fields rou
   (monospaced digits, 14 pt semibold, white; "m:ss") · Pause button (32×32, symbol `pause.fill` 15 pt,
   white) · Stop button (32×32, `stop.fill`, red). Buttons react on the first click without activating the
   app (macOS `acceptsFirstMouse`; WPF: `ShowActivated=false` + `WS_EX_NOACTIVATE`).
-- **Paused:** the time freezes and turns secondary grey; Pause becomes `play.fill` "Resume recording".
-  Tooltips: "Pause recording" / "Resume recording" / "Stop recording".
+- **Paused:** the time freezes and turns secondary grey (white 60 %) under a small **"Paused"** label
+  (Part 5); Pause becomes `play.fill` "Resume recording". Hover hints (Part 5's bubble, not tooltips):
+  "Pause recording" / "Resume recording" / "Stop recording".
 - **Setting:** Settings → Recording → **"Show stop button in recording"**, default **off**, persisted key
   `controlsInRecording` ("true"/"false" in the recording-config dictionary). Help text (verbatim):
   "While recording, a floating pill with the timer, Pause and Stop is always on screen. Off: it's hidden
@@ -1067,7 +1068,8 @@ It is now a labelled panel: the target buttons plus Format / FPS on top, one **c
 caption + dropdown), a **live microphone level meter**, and a **hint line** at the bottom that explains
 whatever the pointer is over. The Settings window's Recording card got the same dropdowns. A **Show
 mouse cursor** option was added. On macOS, window recordings also got a system-audio fix (see Platform
-notes). Snapshots from the headless probe: `docs/parity-v3/part4-record-strip.png` (strip, 2× pixels)
+notes). Snapshots from the headless probe: `docs/parity-v3/part4-record-strip.png` (strip, 2× pixels —
+**before** the 2026-09-25 UI-review fixes; current look: `docs/reviews/2026-09-25-ui-fixes/recording-strip-*.jpg`)
 and `docs/parity-v3/part4-settings-recording.png` (Settings card).
 
 Terms: *dBFS* = decibels relative to digital full scale (0 = loudest possible sample, silence → −∞);
@@ -1080,62 +1082,77 @@ macOS files: `App/Recording/RecordStripController.swift` (strip), `App/Settings/
 `RecordingConfig.swift`, `DeviceChoice.swift` (pure), `DeviceCatalog.swift`, `MicLevel.swift` (pure),
 `MicCapturer.swift`, `CameraBubbleController.swift`, `ScreenRecorder.swift`.
 
-### Layout (exact, as built — 892 × 182 pt)
+### Layout (exact, as built — 964 × 164 pt; same height in every state)
 
 ```
-┌────────────────────────────────────────────────────────────────────────────────────────────┐
-│ [🖥 Full Screen] [⬚ Area…] [▭ Window…]                 Format [MP4|GIF]   FPS [30|60]    ⊗ │
-│ ────────────────────────────────────────────────────────────────────────────────────────── │
-│ 🎙 Microphone           🔊 System audio                   📹 Camera               ↖ Cursor     │
-│ [MacBook Air Mic   ⌃⌄]  [All apps except BetterScreenshot⌃⌄] [FaceTime HD Camera ⌃⌄] [Visible ⌃⌄] │
-│ ▮▮▮▮▮▯▯▯▯▯▯▯▯▯▯▯                                                                           │
-│ ────────────────────────────────────────────────────────────────────────────────────────── │
-│ ⓘ Pick what to record, then choose Full Screen, Area or Window.                            │
-└────────────────────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ [🖥 Full Screen] [⬚ Area…] [▭ Window…]                      Format (MP4|GIF)   FPS (30|60)     ⊗ │
+│ ──────────────────────────────────────────────────────────────────────────────────────────────── │
+│ 🎙 Microphone  ▮▮▮▮▮▯▯▯▯▯▯  🔊 System audio               📹 Camera                  ↖ Mouse cursor │
+│ [MacBook Air Mic       ⌃⌄]  [All apps except BetterScreenshot⌃⌄] [FaceTime HD Camera  ⌃⌄] [Shown ⌃⌄] │
+│ ──────────────────────────────────────────────────────────────────────────────────────────────── │
+│ ⓘ Pick what to record, then choose Full Screen, Area or Window.                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Window:** floating, non-activating (never steals focus), on all desktops, draggable by its
-  background, no title / close buttons. Background = the dark HUD material (dark translucent blur;
+- **Window:** borderless, floating, non-activating (never steals focus), on all desktops, draggable by
+  its background, no title / close buttons. It can still become the key window when clicked (macOS:
+  an `NSPanel` subclass with `canBecomeKey = true`), so Tab moves keyboard focus between its controls
+  with focus rings. Background = the app's **shared dark HUD** (macOS `RecordingHUDStyle`: vibrant-dark
+  `.hudWindow` blur + a **black 40 %** tint + a **1 px white 10 %** border, **12 pt** corner radius;
   WPF: the existing `Theme.CardBrush` card with a 12 px corner radius and the 1 px 10 % white border).
-  Placement: horizontally centred on the work area of the monitor under the pointer, bottom edge
-  **60 pt** above the work area's bottom.
+  Primary text white, secondary text **white 60 %**. Placement: horizontally centred on the work area
+  of the monitor under the pointer, bottom edge **60 pt** above the work area's bottom. Measured after
+  the menus are filled.
 - **Content:** one vertical stack, padding **top 14 · left 16 · bottom 12 · right 16**, **12 pt**
   between rows: top row · separator · sources row · separator · hint row. Every row is exactly
-  **860 pt** wide (= the four columns + three 16 pt gaps). Separators are the standard 1 px hairline.
+  **932 pt** wide (= the four columns + three 16 pt gaps). Separators are the standard 1 px hairline.
 - **Top row** (horizontal, 8 pt spacing), left → right:
   1. Button **"Full Screen"**, icon `display` (SF Symbol) on the left of the label.
   2. Button **"Area…"**, icon `rectangle.dashed`.
   3. Button **"Window…"**, icon `macwindow`.
      Buttons are standard rounded push buttons at the *large* size (≈ 28 pt tall).
   4. Flexible space.
-  5. Label **"Format"** (12 pt, secondary text colour) + 6 pt + segmented **[MP4 | GIF]**.
-  6. 20 pt gap. Label **"FPS"** + 6 pt + segmented **[30 | 60]**.
-  7. 16 pt gap. Close button: borderless icon `xmark.circle.fill` at 16 pt, secondary colour,
-     tooltip **"Close without recording"**, accessible name "Cancel".
+  5. Label **"Format"** (12 pt, white 60 %) + 6 pt + choice control **(MP4 | GIF)**.
+  6. 20 pt gap. Label **"FPS"** + 6 pt + choice control **(30 | 60)**.
+     *Choice control* (replaces a segmented control, whose selected segment was barely lighter than
+     the rest whenever the panel isn't key — i.e. almost always): a track with white 10 % fill, corner
+     radius 7, 2 pt padding and 2 pt between options; each option a borderless 40 × 22 button, corner
+     radius 5, 13 pt text — chosen: **accent-colour fill**, white semibold; other: no fill, white 60 %
+     regular. Accessibility: radio group named "Format" / "Frame rate", options as radio buttons.
+  7. 16 pt gap. Close button: borderless icon `xmark.circle.fill` at 16 pt, white 60 % (white while
+     hovered/focused), tooltip **"Close without recording"**, accessible name "Cancel".
 - **Sources row** (horizontal, **16 pt** gaps, top-aligned) — four columns, each a vertical stack
-  (6 pt spacing) of: header (icon 12 pt medium weight, secondary colour · 5 pt · caption 12 pt medium,
-  secondary colour) → dropdown (regular size, **fixed width**) → a **12 pt-tall footer line**
-  (empty except under Microphone). Column widths (measured so their usual content never truncates —
-  "All apps except BetterScreenshot" needs 251 pt, "David’s iPhone Microphone" 213 pt):
+  (6 pt spacing) of: header row as wide as the column (icon 12 pt medium weight · 5 pt · caption 12 pt
+  medium, both white 60 % · flexible space · optional right-aligned accessory) → dropdown (regular
+  size, **fixed width**). No footer line (it left an empty band when the mic was Off). Column widths:
+  Microphone, System audio and Camera share **252** (fits "All apps except BetterScreenshot", 251 pt,
+  untruncated); Mouse cursor **128**:
 
   | Column | Icon | Caption | Width | Menu items (top → bottom) |
   |---|---|---|---|---|
-  | 1 | `mic` | Microphone | 216 | `Off` · every connected microphone by name |
+  | 1 | `mic` | Microphone | 252 | `Off` · every connected microphone by name |
   | 2 | `speaker.wave.2` | System audio | 252 | `Off` · `All apps` · `All apps except BetterScreenshot` |
-  | 3 | `video` | Camera | 216 | `Off` · every connected camera by name · separator · `Bubble Size ▸` submenu `Small` / `Medium` (✓ on the current one) |
-  | 4 | `cursorarrow` | Cursor | 128 | `Visible` · `Hidden` |
+  | 3 | `video` | Camera | 252 | `Off` · every connected camera by name · separator · `Camera Size ▸` submenu `Small` / `Medium` (✓ on the current one) |
+  | 4 | `cursorarrow` | Mouse cursor | 128 | `Shown` · `Hidden` |
 
   Menu-item tooltips (verbatim): Off → "No system sound in the recording."; All apps → "Every sound
   your Mac plays, including BetterScreenshot's own."; All apps except BetterScreenshot → "Every sound
-  except BetterScreenshot's own, like its capture sound."; Visible → "The pointer is recorded as it
-  moves."; Hidden → "The video shows no mouse pointer."
-- **Microphone footer:** either the **level meter** — 16 segments, 2 pt gaps, 6 pt tall, 1.5 pt
-  corner radius, inset 2 pt left/right, vertically centred; lit segments are green for the first 70 %
-  of the bar, yellow up to 90 %, red above; unlit = white at 14 % — or the link
-  **"Allow microphone access…"** (11 pt, link colour, borderless), or nothing (see Behaviour).
-- **Hint row:** icon `info.circle` (12 pt, secondary) · 6 pt · one line of 12 pt secondary text that
-  fills the rest of the row (tail-truncates, but every string below fits: the longest measured
-  532 pt of ~842 pt available).
+  except BetterScreenshot's own, like its capture sound."; Shown → "The mouse cursor is recorded as it
+  moves."; Hidden → "The video shows no mouse cursor."
+  Dropdown titles always start at the dropdown's normal **12 pt** left inset, truncated or not (macOS'
+  popup cell squeezes it to 5 pt for a title that doesn't fit; the strip keeps 12).
+- **Microphone header accessory** (right-aligned in the Microphone header, same line as the caption):
+  either the **level meter** — **120 × 6 pt**, 16 segments, 2 pt gaps, 1.5 pt corner radius; lit
+  segments are green for the first 70 % of the bar, yellow up to 90 %, red above; unlit = white at
+  14 % — or the link **"Allow microphone access…"** (11 pt, link colour, borderless, 15 pt tall), or
+  nothing (see Behaviour). The header is the same height in all three cases, so the strip never
+  changes size.
+- **Hint row:** icon `info.circle` (12 pt, white 60 %) · 6 pt · one line of 12 pt text that fills the
+  rest of the row (tail-truncates, but every string below fits: the longest measured 532 pt of ~914 pt
+  available). The idle text is white 60 %; while it explains a hovered/focused control it's **white**,
+  and that control's group caption (icon + caption, or the Format / FPS label, or the ✕) turns white
+  too.
 - **Icons in the port** (`windows/src/BetterScreenshot.App/Resources/Icons.xaml`): reuse `icon-mic`,
   `icon-speaker`, `icon-video`, `icon-cursor`, `icon-close-circle`; **add** a monitor (`display`), a
   dashed rectangle (`rectangle.dashed`), a window (`macwindow`) and an info-circle icon.
@@ -1145,6 +1162,7 @@ macOS files: `App/Recording/RecordStripController.swift` (strip), `App/Settings/
 | Pointer over / focus on | Hint |
 |---|---|
 | nothing (idle) | Pick what to record, then choose Full Screen, Area or Window. |
+| nothing (idle) while Format = GIF | GIFs have no sound. Switch Format to MP4 to record audio. |
 | Full Screen | Full Screen: records everything on this screen. |
 | Area… | Area: drag over the part of the screen you want, then recording starts. |
 | Window… | Window: click a window to record just that window, even as it moves. |
@@ -1155,12 +1173,12 @@ macOS files: `App/Recording/RecordStripController.swift` (strip), `App/Settings/
 | System audio column (MP4) | System audio: records the sound your Mac plays, like videos and calls. Choose "Off" to skip it. |
 | Microphone or System audio column while Format = GIF | GIFs have no sound. Switch Format to MP4 to record audio. |
 | Camera column | Camera: shows your webcam in a round bubble on the recording. Set its size in the menu. |
-| Cursor column | Cursor: choose whether the mouse pointer appears in the video. |
+| Mouse cursor column | Mouse cursor: choose whether it appears in the video. |
 | "Allow microphone access…" link, access never asked | Click to let BetterScreenshot use the microphone. macOS asks once. |
 | same link, access denied | Microphone access is off. Click to open System Settings and turn it on for BetterScreenshot. |
 
 (Windows: say "Windows" / "Settings" instead of "macOS" / "System Settings", and "your PC" for
-"your Mac".) A **column's hover area is the whole column** (caption + dropdown + footer), so hovering
+"your Mac".) A **column's hover area is the whole column** (header + dropdown), so hovering
 the caption explains it too. Areas can nest (the link sits inside the Microphone column): the most
 recently entered area wins, and leaving it falls back to whichever area the pointer is still in, else
 idle. With no hover, a **keyboard-focused** control (Tab) shows its hint. Hover never changes anything.
@@ -1179,12 +1197,12 @@ idle. With no hover, a **keyboard-focused** control (Tab) shows its hint. Hover 
   default, else the first listed; `Off` if no device exists at all. An unplugged saved device is *not*
   overwritten: when it comes back it is used again.
 - Choosing `Off` keeps the last device id; choosing a device turns the source on and saves its id.
-- **Bubble Size** submenu sets Small/Medium without changing the selected camera row.
+- **Camera Size** submenu sets Small/Medium without changing the selected camera row.
 - **Format = GIF** disables (dims) the Microphone and System audio dropdowns (their values are kept),
   hides the meter, and the recording ignores both (GIFs have no sound — no mic prompt, no mic in use).
 - **Mic level meter** runs only while all of these hold: strip visible, Format = MP4, a microphone is
   selected, and microphone permission is **already granted**. Opening the strip must never trigger the
-  OS permission prompt. When a mic is selected but access isn't granted, the footer shows
+  OS permission prompt. When a mic is selected but access isn't granted, the Microphone header shows
   **"Allow microphone access…"**: if access was never asked, clicking it asks (the OS prompt), then the
   meter starts; if it was denied, clicking opens the OS privacy settings for the microphone
   (macOS `x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone`; Windows
@@ -1192,7 +1210,7 @@ idle. With no hover, a **keyboard-focused** control (Tab) shows its hint. Hover 
   It reads the device's average power per audio buffer (~47 updates/s) through `MicLevel`.
 - **Long device names** truncate with "…" at the end; hovering the dropdown then shows the full name
   as a tooltip (only when truncated).
-- **Show mouse cursor / Cursor = Hidden** records without the pointer.
+- **Show mouse cursor / Mouse cursor = Hidden** records without the pointer.
 
 ### Settings window — Recording card (same choices, same stored values)
 
@@ -1355,10 +1373,18 @@ back to the compact pill. macOS files: `App/Recording/RecordingControlsControlle
 
 **Window.** Borderless, non-activating floating panel (never takes focus — clicks must land without
 activating the app: WPF `WS_EX_NOACTIVATE` + first-click-through), topmost (`.statusBar` level), on all
-desktops, shadow on, draggable by its background, **tooltips shown even though the app is inactive**.
-Height **40**, corner radius **20** (capsule). Background: the app's dark HUD material (the dark
-translucent panel look used across the app; macOS vibrant dark `.hudWindow`) + a **black 25 %** wash over it (keeps white text readable on bright backdrops) + a **1 px
-border, white 10 %**. The panel is sized to its content (width changes with state, see below).
+desktops, shadow on, draggable by its background. Capsule height **40**, corner radius **20**.
+Background: the app's shared dark HUD (macOS `RecordingHUDStyle`: vibrant dark `.hudWindow` blur) + a
+**black 40 %** tint over it (keeps white text readable on bright backdrops) + a **1 px border, white
+10 %**. The capsule is sized to its content (width changes with expand/collapse and Switch shown/hidden
+only, see below). **Hover hint bubble:** hovering any control shows its hint (the "Hint" column below)
+at once in a small bubble drawn **in the pill's own window** (so it's excluded from the recording with
+the pill; the window grows to hold it and the rest of the window is transparent/click-through): same
+dark HUD, corner radius **7**, height **24**, text 12 pt medium white, 10 pt padding each side,
+**6 pt above** the capsule — **below** when there's no room above — centred on the hovered control and
+kept **8 pt** inside the screen's work area (narrowed + tail-truncated if wider than the screen).
+It replaces tooltips (they appeared late, if at all, while the app is inactive). Disabled controls show
+their hint too (that's where the "why" is).
 
 **Expanded — order, left → right (all sizes in pt):**
 
@@ -1366,31 +1392,34 @@ border, white 10 %**. The panel is sized to its content (width changes with stat
 |---|---|---|---|
 | — | left inset | 14 | — |
 | 1 | status dot (circle) | 10 × 10 | 8 |
-| 2 | timer label, monospaced digits 14 pt semibold, left-aligned, fixed width 46 | 46 | 10 |
+| 2 | timer column, fixed width 46: timer label, monospaced digits 14 pt semibold, left-aligned; while paused a **"Paused"** label (10 pt semibold, white) sits above it, both vertically centred as a pair | 46 | 10 |
 | 3 | separator (vertical line, white 16 %) | 1 × 18 | 10 |
 | 4 | **Mic** toggle (icon + label) | 58 × 28 | 2 |
-| 5 | **Sound** toggle (icon + label) | 79 × 28 | 2 |
+| 5 | **System audio** toggle (icon + label) | 121 × 28 | 2 |
 | 6 | **Camera** toggle (icon + label) | 87 × 28 | 10 |
 | 7 | separator | 1 × 18 | 10 |
-| 8 | **Switch window…** / **Switch area…** (icon + label) | 137 × 28 | 10 |
+| 8 | **Switch Window…** / **Switch Area…** (icon + label) | 140 × 28 | 10 |
 | 9 | separator | 1 × 18 | 10 |
-| 10 | Restart (icon) | 28 × 28 | 2 |
-| 11 | Discard (icon) | 28 × 28 | 2 |
+| 10 | Restart (icon) | 35 × 28 | 2 |
+| 11 | Discard (icon) | 35 × 28 | 2 |
 | 12 | Pause / Resume (icon) | 28 × 28 | 2 |
 | 13 | Stop (icon, red) | 28 × 28 | 6 |
 | 14 | chevron (icon, white 55 %) | 20 × 28 | — |
 | — | right inset | 6 | — |
 
-Total **656** wide on macOS. Items 8 + its separator (7) are **hidden for full-screen recordings** (498
-wide). All vertically centred.
+Total **715** wide on macOS. Items 8 + its separator (7) are **hidden for full-screen recordings** (554
+wide). All vertically centred. Restart and Discard are **35** wide (not 28) so that either confirm label
+fits their combined **72 pt** slot (`RecordingPillLayout.confirmPairButtonWidth`, see Pure logic).
 
 **Buttons.** Borderless, height **28**, corner radius **7**. Icon buttons: SF Symbol 14 pt semibold,
 centred (chevron: 11 pt). Labelled toggles (items 4–6, 8): SF Symbol 13 pt semibold, then the label in
 system font **12 pt medium**, icon leading and hugging the text, **8 pt padding each side**; each
 labelled button's width is **locked to its widest state** (widest icon × widest label + 16) so toggling
-never shifts the pill (macOS widths: 58 / 79 / 87 / 137 — recompute with Segoe UI). Glyph + text colour
+never shifts the pill (macOS widths: 58 / 121 / 87 / 140 — recompute with Segoe UI). Glyph + text colour
 white; **disabled → white 30 %**. **Hover** (tracked even while the app is inactive): fill white 12 %;
-on a button that already has a fill, the fill blended 15 % toward white.
+on a button that already has a fill, the fill blended 15 % toward white. Every **filled (red) chip** —
+muted Mic/System audio, the confirm capsule — has a **1 px white 50 % ring**, so it stays distinct over
+red content.
 
 **Collapsed** (chevron clicked): only dot · timer · Pause · Stop · chevron remain, same metrics and
 spacings (timer → Pause 10, Pause → Stop 2, Stop → chevron 6) = **178** wide.
@@ -1399,59 +1428,69 @@ spacings (timer → Pause 10, Pause → Stop 2, Stop → chevron 6) = **178** wi
 ```
 Recording a window (expanded, default):
 ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
-│ ●  1:23   │ [🎙 Mic] [🔊 Sound] [📷̸ Camera] │ [▭ Switch window…] │ [↺] [🗑] [⏸] [■]  › │
+│ ●  1:23   │ [🎙 Mic] [🔊 System audio] [📷 Camera]┄ │ [▭ Switch Window…] │ [↺] [🗑] [⏸] [■]  › │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────╯
-Mic + Sound muted, camera bubble showing:
-│ ●  1:23   │ ▓🎙̸ Mic▓ ▓🔊̸ Sound▓ [📷 Camera] │ [▭ Switch window…] │ [↺] [🗑] [⏸] [■]  › │
-Area recording, no mic track, paused (grey dot + grey timer, ▶ instead of ⏸):
-│ ○  1:24   │ ░🎙̸ Mic░ [🔊 Sound] [📷̸ Camera] │ [⬚ Switch area…]   │ [↺] [🗑] [▶] [■]  › │
+(┄ = camera off: outline icon + label at white 60 %, no slash, no chip)
+Mic + System audio muted, camera bubble showing:
+│ ●  1:23   │ ▓🎙̸ Mic▓ ▓🔊̸ System audio▓ [📷 Camera] │ [▭ Switch Window…] │ [↺] [🗑] [⏸] [■]  › │
+Area recording, no mic track, paused (grey dot, "Paused" over the grey timer, ▶ instead of ⏸):
+│ ○ Paused  │ ░🎙̸ Mic░ [🔊 System audio] [📷 Camera]┄ │ [⬚ Switch Area…]   │ [↺] [🗑] [▶] [■]  › │
+│    1:24   │
 Countdown (engine not started yet): grey dot, "0:00", Switch/Restart/Discard/Pause greyed, Stop live:
-│ ○  0:00   │ [🎙 Mic] [🔊 Sound] [📷̸ Camera] │ ░▭ Switch window…░ │ ░↺░ ░🗑░ ░⏸░ [■]  › │
-First click on Restart (Discard is the same with "Discard?"):
-│ ●  12:07  │ … │ [▭ Switch window…] │ ▓ Restart? ▓ [🗑] [⏸] [■]  › │
+│ ○  0:00   │ [🎙 Mic] [🔊 System audio] [📷 Camera]┄ │ ░▭ Switch Window…░ │ ░↺░ ░🗑░ ░⏸░ [■]  › │
+First click on Restart — the capsule fills Restart's and Discard's slot (Discard hides), same width:
+│ ●  12:07  │ … │ [▭ Switch Window…] │ ▓ Restart? ▓ [⏸] [■]  › │
+First click on Discard — Restart hides, the capsule sits in the same slot:
+│ ●  12:07  │ … │ [▭ Switch Window…] │ ▓ Discard? ▓ [⏸] [■]  › │
+Hovering Stop (bubble above the pill, centred on the button):
+                                                                     ╭────────────────╮
+                                                                     │ Stop recording │
+                                                                     ╰────────────────╯
 Full screen (no Switch group):
-│ ●  12:07  │ [🎙 Mic] [🔊 Sound] [📷̸ Camera] │ [↺] [🗑] [⏸] [■]  › │
+│ ●  12:07  │ [🎙 Mic] [🔊 System audio] [📷 Camera]┄ │ [↺] [🗑] [⏸] [■]  › │
 Collapsed:
 ╭──────────────────────────╮
 │ ●  12:07   [⏸] [■]  ‹ │
 ╰──────────────────────────╯
 ```
 Snapshots: `part5-pill-expanded.png`, `-muted.png`, `-area-no-mic.png`, `-countdown.png`,
-`-confirm-restart.png`, `-collapsed.png`, `-hover.png` (Sound and Discard hovered).
+`-confirm-restart.png`, `-collapsed.png`, `-hover.png` (Sound and Discard hovered) — all **before** the
+2026-09-25 UI-review fixes; current look: `docs/reviews/2026-09-25-ui-fixes/recording-pill-*.jpg`.
 
 **States of each item (icons are SF Symbol names → port icon keys below):**
 
-| Item | State | Icon | Look | Tooltip (verbatim) |
+| Item | State | Icon | Look | Hint (verbatim) |
 |---|---|---|---|---|
 | Dot | recording | — | systemRed | — |
 | Dot | paused / countdown | — | systemGray | — |
 | Timer | recording | — | white, "m:ss" (minutes unbounded, e.g. "12:07") | — |
-| Timer | paused / countdown | — | secondary grey; countdown shows "0:00" | — |
+| Timer | paused / countdown | — | white 60 %; countdown shows "0:00"; paused adds "Paused" above | — |
 | Mic | on | `mic.fill` | white | "Mute microphone — the video keeps a silent gap, stays in sync" |
 | Mic | muted | `mic.slash.fill` | **red chip**: fill systemRed 85 %, white icon + text | "Unmute microphone" |
 | Mic | not recorded | `mic.slash.fill` | disabled (30 %) | "Mic wasn't on when this recording started — there's no mic track to mute" |
-| Sound | on | `speaker.wave.2.fill` | white | "Mute system audio — the video keeps a silent gap, stays in sync" |
-| Sound | muted | `speaker.slash.fill` | red chip | "Unmute system audio" |
-| Sound | not recorded | `speaker.slash.fill` | disabled | "System audio wasn't on when this recording started — there's no sound track to mute" |
+| System audio | on | `speaker.wave.2.fill` | white | "Mute system audio — the video keeps a silent gap, stays in sync" |
+| System audio | muted | `speaker.slash.fill` | red chip | "Unmute system audio" |
+| System audio | not recorded | `speaker.slash.fill` | disabled | "System audio wasn't on when this recording started — there's no system audio track to mute" |
 | Camera | bubble showing | `video.fill` | white | "Hide camera bubble" |
-| Camera | bubble hidden / never shown | `video.slash.fill` | white, **no chip** (camera-off is the normal state, not a warning) | "Show camera bubble" |
+| Camera | bubble hidden / never shown | `video` (outline, **no slash**) | white 60 %, **no chip** (camera-off is the normal state, not a warning; a slash now always means muted or unavailable) | "Show camera bubble" |
 | Camera | no camera | `video.slash.fill` | disabled | "No camera found" |
 | Camera | permission denied | `video.slash.fill` | disabled | "Camera access is off — allow BetterScreenshot in System Settings › Privacy & Security › Camera" (Windows: "…in Settings › Privacy & security › Camera") |
-| Switch | window recording | `macwindow`, "Switch window…" | white | "Record a different window — it's scaled to fit this video's frame" |
-| Switch | area recording | `rectangle.dashed`, "Switch area…" | white | "Record a different area — it's scaled to fit this video's frame" |
+| Switch | window recording | `macwindow`, "Switch Window…" | white | "Record a different window — it's scaled to fit this video's frame" |
+| Switch | area recording | `rectangle.dashed`, "Switch Area…" | white | "Record a different area — it's scaled to fit this video's frame" |
 | Switch | countdown | as above | disabled | "Available once recording starts" |
 | Restart | normal | `arrow.counterclockwise` | white | "Restart — delete what's recorded so far and start over" |
-| Restart | confirming | no icon, text "Restart?" | **red capsule**: fill systemRed, white 12 pt semibold text, width = text + 16 (≈ 70) | "Click again to restart — what's recorded so far is deleted" |
+| Restart | confirming | no icon, text "Restart?" | **red capsule**: fill systemRed, white 12 pt semibold text, white 50 % ring, width = the Restart + Discard slot (72); Discard hidden | "Click again to restart — what's recorded so far is deleted" |
 | Discard | normal | `trash` | white | "Discard — stop and delete this recording" |
-| Discard | confirming | text "Discard?" | red capsule (≈ 72 wide) | "Click again to delete this recording" |
+| Discard | confirming | text "Discard?" | red capsule in the same 72 pt slot; Restart hidden | "Click again to delete this recording" |
 | Restart/Discard | countdown | icon | disabled | "Available once recording starts" |
-| Pause | recording / paused | `pause.fill` / `play.fill` | white; disabled during countdown | "Pause recording" / "Resume recording" |
+| Pause | recording / paused / countdown | `pause.fill` / `play.fill` | white; disabled during countdown | "Pause recording" / "Resume recording" / "Available once recording starts" |
 | Stop | recording / countdown | `stop.fill` | systemRed glyph | "Stop recording" / "Cancel recording" |
 | Chevron | expanded / collapsed | `chevron.right` / `chevron.left` | white 55 % | "Collapse to timer, Pause and Stop" / "Show all controls" |
 
-**Resizing & position.** Whenever the width changes (expand/collapse, confirm chip, Switch shown/hidden)
-the pill keeps its **bottom-right corner fixed** (the chevron stays under the pointer), then is clamped
-8 pt inside the screen's work area. First show with no saved position: bottom-centre of the recording's
+**Resizing & position.** Whenever the width changes (expand/collapse, Switch shown/hidden — a confirm
+no longer changes it) the capsule keeps its **bottom-right corner fixed** (the chevron stays under the
+pointer), then is clamped 8 pt inside the screen's work area. The hint bubble never moves the capsule;
+the window around it grows and shrinks instead. First show with no saved position: bottom-centre of the recording's
 screen, bottom edge 20 pt above the work area's bottom. Dragging saves the position.
 
 ### Items & behaviour
@@ -1488,12 +1527,13 @@ screen, bottom edge 20 pt above the work area's bottom. Dragging saves the posit
   (the post-capture thumbnail card) **and no History entry**, then shows the toast "Recording discarded".
 - **Confirm (Restart/Discard).** First click turns the button into the red "Restart?"/"Discard?" capsule
   for **3 s**; a second click within that time performs it. It reverts after 3 s, or immediately when
-  Switch, Pause, Stop or the chevron is used or the recording stops (the Mic/Sound/Camera toggles don't
-  cancel it; clicking the other of Restart/Discard moves the confirm to that one). Deliberately
-  **not a dialog** — a modal would steal focus from the app being recorded.
+  Switch, Pause, Stop or the chevron is used or the recording stops (the Mic/System audio/Camera toggles
+  don't cancel it). While one confirms, the other of Restart/Discard is hidden — the capsule takes its
+  space so the pill keeps its size. Deliberately **not a dialog** — a modal would steal focus from the
+  app being recorded.
 - **Pause / Stop** as before (Stop during the countdown cancels the recording).
 - **Chevron** toggles expanded/collapsed; the state persists.
-- Tooltips: every control has one (table above).
+- Hover hints: every control has one (table above), shown in the hint bubble — no tooltips.
 
 ### Data (persisted)
 
@@ -1539,6 +1579,20 @@ zero/negative content → the whole output. Test cases:
 - 100×50 into 1000×500 → (0, 0, 1000, 500) (scales **up**).
 - 0×0 or 10×0 into 1280×800 → (0, 0, 1280, 800).
 
+**`RecordingPillLayout`** (`RecordingPillLayout.swift`, tests `RecordingPillLayoutTests.swift`).
+`confirmPairButtonWidth(confirmWidths, spacing, minimum)` = `max(minimum, ceil((max(confirmWidths) −
+spacing) / 2))` — the Restart/Discard icon-button width; `confirmSlotWidth(buttonWidth, spacing)` = `2 ·
+buttonWidth + spacing`. `hintFrame(size, anchorX, pill, visible, gap, margin)` → the bubble rect
+(bottom-left-origin screen coords): above the pill (`y = pill.maxY + gap`) if `pill.maxY + gap +
+height ≤ visible.maxY`, else below (`y = pill.minY − gap − height`); `width = min(size.width,
+visible.width − 2·margin)`; `x = round(clamp(anchorX − width/2, visible.minX + margin, visible.maxX −
+margin − width))`. Test cases:
+- confirm widths [66, 68], spacing 2, minimum 28 → 33, slot 68; [40, 30] → 28; [] → 28; [69] → 34 (slot 70).
+- pill (400, 100, 600×40), visible (0, 0, 1470×900), size 200×24, anchorX 700, gap 6, margin 8 → (600, 146, 200, 24).
+- pill at y 850 in the same screen → bubble y 820 (below), x 600.
+- anchorX 20, pill (8, 100, 180×40) → x 8; anchorX 1460, pill (1280, 100, 182×40) → maxX 1462.
+- visible (100, 0, 300×900), size 500×24, anchorX 250 → width 284, x 108.
+
 ### Engine behaviour (macOS `ScreenRecorder`) — what the port must reproduce
 
 - `setMicMuted(bool)`, `setSystemAudioMuted(bool)`: flags read on the sample thread; while set, each
@@ -1574,8 +1628,8 @@ zero/negative content → the whole output. Test cases:
 - Engine: `windows/src/BetterScreenshot.App/Recording/RecordingEngine.cs` — `SetMuted(track, bool)`,
   `Retarget(PxRect)`, `Discard()`; `windows/src/BetterScreenshot.Recording/FfmpegArgs.cs` —
   `BuildRecording` gains an output size (scale + pad) and per-track mute (below).
-- Pure logic: `windows/src/BetterScreenshot.Recording/LetterboxFit.cs` (+ `SilenceFill.cs` only if audio
-  is captured in-process, option C below); tests in `windows/tests/BetterScreenshot.Tests/RecordingTests.cs`
+- Pure logic: `windows/src/BetterScreenshot.Recording/LetterboxFit.cs`, `RecordingPillLayout.cs` (+
+  `SilenceFill.cs` only if audio is captured in-process, option C below); tests in `windows/tests/BetterScreenshot.Tests/RecordingTests.cs`
   (or new `LetterboxFitTests.cs` / `SilenceFillTests.cs`).
 - Icons (`windows/src/BetterScreenshot.App/Resources/Icons.xaml`): reuse `icon-mic`, `icon-speaker`,
   `icon-video`, `icon-trash`, `icon-play`, `icon-undo` (restart ↺); **add** mic-slash, speaker-slash,
@@ -1620,9 +1674,10 @@ segments with `-c copy` at stop**. A running ffmpeg can't change its inputs or r
   recording" is on — verify with a probe recording that it hides the window from `gdigrab`; if not, fall
   back to `ddagrab` (Desktop Duplication honours it). It's per-window, so it survives a switch.
 - **Focus.** The pill must never activate (`WS_EX_NOACTIVATE`, `ShowActivated=false`, handle
-  `WM_MOUSEACTIVATE` → `MA_NOACTIVATE`). Test that its tooltips and hover highlights still appear while
-  another app is focused (macOS needed an explicit opt-in, `allowsToolTipsWhenApplicationIsInactive`,
-  and hover tracking that is active even when the app isn't).
+  `WM_MOUSEACTIVATE` → `MA_NOACTIVATE`). Test that the hover hint bubble and hover highlights still
+  appear while another app is focused (macOS needed hover tracking that is active even when the app
+  isn't). Draw the bubble inside the pill's own window (or give its window the same
+  `WDA_EXCLUDEFROMCAPTURE`) so it never shows up in the video.
 - **Camera bubble show/hide:** keep the `CameraBubbleWindow` instance and `Hide()`/`Show()` it so a
   dragged position survives; stop the camera while hidden.
 

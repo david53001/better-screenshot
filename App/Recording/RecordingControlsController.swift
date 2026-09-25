@@ -1,21 +1,27 @@
 import AppKit
+import RecordingKit
 
 /// The floating pill shown for the whole recording session (countdown included).
 /// Expanded (default):
-///   ● 1:23 │ Mic · Sound · Camera │ Switch window… │ ↺ 🗑 ⏸ ■  ›
+///   ● 1:23 │ Mic · System audio · Camera │ Switch Window… │ ↺ 🗑 ⏸ ■  ›
 /// Collapsed (chevron): ● 1:23 ⏸ ■ ‹ — the pre-v3 compact pill.
+/// Paused, the timer column reads "Paused" over the dimmed time. Hovering any control
+/// shows what it does in a small bubble above the pill (below it at the top of the
+/// screen) — at once, unlike a tooltip. The bubble is drawn in the pill's own window,
+/// so it's left out of the recording along with the pill.
 /// Draggable; the collapsed state and position persist in UserDefaults
-/// (`recordingPillCollapsed`, `recordingPillAnchor` — its bottom-right corner, so
-/// the chevron stays under the pointer when it resizes). Restart/Discard confirm
-/// inline (the button turns into "Restart?"/"Discard?" for 3 s) — the panel never
-/// activates, so nothing steals focus from the app being recorded. Whether it
-/// shows up in the video is decided by RecordingCoordinator's content filter —
-/// `windowID` is what the coordinator excludes.
+/// (`recordingPillCollapsed`, `recordingPillAnchor` — the capsule's bottom-right corner,
+/// so the chevron stays under the pointer when it resizes). Restart/Discard confirm
+/// inline (the button turns into "Restart?"/"Discard?" for 3 s, filling the space of
+/// both buttons so the pill keeps its size) — the panel never activates, so nothing
+/// steals focus from the app being recorded. Whether it shows up in the video is
+/// decided by RecordingCoordinator's content filter — `windowID` is what the
+/// coordinator excludes. Drawn in the shared dark HUD look (`RecordingHUDStyle`).
 @MainActor
 final class RecordingControlsController {
-    /// A recorded source's pill state. Mic/Sound: on = audible, off = muted.
+    /// A recorded source's pill state. Mic/System audio: on = audible, off = muted.
     /// Camera: on = bubble showing. `unavailable` greys the button; the string
-    /// is its tooltip (why).
+    /// is its hint (why).
     enum SourceState: Equatable { case on, off, unavailable(String) }
     enum SwitchKind { case window, area }
 
@@ -51,6 +57,12 @@ final class RecordingControlsController {
         static let chevronInset: CGFloat = 6
         static let group: CGFloat = 10         // around separators
         static let tight: CGFloat = 2          // between buttons of one group
+        static let iconButton: CGFloat = 28
+        static let timeWidth: CGFloat = 46     // "88:88" without jitter as digits change
+        static let hintHeight: CGFloat = 24
+        static let hintGap: CGFloat = 6
+        static let hintPadding: CGFloat = 10
+        static let hintMargin: CGFloat = 8     // from the screen edges
     }
     private enum Key {
         static let collapsed = "recordingPillCollapsed"
@@ -59,8 +71,12 @@ final class RecordingControlsController {
     private static let confirmSeconds: TimeInterval = 3
 
     private var panel: NSPanel?
+    private var capsule: NSVisualEffectView?
+    private var hintBubble: NSVisualEffectView?
+    private var hintLabel: NSTextField?
     private var stack: NSStackView?
     private var dot: NSView?
+    private var pausedLabel: NSTextField?
     private var timeLabel: NSTextField?
     private var micButton: PillButton?
     private var soundButton: PillButton?
@@ -76,6 +92,14 @@ final class RecordingControlsController {
     /// The separator just before the Switch button (hidden with it).
     private var switchSeparator: NSView?
     private var moveObserver: NSObjectProtocol?
+    /// Width of the Restart and Discard icon buttons — together they hold either confirm label.
+    private var confirmPairWidth = Metric.iconButton
+
+    /// The capsule's frame on screen. The window is this, plus the hint bubble while shown.
+    private var pillFrame = NSRect.zero
+    private var hovered: PillButton?
+    /// Set while we move/resize the window ourselves (not a user drag).
+    private var laying = false
 
     private var status = Status()
     private var collapsed = UserDefaults.standard.bool(forKey: Key.collapsed)
@@ -96,31 +120,49 @@ final class RecordingControlsController {
 
         let label = NSTextField(labelWithString: "0:00")
         label.font = .monospacedDigitSystemFont(ofSize: 14, weight: .semibold)
-        label.textColor = .white
+        label.textColor = RecordingHUDStyle.primaryText
         label.alignment = .left
-        Self.pin(label, width: 46)             // "88:88" without jitter as digits change
+        Self.pin(label, width: Metric.timeWidth)
+        // Paused: the word sits over the dimmed time, in the same fixed-width column.
+        let paused = NSTextField(labelWithString: "Paused")
+        paused.font = .systemFont(ofSize: 10, weight: .semibold)
+        paused.textColor = RecordingHUDStyle.primaryText
+        paused.isHidden = true
+        let timeColumn = NSStackView(views: [paused, label])
+        timeColumn.orientation = .vertical
+        timeColumn.alignment = .leading
+        timeColumn.spacing = 0
+        timeColumn.detachesHiddenViews = true
 
         let mic = PillButton.labelled(["Mic"], symbols: ["mic.fill", "mic.slash.fill"],
                                       target: self, action: #selector(micTapped))
-        let sound = PillButton.labelled(["Sound"], symbols: ["speaker.wave.2.fill", "speaker.slash.fill"],
+        let sound = PillButton.labelled(["System audio"], symbols: ["speaker.wave.2.fill", "speaker.slash.fill"],
                                         target: self, action: #selector(soundTapped))
-        let camera = PillButton.labelled(["Camera"], symbols: ["video.fill", "video.slash.fill"],
+        let camera = PillButton.labelled(["Camera"], symbols: ["video.fill", "video", "video.slash.fill"],
                                          target: self, action: #selector(cameraTapped))
-        let switchButton = PillButton.labelled(["Switch window…", "Switch area…"],
+        let switchButton = PillButton.labelled(["Switch Window…", "Switch Area…"],
                                                symbols: ["macwindow", "rectangle.dashed"],
                                                target: self, action: #selector(switchTapped))
 
-        let restart = PillButton.icon("arrow.counterclockwise", target: self, action: #selector(restartTapped))
-        let discard = PillButton.icon("trash", target: self, action: #selector(discardTapped))
+        confirmPairWidth = RecordingPillLayout.confirmPairButtonWidth(
+            confirmWidths: ["Restart?", "Discard?"].map(PillButton.confirmWidth(for:)),
+            spacing: Metric.tight, minimum: Metric.iconButton)
+        let restart = PillButton.icon("arrow.counterclockwise", target: self, action: #selector(restartTapped),
+                                      width: confirmPairWidth)
+        let discard = PillButton.icon("trash", target: self, action: #selector(discardTapped),
+                                      width: confirmPairWidth)
         let pause = PillButton.icon("pause.fill", target: self, action: #selector(pauseTapped))
         let stop = PillButton.icon("stop.fill", target: self, action: #selector(stopTapped))
         stop.tint = .systemRed
         let chevron = PillButton.icon("chevron.right", target: self, action: #selector(chevronTapped),
                                       width: 20, pointSize: 11)
         chevron.tint = NSColor.white.withAlphaComponent(0.55)
+        for b in [mic, sound, camera, switchButton, restart, discard, pause, stop, chevron] {
+            b.onHover = { [weak self] button, inside in self?.hoverChanged(button, inside) }
+        }
 
         let sep1 = Self.separator(), sep2 = Self.separator(), sep3 = Self.separator()
-        let views: [NSView] = [dot, label, sep1, mic, sound, camera, sep2, switchButton, sep3,
+        let views: [NSView] = [dot, timeColumn, sep1, mic, sound, camera, sep2, switchButton, sep3,
                                restart, discard, pause, stop, chevron]
         let stack = NSStackView(views: views)
         stack.orientation = .horizontal
@@ -128,41 +170,43 @@ final class RecordingControlsController {
         stack.spacing = Metric.tight
         stack.detachesHiddenViews = true
         stack.setCustomSpacing(8, after: dot)
-        for v in [label, sep1, camera, sep2, switchButton, sep3] {
+        for v in [timeColumn, sep1, camera, sep2, switchButton, sep3] {
             stack.setCustomSpacing(Metric.group, after: v)
         }
         stack.setCustomSpacing(6, after: stop)
         stack.translatesAutoresizingMaskIntoConstraints = false
 
-        let bg = NSVisualEffectView()
-        bg.appearance = NSAppearance(named: .vibrantDark)
-        bg.material = .hudWindow
-        bg.state = .active
-        bg.wantsLayer = true
-        bg.layer?.cornerRadius = Metric.height / 2
-        bg.layer?.masksToBounds = true
-        bg.layer?.borderWidth = 1
-        bg.layer?.borderColor = NSColor.white.withAlphaComponent(0.1).cgColor
-        // A light dark wash keeps white text readable over bright backdrops.
-        let wash = NSView()
-        wash.wantsLayer = true
-        wash.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.25).cgColor
-        wash.translatesAutoresizingMaskIntoConstraints = false
-        bg.addSubview(wash)
-        bg.addSubview(stack)
+        let capsule = RecordingHUDStyle.makeBackground(cornerRadius: Metric.height / 2)
+        capsule.addSubview(stack)
         NSLayoutConstraint.activate([
-            wash.leadingAnchor.constraint(equalTo: bg.leadingAnchor),
-            wash.trailingAnchor.constraint(equalTo: bg.trailingAnchor),
-            wash.topAnchor.constraint(equalTo: bg.topAnchor),
-            wash.bottomAnchor.constraint(equalTo: bg.bottomAnchor),
-            stack.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: Metric.inset),
-            stack.centerYAnchor.constraint(equalTo: bg.centerYAnchor),
+            stack.leadingAnchor.constraint(equalTo: capsule.leadingAnchor, constant: Metric.inset),
+            stack.centerYAnchor.constraint(equalTo: capsule.centerYAnchor),
         ])
-        // The panel is sized to the stack (`fittedSize`), not the other way round —
+        // The capsule is sized to the stack (`fittedSize`), not the other way round —
         // a required trailing pin would fight the old frame for a pass on every resize.
-        let trailing = stack.trailingAnchor.constraint(equalTo: bg.trailingAnchor, constant: -Metric.chevronInset)
+        let trailing = stack.trailingAnchor.constraint(equalTo: capsule.trailingAnchor, constant: -Metric.chevronInset)
         trailing.priority = .defaultHigh
         trailing.isActive = true
+
+        let bubble = RecordingHUDStyle.makeBackground(cornerRadius: 7)
+        let hint = NSTextField(labelWithString: "")
+        hint.font = .systemFont(ofSize: 12, weight: .medium)
+        hint.textColor = RecordingHUDStyle.primaryText
+        hint.lineBreakMode = .byTruncatingTail
+        hint.translatesAutoresizingMaskIntoConstraints = false
+        bubble.addSubview(hint)
+        NSLayoutConstraint.activate([
+            hint.leadingAnchor.constraint(equalTo: bubble.leadingAnchor, constant: Metric.hintPadding),
+            hint.trailingAnchor.constraint(equalTo: bubble.trailingAnchor, constant: -Metric.hintPadding),
+            hint.centerYAnchor.constraint(equalTo: bubble.centerYAnchor),
+        ])
+        bubble.isHidden = true
+
+        // Capsule and bubble are placed by hand (`layoutWindow`); the rest of the
+        // window is transparent, and clicks there pass through to what's below.
+        let root = NSView()
+        root.addSubview(capsule)
+        root.addSubview(bubble)
 
         let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 200, height: Metric.height),
                         styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -172,13 +216,16 @@ final class RecordingControlsController {
         p.hasShadow = true
         p.hidesOnDeactivate = false
         p.isMovableByWindowBackground = true
-        p.allowsToolTipsWhenApplicationIsInactive = true   // we never activate
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        p.contentView = bg
+        p.contentView = root
 
         self.panel = p
+        self.capsule = capsule
+        self.hintBubble = bubble
+        self.hintLabel = hint
         self.stack = stack
         self.dot = dot
+        self.pausedLabel = paused
         self.timeLabel = label
         self.micButton = mic
         self.soundButton = sound
@@ -199,10 +246,8 @@ final class RecordingControlsController {
         place(size: size, anchor: anchor)
         p.orderFrontRegardless()
         moveObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.didMoveNotification, object: p, queue: .main) { [weak p] _ in
-            guard let p else { return }
-            UserDefaults.standard.set(NSStringFromPoint(NSPoint(x: p.frame.maxX, y: p.frame.minY)),
-                                      forKey: Key.anchor)
+            forName: NSWindow.didMoveNotification, object: p, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.panelMoved() }
         }
     }
 
@@ -212,7 +257,8 @@ final class RecordingControlsController {
         moveObserver = nil
         panel?.orderOut(nil)
         panel = nil
-        stack = nil; dot = nil; timeLabel = nil
+        capsule = nil; hintBubble = nil; hintLabel = nil; hovered = nil
+        stack = nil; dot = nil; pausedLabel = nil; timeLabel = nil
         micButton = nil; soundButton = nil; cameraButton = nil; switchButton = nil
         restartButton = nil; discardButton = nil; pauseButton = nil; stopButton = nil; chevron = nil
         expandedOnly = []; switchSeparator = nil
@@ -235,22 +281,25 @@ final class RecordingControlsController {
         // nil during the countdown (and a Restart's) — show a fresh 0:00.
         timeLabel?.stringValue = s.elapsed?.replacingOccurrences(of: "Paused · ", with: "") ?? "0:00"
         let live = s.running && !s.paused
-        timeLabel?.textColor = live ? .white : .secondaryLabelColor
+        timeLabel?.textColor = live ? RecordingHUDStyle.primaryText : RecordingHUDStyle.secondaryText
+        pausedLabel?.isHidden = !(s.running && s.paused)
         dot?.layer?.backgroundColor = (live ? NSColor.systemRed : NSColor.systemGray).cgColor
 
-        render(micButton, s.mic, on: "mic.fill", off: "mic.slash.fill", offIsWarning: true,
+        render(micButton, s.mic, on: "mic.fill", off: "mic.slash.fill", unavailable: "mic.slash.fill",
+               offIsWarning: true,
                tipOn: "Mute microphone — the video keeps a silent gap, stays in sync",
                tipOff: "Unmute microphone")
-        render(soundButton, s.sound, on: "speaker.wave.2.fill", off: "speaker.slash.fill", offIsWarning: true,
+        render(soundButton, s.sound, on: "speaker.wave.2.fill", off: "speaker.slash.fill",
+               unavailable: "speaker.slash.fill", offIsWarning: true,
                tipOn: "Mute system audio — the video keeps a silent gap, stays in sync",
                tipOff: "Unmute system audio")
-        render(cameraButton, s.camera, on: "video.fill", off: "video.slash.fill", offIsWarning: false,
-               tipOn: "Hide camera bubble", tipOff: "Show camera bubble")
+        render(cameraButton, s.camera, on: "video.fill", off: "video", unavailable: "video.slash.fill",
+               offIsWarning: false, tipOn: "Hide camera bubble", tipOff: "Show camera bubble")
 
         if let b = switchButton {
             let window = s.switchKind != .area
             b.symbol = window ? "macwindow" : "rectangle.dashed"
-            b.label = window ? "Switch window…" : "Switch area…"
+            b.label = window ? "Switch Window…" : "Switch Area…"
             b.isEnabled = s.running
             b.setTip(!s.running ? "Available once recording starts"
                      : window ? "Record a different window — it's scaled to fit this video's frame"
@@ -264,7 +313,8 @@ final class RecordingControlsController {
                           confirmTip: "Click again to delete this recording")
         pauseButton?.symbol = s.paused ? "play.fill" : "pause.fill"
         pauseButton?.isEnabled = s.running
-        pauseButton?.setTip(s.paused ? "Resume recording" : "Pause recording")
+        pauseButton?.setTip(!s.running ? "Available once recording starts"
+                            : s.paused ? "Resume recording" : "Pause recording")
         stopButton?.setTip(s.running ? "Stop recording" : "Cancel recording")
         chevron?.symbol = collapsed ? "chevron.left" : "chevron.right"
         chevron?.setTip(collapsed ? "Show all controls" : "Collapse to timer, Pause and Stop")
@@ -273,23 +323,29 @@ final class RecordingControlsController {
         if !collapsed {
             switchButton?.isHidden = s.switchKind == nil
             switchSeparator?.isHidden = s.switchKind == nil
+            // A confirming button takes its partner's space too (fixed pill width).
+            restartButton?.isHidden = confirming == .discard
+            discardButton?.isHidden = confirming == .restart
         }
     }
 
-    private func render(_ b: PillButton?, _ state: SourceState, on: String, off: String,
+    private func render(_ b: PillButton?, _ state: SourceState, on: String, off: String, unavailable: String,
                         offIsWarning: Bool, tipOn: String, tipOff: String) {
         guard let b else { return }
         switch state {
         case .on:
             b.symbol = on; b.isEnabled = true; b.tint = .white; b.fill = nil; b.setTip(tipOn)
-        case .off:
-            // A muted track is a red chip (readable on any backdrop); a hidden
-            // camera just shows the slashed icon.
+        case .off where offIsWarning:
+            // A muted track is a red chip with a slashed icon (readable on any backdrop).
             b.symbol = off; b.isEnabled = true; b.tint = .white
-            b.fill = offIsWarning ? NSColor.systemRed.withAlphaComponent(0.85) : nil
+            b.fill = NSColor.systemRed.withAlphaComponent(0.85)
+            b.setTip(tipOff)
+        case .off:
+            // A hidden camera is simply "not on": outline icon, dimmed — no slash, no chip.
+            b.symbol = off; b.isEnabled = true; b.tint = RecordingHUDStyle.secondaryText; b.fill = nil
             b.setTip(tipOff)
         case .unavailable(let why):
-            b.symbol = off; b.isEnabled = false; b.tint = .white; b.fill = nil; b.setTip(why)
+            b.symbol = unavailable; b.isEnabled = false; b.tint = .white; b.fill = nil; b.setTip(why)
         }
     }
 
@@ -298,21 +354,21 @@ final class RecordingControlsController {
         guard let b else { return }
         b.isEnabled = status.running
         if confirming == confirm {
-            b.symbol = nil; b.label = title; b.bold = true; b.fill = .systemRed; b.fixedWidth = nil
+            b.symbol = nil; b.label = title; b.bold = true; b.fill = .systemRed
+            b.fixedWidth = RecordingPillLayout.confirmSlotWidth(buttonWidth: confirmPairWidth, spacing: Metric.tight)
             b.setTip(confirmTip)
         } else {
-            b.symbol = symbol; b.label = ""; b.bold = false; b.fill = nil; b.fixedWidth = 28
+            b.symbol = symbol; b.label = ""; b.bold = false; b.fill = nil; b.fixedWidth = confirmPairWidth
             b.setTip(status.running ? tip : "Available once recording starts")
         }
     }
 
     // MARK: - Sizing
 
-    /// Refit the panel to its content, keeping the bottom-right corner (where the
+    /// Refit the capsule to its content, keeping its bottom-right corner (where the
     /// chevron is) in place, clamped onto the screen.
     private func resize() {
-        guard let panel else { return }
-        place(size: fittedSize, anchor: NSPoint(x: panel.frame.maxX, y: panel.frame.minY))
+        place(size: fittedSize, anchor: NSPoint(x: pillFrame.maxX, y: pillFrame.minY))
     }
 
     private var fittedSize: NSSize {
@@ -328,7 +384,44 @@ final class RecordingControlsController {
             frame.origin.x = min(max(frame.minX, visible.minX + 8), visible.maxX - frame.width - 8)
             frame.origin.y = min(max(frame.minY, visible.minY + 8), visible.maxY - frame.height - 8)
         }
-        panel.setFrame(frame, display: true)
+        pillFrame = frame
+        layoutWindow()
+    }
+
+    /// Sizes the window to the capsule plus, while a control is hovered, its hint bubble.
+    private func layoutWindow() {
+        guard let panel, let capsule, let bubble = hintBubble, let hint = hintLabel else { return }
+        var bubbleFrame: NSRect?
+        if let b = hovered, !b.isHidden, !b.hint.isEmpty {
+            capsule.frame.size = pillFrame.size
+            capsule.layoutSubtreeIfNeeded()
+            hint.stringValue = b.hint
+            let size = CGSize(width: ceil(hint.attributedStringValue.size().width) + 2 * Metric.hintPadding,
+                              height: Metric.hintHeight)
+            let visible = (NSScreen.screens.first { $0.frame.intersects(pillFrame) } ?? NSScreen.main)?
+                .visibleFrame ?? pillFrame
+            bubbleFrame = RecordingPillLayout.hintFrame(
+                size: size, anchorX: pillFrame.minX + b.convert(b.bounds, to: capsule).midX,
+                pill: pillFrame, visible: visible, gap: Metric.hintGap, margin: Metric.hintMargin)
+        }
+        let frame = bubbleFrame.map { pillFrame.union($0) } ?? pillFrame
+        laying = true
+        panel.setFrame(frame, display: false)
+        laying = false
+        capsule.frame = pillFrame.offsetBy(dx: -frame.minX, dy: -frame.minY)
+        if let bubbleFrame { bubble.frame = bubbleFrame.offsetBy(dx: -frame.minX, dy: -frame.minY) }
+        bubble.isHidden = bubbleFrame == nil
+        panel.contentView?.needsDisplay = true
+        panel.invalidateShadow()
+    }
+
+    /// A user drag: remember where the capsule's bottom-right corner ended up.
+    private func panelMoved() {
+        guard !laying, let panel, let capsule else { return }
+        pillFrame.origin = NSPoint(x: panel.frame.minX + capsule.frame.minX,
+                                   y: panel.frame.minY + capsule.frame.minY)
+        UserDefaults.standard.set(NSStringFromPoint(NSPoint(x: pillFrame.maxX, y: pillFrame.minY)),
+                                  forKey: Key.anchor)
     }
 
     /// The remembered bottom-right corner, if the pill would still be on a screen there.
@@ -337,6 +430,13 @@ final class RecordingControlsController {
         let anchor = NSPointFromString(raw)
         let probe = NSPoint(x: anchor.x - min(size.width, 40), y: anchor.y + size.height / 2)
         return NSScreen.screens.contains { $0.visibleFrame.contains(probe) } ? anchor : nil
+    }
+
+    // MARK: - Hover hint
+
+    private func hoverChanged(_ b: PillButton, _ inside: Bool) {
+        if inside { hovered = b } else if hovered === b { hovered = nil } else { return }
+        layoutWindow()
     }
 
     // MARK: - Confirm
@@ -404,8 +504,9 @@ final class RecordingControlsController {
 }
 
 /// A borderless pill control: SF Symbol and/or label, hover highlight, a state
-/// fill (muted / confirm), and first-mouse clicks so it works while the panel
-/// never becomes key. Every property change funnels through `refresh()`.
+/// fill (muted / confirm — ringed in white so it stands out on red content), a
+/// hint shown by the pill's hover bubble, and first-mouse clicks so it works while
+/// the panel never becomes key. Every property change funnels through `refresh()`.
 private final class PillButton: NSButton {
     var symbol: String? { didSet { if symbol != oldValue { refresh() } } }
     var label = "" { didSet { if label != oldValue { refresh() } } }
@@ -415,6 +516,9 @@ private final class PillButton: NSButton {
     /// nil = natural width plus padding.
     var fixedWidth: CGFloat? { didSet { if fixedWidth != oldValue { refresh() } } }
     override var isEnabled: Bool { didSet { if isEnabled != oldValue { refresh(); applyBackground() } } }
+    /// What the control does (or why it's unavailable) — the pill's hover bubble text.
+    private(set) var hint = ""
+    var onHover: ((PillButton, Bool) -> Void)?
 
     private var pointSize: CGFloat = 14
     private var widthConstraint: NSLayoutConstraint?
@@ -441,7 +545,15 @@ private final class PillButton: NSButton {
         return b
     }
 
-    private convenience init(target: AnyObject, action: Selector, pointSize: CGFloat) {
+    /// Natural width of a bold confirm label ("Restart?") with padding.
+    static func confirmWidth(for title: String) -> CGFloat {
+        let b = PillButton(target: nil, action: nil, pointSize: 14)
+        b.label = title
+        b.bold = true
+        return b.naturalWidth
+    }
+
+    private convenience init(target: AnyObject?, action: Selector?, pointSize: CGFloat) {
         self.init(frame: .zero)
         self.target = target
         self.action = action
@@ -476,8 +588,12 @@ private final class PillButton: NSButton {
         }
     }
 
+    /// Sets the hover hint (and the VoiceOver label); a hint shown right now updates in place.
     func setTip(_ tip: String) {
-        if toolTip != tip { toolTip = tip; setAccessibilityLabel(tip) }
+        guard hint != tip else { return }
+        hint = tip
+        setAccessibilityLabel(tip)
+        if hovering { onHover?(self, true) }
     }
 
     private func applyBackground() {
@@ -485,6 +601,9 @@ private final class PillButton: NSButton {
         let c = fill.map { hover ? $0.blended(withFraction: 0.15, of: .white) ?? $0 : $0 }
             ?? (hover ? NSColor.white.withAlphaComponent(0.12) : .clear)
         layer?.backgroundColor = c.cgColor
+        // A thin white ring keeps a red chip distinct over red content.
+        layer?.borderWidth = fill == nil ? 0 : 1
+        layer?.borderColor = NSColor.white.withAlphaComponent(0.5).cgColor
     }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -500,6 +619,6 @@ private final class PillButton: NSButton {
                                                               .inVisibleRect], owner: self))
     }
 
-    override func mouseEntered(with event: NSEvent) { hovering = true; applyBackground() }
-    override func mouseExited(with event: NSEvent) { hovering = false; applyBackground() }
+    override func mouseEntered(with event: NSEvent) { hovering = true; applyBackground(); onHover?(self, true) }
+    override func mouseExited(with event: NSEvent) { hovering = false; applyBackground(); onHover?(self, false) }
 }

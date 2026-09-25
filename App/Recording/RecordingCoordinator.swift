@@ -422,7 +422,7 @@ final class RecordingCoordinator {
 
     private static let noMicTip = "Mic wasn't on when this recording started — there's no mic track to mute"
     private static let noSoundTip =
-        "System audio wasn't on when this recording started — there's no sound track to mute"
+        "System audio wasn't on when this recording started — there's no system audio track to mute"
     private static let gifTip = "GIFs have no sound — there's no audio track to mute"
 
     private func pillStatus() -> RecordingControlsController.Status {
