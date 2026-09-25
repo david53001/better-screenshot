@@ -19,6 +19,10 @@ final class TourCoordinator {
     var openSurface: ((TourSurface) -> Bool)?
     /// A short confirmation for the user (the app shows it in its HUD).
     var notify: ((String) -> Void)?
+    /// Windows besides a tour's host where a step's anchor may live, searched after the host: the
+    /// menu-bar status item's window (the Welcome tour's first step points at the icon). The tag then
+    /// attaches to that window; the host still decides pausing.
+    var extraAnchorWindows: () -> [NSWindow] = { [] }
     /// How long a completed Try step shows its "done" state before the next step.
     var completedDelay: TimeInterval = 0.8
 
@@ -293,15 +297,18 @@ final class TourCoordinator {
         guard let session = running, let window = session.window,
               session.engine.tour.steps.indices.contains(index) else { return }
         let step = session.engine.tour.steps[index]
-        guard let anchor = window.view(forTourAnchor: step.anchor) else {
+        guard let (anchor, anchorWindow) = locate(step.anchor, in: window) else {
             checkHost()
             return
         }
+        // A control further down a scrolling window (Settings' Keyboard Shortcuts card) is brought
+        // into view first; no-op when it's already visible.
+        anchor.scrollToVisible(anchor.bounds)
         generation += 1
         showingCompleted = false
         let body = TourText.resolvingShortcuts(in: step.body, shortcutText)
         tagPresenter.show(step: step, body: body, number: index + 1,
-                          total: session.engine.tour.steps.count, anchor: anchor, host: window)
+                          total: session.engine.tour.steps.count, anchor: anchor, host: anchorWindow)
     }
 
     /// The Try step's brief "done" state, then `then` (unless something else was shown meanwhile).
@@ -410,7 +417,17 @@ final class TourCoordinator {
     private func tour(_ id: TourID) -> Tour? { catalog.first { $0.id == id } }
 
     private func presence(in window: NSWindow?) -> (String) -> Bool {
-        { [weak window] anchor in window?.view(forTourAnchor: anchor) != nil }
+        { [weak self, weak window] anchor in self?.locate(anchor, in: window) != nil }
+    }
+
+    /// `anchor`'s view and the window it's in: the host first, then `extraAnchorWindows`.
+    private func locate(_ anchor: String, in window: NSWindow?) -> (NSView, NSWindow)? {
+        guard let window else { return nil }
+        if let view = window.view(forTourAnchor: anchor) { return (view, window) }
+        for other in extraAnchorWindows() where other !== window {
+            if let view = other.view(forTourAnchor: anchor) { return (view, other) }
+        }
+        return nil
     }
 
     private func mayAutoStart(_ tour: Tour) -> Bool {

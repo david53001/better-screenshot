@@ -14,8 +14,13 @@ final class MenuBarController: NSObject {
         super.init()
         statusItem.button?.image = NSImage(systemSymbolName: "camera.viewfinder",
                                            accessibilityDescription: "BetterScreenshot")
+        statusItem.button?.tourAnchor = "menuBar.icon"   // the Welcome tour's first step
         buildMenu()
     }
+
+    /// The status item's own window — where the Welcome tour's `menuBar.icon` anchor lives
+    /// (`TourCoordinator.extraAnchorWindows`).
+    var iconWindow: NSWindow? { statusItem.button?.window }
 
     private var actionItems: [HotkeyAction: NSMenuItem] = [:]
     private var recordItem: NSMenuItem?
