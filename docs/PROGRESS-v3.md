@@ -26,13 +26,21 @@ keep the Mac responsive.
 | 2 | Text | Part 2 | **merged** into `main` (`4347104`) | `c206a2f`, `0b324b9`, `f275179` |
 | 2 | Redaction + tools | Part 3 | **merged** into `main` (`dc1c11e`) | `9b40dfe`…`fc056b0` |
 | 3 | Tours & help | Part 7 (spec §14: interactive, action-driven first-run + first-use tours, ⓘ on every window; no demo videos) | **approved 2026-09-25, deferred** — owner: "we will build later"; the next step after the UI-fix lane below. Build straight from spec §14 (no plan doc) | — |
-| 4 | UI fixes | Fix the independent UI review's issues (`docs/reviews/2026-09-25-ui-review.md`, overall 5/10): editor · recording strip/pill/countdown · video editor · app shell (Settings, History, Welcome, menu, Quick Access, overlays) | launched 2026-09-25 | — |
+| 4 | UI fixes | Fix the independent UI review's issues (`docs/reviews/2026-09-25-ui-review.md`, overall 5/10): editor · recording strip/pill/countdown · video editor · app shell (Settings, History, Welcome, menu, Quick Access, overlays) | **merged** into `main` 2026-09-25 (`e85734a` video, `45dfd46` editor, `0584da9` strip/pill/countdown, `76a2a57` app shell) — all review items fixed except C2 (partly: Settings keeps its own dropdown style) and V6/Q3 (judged acceptable). After-screenshots: `docs/reviews/2026-09-25-ui-fixes/`. 433 tests pass | `674ae95`…`1fced9b` |
 | — | Coordinator | Windows doc §A (`6a1304e`), all merges, CHANGELOG/README/CLAUDE.md, full verification | **done** 2026-09-24 | `main` |
 
 **Known follow-ups** (after all lanes merge):
 - Mid-recording microphone device switch from the live pill (needs Part 4's device catalog + Part 5's
   pill) — spec §8.
 - History thumbnail isn't regenerated after the video editor's Replace Original (pre-existing).
+- UI-fix leftovers (2026-09-25): (a) two copies of the shared dark HUD style —
+  `Packages/OverlayKit/Sources/OverlayKit/HUDStyle.swift` and
+  `Packages/RecordingKit/Sources/RecordingKit/RecordingHUDStyle.swift` (same values; RecordingKit doesn't
+  depend on OverlayKit) — merge if a shared module appears; (b) keyboard Tab between record-strip controls
+  only works with macOS keyboard navigation on — verify on the real app; (c) 60% white secondary text on
+  the HUD over very light content measures ~4.3:1 (just under WCAG's 4.5:1); (d) recording toasts raised
+  by `RecordingCoordinator` are dark but have no icon (`HUDController.show(_:symbol:)` supports one);
+  (e) re-run the `reviewer` skill to get the post-fix score.
 
 **Gotcha (stale root build):** after merging a branch that adds files to a `Packages/*` library, the
 root `swift build` may fail with "cannot find X in scope" — delete `.build/debug.yaml` (the cached

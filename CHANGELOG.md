@@ -57,6 +57,39 @@ port notes: `docs/MAC-TO-WINDOWS-PARITY-v3.md`.
   Electron apps) — window recordings now take system audio from the whole display's audio.
 - Dropdown fields in Settings (e.g. the Pin corner-radius menu) drew as bare text with two chevrons.
 
+### UI polish — fixes from the independent UI review
+Review: `docs/reviews/2026-09-25-ui-review.md` (5/10 before these fixes); after-screenshots in
+`docs/reviews/2026-09-25-ui-fixes/`.
+- **Annotation editor:** Undo, Redo and the panel toggle are visible in the title bar again (they had
+  zero width), and the editor stays dark in Light mode. Screenshots open at their real size — Fit never
+  enlarges past 100% — in a window sized to match. The inspector is tidier: Front/Back/Delete sit in a
+  footer that's always reachable, the Text panel is about 20% shorter, colour wells are labelled,
+  sliders line up, and Front/Back have distinct arrow icons. Turning on a text Outline picks a colour
+  that contrasts with the text; handles no longer cover the letters; a dashed frame shows while typing;
+  the default red is the Red swatch; the bottom bar is slimmer.
+- **Video editor:** a real time ruler above the filmstrip (round times in the edit's own clock, never
+  overlapping), and zoomed-in filmstrips no longer repeat frames. A missing or unreadable file shows a
+  clear centred error with Show in Finder. Export progress has its own slot so nothing moves; the footer
+  checkbox is now "Mute whole video"; Replace Original stays disabled until there's an edit to save.
+- **Record strip:** a darker, readable HUD over any window; the mic level meter sits beside the
+  Microphone label (no empty gap); equal columns; the chosen Format/FPS is clearly highlighted; the
+  hovered control's label lights up with its hint; in GIF mode the hint explains why audio is off.
+- **Recording pill:** keeps its width when asking "Restart?"/"Discard?"; shows "Paused"; hovering any
+  control explains it instantly; says "System audio"; camera off no longer looks muted; muted chips stay
+  visible over red content. **Countdown:** the number is centred, with "Click to start now".
+- **Quick Access card:** shows each capture once, edge to edge (it was drawing the image twice, hiding
+  the contrast tint), so its buttons stay readable on busy images; recording cards show "0:42 · MP4".
+- **Settings:** every ⓘ explanation shows in full; the layout is balanced with a new "In the video"
+  card; "Mouse cursor: Shown/Hidden" and "Show recording controls in the video" use the record strip's
+  words; "Capture Full Screen" everywhere.
+- **History:** action buttons never truncate; items show their size or length; recordings get a play
+  badge; the empty window explains how to take a first screenshot; Clear All moved into a ⋯ menu.
+- **Welcome:** the shortcut list is an aligned grid of *your* shortcuts (including Capture Text) in ⇧⌘
+  order, and the window no longer changes size between steps.
+- **Overlays:** toasts, the area-selection size label and the pin's close button share one dark style
+  and stay readable over light content; long window-picker titles are cut to fit; every menu-bar menu
+  item has an icon.
+
 ## Unreleased (earlier) — 2026-09-24 · Text boxes & fonts, stop button, recording trim
 
 ### Added
