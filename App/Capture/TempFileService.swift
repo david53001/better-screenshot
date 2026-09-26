@@ -21,7 +21,7 @@ final class TempFileService {
         self.settings = settings
         sweep()   // clear directories orphaned by earlier runs
         let timer = Timer(timeInterval: Self.sweepInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.sweep() }
+            Task { @MainActor [weak self] in self?.sweep() }
         }
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer

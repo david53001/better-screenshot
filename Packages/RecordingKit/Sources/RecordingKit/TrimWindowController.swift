@@ -177,7 +177,7 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
             MainActor.assumeIsolated { self?.playerTimeChanged(time.seconds) }
         }
         playingObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] _, _ in
-            Task { @MainActor in self?.refreshPlayButton() }
+            Task { @MainActor [weak self] in self?.refreshPlayButton() }
         }
     }
 
@@ -895,7 +895,7 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
         if !determinate { progressBar.startAnimation(nil) }
         refreshChrome()
         let progress: TrimExporter.Progress = { [weak self] p in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self, self.isExporting, determinate else { return }
                 self.progressBar.doubleValue = p
                 self.progressLabel.stringValue = "\(Int((p * 100).rounded()))%"
