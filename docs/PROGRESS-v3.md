@@ -36,9 +36,9 @@ keep the Mac responsive.
   GitHub Actions** (`TrimExporterTests.swift`, `skipFrameExactChecks`): on GitHub's VM runners (no hardware
   video encoder) a 2 s three-cut edit re-encoded to 1.6–1.7 s, differently each run; on the owner's Mac they
   pass every time. **Follow-up:** check the video editor's cut/GIF export on a real macOS 15 Mac.
-- **Not released yet:** everything since `v2.11.0` (v3 Parts 0–7, UI-review fixes, window placement, tours)
-  is on `main` only. The README's install one-liner fetches the latest GitHub *release*, so users get it only
-  after a release is tagged and published (signed with the stable identity — see root `CLAUDE.md`).
+- **Released as `v3.0.0` on 2026-09-26** (tag on `a63bc69`, GitHub release "Latest" with the universal,
+  stable-identity-signed `BetterScreenshot.app.zip` from `scripts/package-release.sh`; CI green on that
+  commit). Everything since `v2.11.0` — v3 Parts 0–7, UI-review fixes, window placement, tours — is in it.
 - Mid-recording microphone device switch from the live pill (needs Part 4's device catalog + Part 5's
   pill) — spec §8.
 - History thumbnail isn't regenerated after the video editor's Replace Original (pre-existing).

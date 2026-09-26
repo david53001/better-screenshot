@@ -140,7 +140,7 @@ font family / bold / italic / alignment; drag = text box (`TextAnnotation.wrapWi
 capture unless `RecordingConfig.controlsInRecording`; `TrimWindowController` + `TrimExporter` in
 RecordingKit trim MP4s losslessly (Save as Copy / Replace Original, which reloads the player).
 
-**Built — v3 editor & recording overhaul (2026-09-24, merged on `main`, untagged/unpushed; status + follow-ups in `docs/PROGRESS-v3.md`):**
+**Built — v3 editor & recording overhaul (released as `v3.0.0` on 2026-09-26; status + follow-ups in `docs/PROGRESS-v3.md`):**
 `docs/superpowers/specs/2026-09-24-betterscreenshot-editor-recording-v3-design.md` — Parts 0–6: trim
 Cancel restores the card (bug), editor inspector redesign, text v2 (corner-scale, background colour,
 outline/presets), redaction strength (+ fix: blur/pixelate patches are baked at creation so moving or
