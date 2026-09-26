@@ -2,7 +2,7 @@
 
 All notable changes to BetterScreenshot. Versions are git tags; releases are published on [GitHub](../../releases).
 
-## Unreleased — v3 editor & recording overhaul
+## v3.0.0 — 2026-09-26 · Editor & recording overhaul, video editor, guided tours
 
 Design: `docs/superpowers/specs/2026-09-24-betterscreenshot-editor-recording-v3-design.md`; Windows
 port notes: `docs/MAC-TO-WINDOWS-PARITY-v3.md`.
@@ -132,7 +132,9 @@ Review: `docs/reviews/2026-09-25-ui-review.md` (5/10 before these fixes); after-
   and stay readable over light content; long window-picker titles are cut to fit; every menu-bar menu
   item has an icon.
 
-## Unreleased (earlier) — 2026-09-24 · Text boxes & fonts, stop button, recording trim
+## v3.0.0, first half (built 2026-09-24) · Text boxes & fonts, stop button, recording trim
+
+Shipped in the same v3.0.0 release as the section above.
 
 ### Added
 - **Trim recordings.** A ✂ button on a finished MP4 recording's Quick Access card (and **Trim…** in
