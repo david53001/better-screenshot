@@ -348,6 +348,21 @@ let trimExporterTests: [TestCase] = [
             t.equal(i.audio, 1)
         } catch { t.fail("passthrough export: \(error)") }
     },
+    TestCase("mutedExportOfCutsKeepsTheEditsLength") { t in
+        // The GIF path renders the edit with no audio first. With audio the file's length comes from
+        // the audio track too, so a short video track would go unnoticed there.
+        let dir = freshDir(); defer { try? FileManager.default.removeItem(at: dir) }
+        let src = dir.appendingPathComponent("Recording.mp4")
+        let out = dir.appendingPathComponent("Muted.mp4")
+        do {
+            try makeFixtureMP4(at: src)
+            try blocking { try await TrimExporter.export(source: src, cuts: threeSegments(), muted: true, to: out) }
+            let i = try info(out)
+            print("      muted 3-segment export: duration \(i.duration) s, video \(i.video), audio \(i.audio)")
+            t.approxEqual(i.duration, 2.0, tol: 0.15)
+            t.equal(i.audio, 0)
+        } catch { t.fail("muted export: \(error)") }
+    },
     TestCase("gifExportOfTheEdit") { t in
         let dir = freshDir(); defer { try? FileManager.default.removeItem(at: dir) }
         let src = dir.appendingPathComponent("Recording.mp4")
