@@ -168,7 +168,58 @@ enum ScriptRecovery {
             glyphs[i].clipped = box.minY < core.minY - 0.1 * core.height || box.maxY > core.maxY + 0.1 * core.height
         }
         guard glyphs.count >= 2 else { return nil }
-        return measure(glyphs, blobs: blobs, map: map)
+        var all = blobs
+        glyphs = splitRaisedTails(glyphs, blobs: &all, map: map)
+        return measure(glyphs, blobs: all, map: map)
+    }
+
+    /// At low resolution a script touches its base (`x²` one blob): a run of
+    /// columns on the glyph's right whose ink stays well off the baseline and
+    /// rises above the rest is cut off as a glyph of its own.
+    private static func splitRaisedTails(_ input: [Glyph], blobs: inout [InkMap.Blob], map: InkMap) -> [Glyph] {
+        var glyphs = input
+        let w = map.width
+        guard let rough = measure(glyphs, blobs: blobs, map: map) else { return glyphs }
+        for i in glyphs.indices.reversed() {
+            let g = glyphs[i]
+            guard g.blobs.count == 1, !g.isStructure, !g.quote, g.box.width >= 0.5 * rough.capHeight else { continue }
+            // Measured without it: run together, it would pass for the tallest letter.
+            var others = glyphs
+            others.remove(at: i)
+            guard others.count >= 2, let line = measure(others, blobs: blobs, map: map) else { continue }
+            let cap = line.capHeight
+            guard g.box.width >= 0.8 * cap else { continue }
+            let blob = blobs[g.blobs[0]]
+            let x0 = Int(g.box.minX), columns = Int(g.box.width)
+            var bottom = [Int](repeating: Int.min, count: columns), top = [Int](repeating: Int.max, count: columns)
+            for p in blob.pixels {
+                let c = p % w - x0, y = p / w
+                guard c >= 0, c < columns else { continue }
+                bottom[c] = max(bottom[c], y); top[c] = min(top[c], y)
+            }
+            var cut = columns
+            // A script's ink stays half a capital off the baseline (an italic
+            // `f`'s hook comes lower, and barely rises above its stem).
+            while cut > 0, bottom[cut - 1] != Int.min, CGFloat(bottom[cut - 1]) < line.baseline - 0.5 * cap { cut -= 1 }
+            let run = columns - cut
+            guard CGFloat(run) >= 0.3 * cap, CGFloat(cut) >= 0.3 * cap,
+                  let leftBottom = bottom[..<cut].max(), CGFloat(leftBottom) > line.baseline - 0.1 * cap,
+                  // (the columns where they touch may hold both)
+                  let runTop = top[cut...].min(), let leftTop = top[..<max(1, cut - 2)].min(),
+                  CGFloat(runTop) <= line.baseline - 0.9 * cap, CGFloat(leftTop) >= CGFloat(runTop) + 0.45 * cap
+            else { continue }
+            let split = x0 + cut
+            let left = blob.pixels.filter { $0 % w < split }, right = blob.pixels.filter { $0 % w >= split }
+            func box(_ pixels: [Int]) -> CGRect {
+                let xs = pixels.map { $0 % w }, ys = pixels.map { $0 / w }
+                return CGRect(x: xs.min()!, y: ys.min()!, width: xs.max()! - xs.min()! + 1, height: ys.max()! - ys.min()! + 1)
+            }
+            blobs[g.blobs[0]] = InkMap.Blob(box: box(left), pixels: left)
+            blobs.append(InkMap.Blob(box: box(right), pixels: right))
+            glyphs[i].box = box(left)
+            glyphs.insert(Glyph(box: box(right), blobs: [blobs.count - 1]), at: i + 1)
+        }
+        return glyphs
     }
 
     /// Vision drops a full stop after a closing quote or a stacked fraction

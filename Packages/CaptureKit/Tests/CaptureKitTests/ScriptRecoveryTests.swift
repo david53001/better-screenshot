@@ -12,6 +12,17 @@ private func measuredLine(_ glyphs: [ScriptRecovery.Glyph], cap: CGFloat, baseli
                         capHeight: cap, baseline: baseline)
 }
 
+/// Black rectangles on white, given top-left-origin pixel rects.
+private func inkImage(width: Int, height: Int, _ rects: [CGRect]) -> CGImage {
+    let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                        space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue)!
+    ctx.setFillColor(gray: 1, alpha: 1)
+    ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+    ctx.setFillColor(gray: 0, alpha: 1)
+    for r in rects { ctx.fill(CGRect(x: r.minX, y: CGFloat(height) - r.maxY, width: r.width, height: r.height)) }
+    return ctx.makeImage()!
+}
+
 let scriptRecoveryTests: [TestCase] = [
     TestCase("scriptRunsUseUnicodeWhereItExists") { t in
         t.equal(ScriptRecovery.script("2", superscript: true), "²")
@@ -97,5 +108,19 @@ let scriptRecoveryTests: [TestCase] = [
         t.equal(ScriptRecovery.alignment([0, 1, 2, 3], Array("x+1"), spaces: [], measuredLine(
             [glyph(0, 14, 10, 16), glyph(11, 4, 7, 12), glyph(24, 14, 10, 12), glyph(40, 10, 10, 20)].enumerated().map { i, g in
                 var g = g; if i == 1 { g.kind = .sup }; return g }, cap: 20, baseline: 30)) ?? [], [0..<1, 1..<1, 1..<2, 2..<3])
+    },
+    TestCase("aScriptTouchingItsLetterIsCutOff") { t in
+        // Three capitals (20 tall, baseline y = 40), then an x-height block with
+        // a raised block run into its top right: `x²` printed as one blob.
+        let letters = [10, 30, 50].map { CGRect(x: $0, y: 20, width: 12, height: 20) }
+        let image = inkImage(width: 120, height: 60, letters + [CGRect(x: 70, y: 26, width: 12, height: 14),
+                                                             CGRect(x: 81, y: 16, width: 8, height: 11)])
+        let line = ScriptRecovery.lineGlyphs(rect: CGRect(x: 5, y: 18, width: 100, height: 24), in: image)
+        t.equal(line?.glyphs.count, 5)
+        t.equal(line?.glyphs.last?.box.minX, 82)
+        // Without the raised part rising clear of it, the letter stays whole.
+        let hook = inkImage(width: 120, height: 60, letters + [CGRect(x: 70, y: 20, width: 12, height: 20),
+                                                            CGRect(x: 81, y: 18, width: 8, height: 6)])
+        t.equal(ScriptRecovery.lineGlyphs(rect: CGRect(x: 5, y: 18, width: 100, height: 24), in: hook)?.glyphs.count, 4)
     },
 ]
