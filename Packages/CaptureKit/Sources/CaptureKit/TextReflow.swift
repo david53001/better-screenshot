@@ -756,9 +756,14 @@ public enum TextReflow {
     /// Joins a wrapped line onto its paragraph; a soft hyphen glued to a word
     /// before a lower-case continuation is removed (`portfo-` + `lio`), a
     /// spaced dash (`money —`, `money -`) is not.
+    /// A word broken across lines rejoins: `infor-` + `mation` → `information`.
+    /// A compound keeps its hyphen (`light-` + `dependent`): the joined word
+    /// isn't in the system word list.
     private static func joinWrapped(_ text: String, _ next: String) -> String {
         if text.hasSuffix("-"), text.dropLast().last?.isLetter == true, let c = next.first, c.isLowercase {
-            return String(text.dropLast()) + next
+            let left = text.dropLast().reversed().prefix { $0.isLetter }.reversed()
+            let right = next.prefix { $0.isLetter }
+            return (WordList.contains(String(left) + right) == false ? text : String(text.dropLast())) + next
         }
         return text + " " + next
     }

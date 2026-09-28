@@ -130,6 +130,17 @@ let textReflowTests: [TestCase] = [
         ]
         t.equal(TextReflow.paragraphs(lines), ["a tool for product portfolio analysis"])
     },
+    TestCase("aCompoundBrokenAtItsHyphenKeepsIt") { t in
+        // `lightdependent` isn't a word, so the hyphen was the compound's.
+        let lines = [
+            line("the light-", top: 0.10, left: 0.1, right: 0.3),
+            line("dependent reactions", top: 0.16, left: 0.1, right: 0.48),
+        ]
+        t.equal(TextReflow.paragraphs(lines), ["the light-dependent reactions"])
+        t.equal(WordList.contains("reactions"), true)
+        t.equal(WordList.contains("running"), true)
+        t.equal(WordList.contains("lightdependent"), false)
+    },
     TestCase("bulletGlyphsNormalizeAndWhitespaceTrims") { t in
         let lines = [
             line("  · first thing ", top: 0.10, left: 0.1, right: 0.4),
