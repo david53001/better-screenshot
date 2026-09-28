@@ -31,6 +31,8 @@ enum ScriptRecovery {
         /// A fraction running past the line's box: part of it belongs to a line
         /// Vision boxed separately, so its own read is kept.
         var clipped = false
+        /// The two ticks of a `"`: punctuation, never a script.
+        var quote = false
         /// Not a letter-sized glyph: leave it out of size and baseline estimates.
         var isStructure: Bool { container || fraction != nil }
     }
@@ -57,27 +59,7 @@ enum ScriptRecovery {
     /// `others`: the boxes of other lines, whose ink is left out.
     static func recover(_ text: String, rect: CGRect, in image: CGImage, excluding others: [CGRect] = [],
                         confident: Bool = true, reread: (CGImage) -> String?) -> String? {
-        let pad = rect.height * 0.3
-        let crop = rect.insetBy(dx: -pad, dy: -pad).integral
-            .intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
-        guard let map = InkMap(image, rect: crop) else { return nil }
-        let core = rect.offsetBy(dx: -crop.minX, dy: -crop.minY)
-        let neighbours = others.map { $0.offsetBy(dx: -crop.minX, dy: -crop.minY) }
-        // Ink of this line only: a descender from the line above or an ascender
-        // from the line below pokes into the padded crop but ends outside the box.
-        let blobs = map.blobs().filter { blob in
-            blob.pixels.count >= 3
-                && blob.box.maxY > core.minY + 0.1 * core.height && blob.box.minY < core.maxY - 0.1 * core.height
-                && blob.box.minY > core.minY - 0.25 * core.height && blob.box.maxY < core.maxY + 0.25 * core.height
-                && blob.box.maxX > core.minX - core.height && blob.box.minX < core.maxX + core.height
-                && !neighbours.contains { $0.contains(CGPoint(x: blob.box.midX, y: blob.box.midY)) && !core.contains(CGPoint(x: blob.box.midX, y: blob.box.midY)) }
-        }
-        var glyphs = self.glyphs(blobs, lineHeight: core.height)
-        for i in glyphs.indices where glyphs[i].fraction != nil {
-            let box = glyphs[i].box
-            glyphs[i].clipped = box.minY < core.minY - 0.1 * core.height || box.maxY > core.maxY + 0.1 * core.height
-        }
-        guard glyphs.count >= 2, var line = measure(glyphs, blobs: blobs, map: map) else { return nil }
+        guard var line = lineGlyphs(rect: rect, in: image, excluding: others) else { return nil }
         let hasScripts = classify(&line)
         line.trig = text.range(of: #"(?<![A-Za-z])(?:sin|cos|tan|sec|csc|cot)"#, options: .regularExpression) != nil
         line.hasDifferential = text.range(of: #"(?<![A-Za-z])d[a-zθ](?![a-z])"#, options: .regularExpression) != nil
@@ -158,6 +140,68 @@ enum ScriptRecovery {
             (0..<w).filter { ink.contains((y0 + y) * line.map.width + Int(box.minX) + $0) }.count
         }.max() ?? 0
         return Double(bottom) >= 0.8 * Double(w)
+    }
+
+    /// The glyphs of the line boxed at `rect`, measured (cap height, baseline).
+    static func lineGlyphs(rect: CGRect, in image: CGImage, excluding others: [CGRect] = []) -> Line? {
+        let pad = rect.height * 0.3
+        let crop = rect.insetBy(dx: -pad, dy: -pad).integral
+            .intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        guard let map = InkMap(image, rect: crop) else { return nil }
+        let core = rect.offsetBy(dx: -crop.minX, dy: -crop.minY)
+        let neighbours = others.map { $0.offsetBy(dx: -crop.minX, dy: -crop.minY) }
+        // Ink of this line only: a descender from the line above or an ascender
+        // from the line below pokes into the padded crop but ends outside the box.
+        let blobs = map.blobs().filter { blob in
+            blob.pixels.count >= 3
+                && blob.box.maxY > core.minY + 0.1 * core.height && blob.box.minY < core.maxY - 0.1 * core.height
+                && blob.box.minY > core.minY - 0.25 * core.height && blob.box.maxY < core.maxY + 0.25 * core.height
+                && blob.box.maxX > core.minX - core.height && blob.box.minX < core.maxX + core.height
+                && !neighbours.contains { $0.contains(CGPoint(x: blob.box.midX, y: blob.box.midY)) && !core.contains(CGPoint(x: blob.box.midX, y: blob.box.midY)) }
+        }
+        var glyphs = self.glyphs(blobs, lineHeight: core.height)
+        for i in glyphs.indices where glyphs[i].fraction != nil {
+            let box = glyphs[i].box
+            glyphs[i].clipped = box.minY < core.minY - 0.1 * core.height || box.maxY > core.maxY + 0.1 * core.height
+        }
+        guard glyphs.count >= 2 else { return nil }
+        return measure(glyphs, blobs: blobs, map: map)
+    }
+
+    /// A monospaced line's spaces, rebuilt from where its glyphs sit: every
+    /// character takes one cell, so the gap between two characters says how many
+    /// spaces lie between them (`items ()` → `items()`, `$curl-fsSL` →
+    /// `$ curl -fsSL`, two spaces before an inline `#` comment). Nil when the
+    /// line isn't monospaced or its characters can't be matched to glyphs.
+    static func monospaceSpacing(_ text: String, rect: CGRect, in image: CGImage, excluding others: [CGRect] = []) -> String? {
+        let lead = text.prefix { $0 == " " }
+        let read = Array(text.filter { $0 != " " })
+        guard read.count >= 4, let line = lineGlyphs(rect: rect, in: image, excluding: others),
+              let spans = alignment(Array(line.glyphs.indices), read, spaces: [], line) else { return nil }
+        // Each character's centre: glyphs holding several share their width.
+        var centres = [CGFloat](repeating: 0, count: read.count)
+        for (k, span) in spans.enumerated() where !span.isEmpty {
+            let box = line.glyphs[k].box
+            for (m, j) in span.enumerated() {
+                centres[j] = box.minX + (CGFloat(m) + 0.5) * box.width / CGFloat(span.count)
+            }
+        }
+        let placed = spans.flatMap { Array($0) }
+        // Every glyph read: where Vision dropped one, its cell isn't a space.
+        guard placed.count == read.count, !spans.contains(where: \.isEmpty) else { return nil }
+        let steps = read.indices.dropFirst().map { centres[$0] - centres[$0 - 1] }
+        let sorted = steps.sorted()
+        let cell = sorted[sorted.count / 2]
+        guard cell > 2 else { return nil }
+        // Monospaced: nearly every step is a whole number of cells.
+        let whole = steps.filter { abs($0 / cell - ($0 / cell).rounded()) < 0.2 && $0 > 0.5 * cell }.count
+        guard Double(whole) >= 0.9 * Double(steps.count) else { return nil }
+        var out = String(lead) + String(read[0])
+        for (i, step) in steps.enumerated() {
+            // Two cells apart is one space; a glyph off-centre in its cell doesn't make one.
+            out += String(repeating: " ", count: max(0, Int((step / cell - 0.65).rounded(.down)))) + String(read[i + 1])
+        }
+        return out == text ? nil : out
     }
 
     /// Two holes stacked one above the other in a full-size glyph: `θ` (Vision
@@ -261,7 +305,22 @@ enum ScriptRecovery {
                 glyphs.append(Glyph(box: box, blobs: [index], container: encloses))
             }
         }
-        return glyphs.sorted { $0.box.minX < $1.box.minX }
+        // The two ticks of a `"` side by side, small and level, are one glyph.
+        var merged: [Glyph] = []
+        for g in glyphs.sorted(by: { $0.box.minX < $1.box.minX }) {
+            if let last = merged.last, !last.isStructure, !g.isStructure,
+               max(last.box.height, g.box.height) < 0.4 * lineHeight, max(last.box.width, g.box.width) < 0.25 * lineHeight,
+               g.box.minX - last.box.maxX < 0.12 * lineHeight, abs(g.box.minY - last.box.minY) < 0.08 * lineHeight,
+               abs(g.box.height - last.box.height) < 0.15 * lineHeight,
+               last.box.height > 1.3 * last.box.width, g.box.height > 1.3 * g.box.width {
+                merged[merged.count - 1].box = last.box.union(g.box)
+                merged[merged.count - 1].blobs += g.blobs
+                merged[merged.count - 1].quote = true
+            } else {
+                merged.append(g)
+            }
+        }
+        return merged
     }
 
     private static func measure(_ glyphs: [Glyph], blobs: [InkMap.Blob], map: InkMap) -> Line? {
@@ -294,7 +353,7 @@ enum ScriptRecovery {
                 if glyph.kind == .normal && !glyph.isStructure && glyph.box.height >= 0.4 * cap
                     && glyph.box.maxY > line.baseline - 0.3 * cap { base = glyph }
             }
-            guard let b = base, !g.isStructure, i > 0,
+            guard let b = base, !g.isStructure, !g.quote, i > 0,
                   g.box.minX - line.glyphs[i - 1].box.maxX < 0.6 * cap else { continue }
             let refBottom = min(b.box.maxY, line.baseline + 0.1 * cap)
             let refHeight = min(b.box.height, cap)

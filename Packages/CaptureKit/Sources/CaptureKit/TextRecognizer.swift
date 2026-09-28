@@ -78,6 +78,13 @@ public enum TextRecognizer {
             for i in lines.indices {
                 lines[i].rawText = raw.max { iou($0.box, lines[i].box) < iou($1.box, lines[i].box) }
                     .flatMap { iou($0.box, lines[i].box) > 0.5 ? $0.text : nil }
+                // Vision's spaces in monospaced code are guesses (`items ()`,
+                // `$curl`); the character cells say where they really are.
+                let others = lines.indices.filter { $0 != i }.map { pixels(lines[$0].box) }
+                if let spaced = ScriptRecovery.monospaceSpacing(lines[i].rawText ?? lines[i].text,
+                                                                rect: pixels(lines[i].box), in: source, excluding: others) {
+                    lines[i].rawText = spaced
+                }
             }
         }
         let codes = qrRequest.results ?? []

@@ -538,7 +538,90 @@ public enum TextReflow {
             .replacingOccurrences(of: "‹", with: "<").replacingOccurrences(of: "›", with: ">")
         text = spacedMemberAccess.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text),
                                                            withTemplate: ".")
-        return text
+        text = dashedExtension.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text),
+                                                        withTemplate: ".$1")
+        text = withHexDigits(text)
+        text = withTripleQuotes(text)
+        return withBalancedBrackets(text)
+    }
+
+    /// `main-py` → `main.py`: Vision reads a file name's dot as a hyphen.
+    private static let dashedExtension = try! NSRegularExpression(
+        pattern: #"(?<=[A-Za-z0-9_])-(py|js|jsx|ts|tsx|swift|txt|md|json|sh|c|h|cpp|java|rb|go|rs|html|css|log|csv|yml|yaml|toml|xml|sql)\b(?![-/])"#)
+
+    /// A commit hash or hex id (`alb2c3d`): `l` is `1` and `O`/`o` is `0`.
+    static func withHexDigits(_ line: String) -> String {
+        var words = line.components(separatedBy: " ")
+        for (i, word) in words.enumerated() where (7...40).contains(word.count)
+            && word.allSatisfy({ $0.isHexDigit || "lOo".contains($0) }) && word.filter(\.isNumber).count >= 2
+            && word.contains(where: { "lOo".contains($0) }) {
+            words[i] = String(word.map { $0 == "l" ? "1" : "Oo".contains($0) ? "0" : $0 })
+        }
+        return words.joined(separator: " ")
+    }
+
+    /// Vision reads a triple double quote as a mix of single and double quotes
+    /// (three or four marks): a line whose quote runs include a double quote
+    /// gets three double quotes for each of them.
+    static func withTripleQuotes(_ line: String) -> String {
+        let runs = tripleQuote.matches(in: line, range: NSRange(line.startIndex..., in: line))
+        let double = runs.contains { Range($0.range, in: line).map { line[$0].contains { "\"“”".contains($0) } } ?? false }
+        guard double else { return line }
+        return tripleQuote.stringByReplacingMatches(in: line, range: NSRange(line.startIndex..., in: line),
+                                                    withTemplate: "\"\"\"")
+    }
+
+    private static let tripleQuote = try! NSRegularExpression(pattern: #"['"‘’“”]{3,5}"#)
+
+    /// One look-alike swap that balances a line's brackets: `Lpush, pull]` →
+    /// `[push, pull]`, `else i return 0 }` → `else { return 0 }`,
+    /// `[3, 4, 51):` → `[3, 4, 5]):`. Nothing changes unless exactly one
+    /// candidate is found and it balances the line.
+    static func withBalancedBrackets(_ line: String) -> String {
+        let chars = Array(line)
+        let openerOf: [Character: Character] = [")": "(", "]": "[", "}": "{"]
+        /// The first closer that doesn't fit: its index and the opener it met (nil: nothing open).
+        func firstProblem(_ c: [Character]) -> (index: Int, open: Int?)? {
+            var stack: [Int] = []
+            var quote: Character?
+            for (i, ch) in c.enumerated() {
+                if let q = quote { if ch == q { quote = nil }; continue }
+                if ch == "\"" || ch == "'" || ch == "`" { quote = ch; continue }
+                if "([{".contains(ch) { stack.append(i); continue }
+                guard let opener = openerOf[ch] else { continue }
+                if let top = stack.last {
+                    if c[top] == opener { stack.removeLast() } else { return (i, top) }
+                } else if c[..<i].contains(where: { !$0.isWhitespace && !"})]".contains($0) }) {
+                    return (i, nil) // a closer mid-line with nothing open
+                }
+            }
+            return nil
+        }
+        guard let problem = firstProblem(chars) else { return line }
+        var candidate: (Int, Character)?
+        if let open = problem.open {
+            // `[3, 4, 51)`: the glyph right before is the missing closer.
+            let wanted: Character = chars[open] == "[" ? "]" : chars[open] == "{" ? "}" : ")"
+            let before = problem.index - 1
+            if before > open, "1lIJ|)".contains(chars[before]) { candidate = (before, wanted) }
+        } else if let wanted = openerOf[chars[problem.index]] {
+            for i in stride(from: problem.index - 1, through: 0, by: -1) {
+                let startsToken = i == 0 || " (=:,".contains(chars[i - 1])
+                let next: Character? = i + 1 < chars.count ? chars[i + 1] : nil
+                if wanted == "[", startsToken, "LlI1".contains(chars[i]),
+                   let n = next, n.isLetter || n.isNumber || "\"'".contains(n) {
+                    candidate = (i, "["); break
+                }
+                if wanted == "{", startsToken, "il(".contains(chars[i]), next == " ", i + 2 < problem.index,
+                   chars[(i + 2)..<problem.index].contains(where: { $0.isLetter || $0.isNumber }) {
+                    candidate = (i, "{"); break
+                }
+            }
+        }
+        guard let (index, bracket) = candidate else { return line }
+        var fixed = chars
+        fixed[index] = bracket
+        return firstProblem(fixed) == nil ? String(fixed) : line
     }
 
     // MARK: Prose
