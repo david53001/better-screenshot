@@ -150,6 +150,10 @@ char width → indentation from left edges, blank lines from pitch), prose (gap/
 rules + the next-word fit test, which is skipped for math lines and replaced by punctuation/case for a
 column's longest line). `MathLayout.swift` rebuilds stacked fractions (needs a bar ≈ the fraction's width
 *and* something beside it on the bar's line — a table border runs far wider) and detached exponents.
+`DisplayMath.swift` rebuilds display equations from pixels (∫/∑ with limits, `lim`, matrices) where
+MathLayout can't; `ScriptRecovery.alignment` (a small dynamic program) assigns Vision's characters to
+glyphs; `TextRecognizer.cellLines` reads table cells Vision didn't box; `WordList.swift` (system word
+list) decides whether a line-end hyphen stays.
 `ScriptRecovery.swift` (+ `InkMap.swift`: Otsu binarization, 8-connected blobs) finds glyphs per line,
 marks raised/lowered ones against the full-size glyph before them, and re-reads a straightened copy through
 Vision when Vision's own characters can't be trusted; it also turns a radical blob into `√(…)`, `+` with a

@@ -15,8 +15,10 @@ text recognition. Imported by the `App/` target (mainly `App/Capture`).
 - `OverlayPositioner.swift` — where post-capture overlays sit (pure).
 - `TextRecognizer.swift` + `RecognitionResult.swift` — Vision OCR / QR ("Capture Text"). Layout and math
   rebuilding: `TextReflow.swift` (reading order, tables, code, paragraphs, lists), `MathLayout.swift`
-  (stacked fractions, detached exponents), `ScriptRecovery.swift` + `InkMap.swift` (super/subscripts, √, ±,
-  inline fractions from pixels), `Homoglyphs.swift`. Measure any change with the corpus harness
+  (stacked fractions, detached exponents; `spacedOperators` / `repairedMathSymbols` tidy math lines),
+  `DisplayMath.swift` (display equations from pixels: ∫/∑ limits, `lim`, matrices), `ScriptRecovery.swift`
+  + `InkMap.swift` (super/subscripts, √, ±, inline fractions, dashes, checkboxes, icons from pixels),
+  `WordList.swift` (system word list for line-end hyphens), `Homoglyphs.swift`. Measure any change with the corpus harness
   `tools/ocr-bench/run.sh` (repo root) — see the root `CLAUDE.md` "Capture Text structure + math".
 - `TempImageWriter.swift` — writes the drag-out / clipboard temp PNG into `$TMPDIR/BetterScreenshot-<UUID>/`
   **and sweeps expired ones** (`cleanExpired`, scoped to that prefix); `TempFileRetentionScale.swift` is its

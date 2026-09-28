@@ -5,36 +5,57 @@ of the one that produced it.
 
 ## Latest status (session 2, overnight 2026-09-28 → 29) — read this first
 
-The owner asked to keep working overnight and then run a fresh independent reviewer. Progress so far
-(each item committed on `ocr-structure-math`; newest baseline `tools/ocr-bench/baselines/2026-09-29-alignment.json`):
+The owner asked to keep working overnight, then run a fresh independent reviewer. Everything below is
+committed on branch `ocr-structure-math` (not merged, not tagged). **Newest corpus baseline:
+`tools/ocr-bench/baselines/2026-09-29-icons.json`.**
+
+**Numbers now** (`tools/ocr-bench/run.sh`, then `python3 tools/ocr-bench/summarize.py`):
+existing **54/66** (CER 0.020) · held-out **19/35** (CER 0.085) · no-harm **5/7** (CER 0.010) ·
+CaptureKit unit tests **181/181**. At the start of the night: 41/66 · 8/35 · 3/6. CER = character error
+rate (edit distance ÷ expected length). Median recognition time in the debug bench ≈ 360 ms (was ≈ 290).
+
+What was added, in pipeline order (all in `Packages/CaptureKit/Sources/CaptureKit/`):
 
 - **Character↔glyph alignment** (`ScriptRecovery.alignment`, a small dynamic program): Vision's characters
-  are assigned to glyphs by cost instead of requiring one character per glyph. A full-size glyph takes 1
-  character, 2–3 when it is that wide (touching italics `2x`), 0 when Vision dropped it; a script glyph 1
-  (0 = dropped, re-read); a stacked fraction any number. Costs: width vs the median letter width; shape
-  class (bar = `=`/`−`, speck = `.`/`,`); height class (ascender/capital letters on x-height glyphs and the
-  reverse, descender mismatch; digits neutral because of old-style figures); Vision's spaces must fall on
-  real gaps; a script never takes a character right after a space. `glyphTexts` builds one *slot* per
-  character on its glyph and runs the old repairs on slots.
-- Fixed with it: H10 `3/10, … 1 − 3/10 = 7/10` (fractions inside a sentence), H13 `2x³ − 3x² − 12x + 5`
-  (plus a re-read correcting a digit Vision read for the letter just before a script: `322` → `3x²`),
-  H14 footnotes `¹ ²`, H18 `19th`.
-- θ: a glyph with two holes stacked vertically on a line containing sin/cos/tan… (`InkMap.holes`);
-  ∫: a stroke > 2.2× cap height read `/`/`J`/`S` on a line with `dx`; `log` look-alikes (`10g`, `l0g`) before
-  a subscript or `(`; ordinals (`3rd`, `19th`) stay plain; ready-made superscripts (`™`, `°`) kept; ink of
-  other Vision boxes on the same row is excluded unless that box is a short raised exponent; an
-  apostrophe is never a script's base; the old-style-digit refusal applies only inside numbers (`log₂8` ok).
-- Later the same night (each committed, baselines `2026-09-29-*.json`): shape repairs (prime `′`, `|`,
-  `Δ`, raised `⁺`/`⁻` charges, colon/bullet shape classes); code repairs (monospace spacing rebuilt from
-  pixel cells in `ScriptRecovery.monospaceSpacing`, bracket balancing / file extensions / hex ids / triple
-  quotes in `TextReflow.cleanedCode`, lone `{` `}` `},` lines recovered from loose ink in
-  `TextRecognizer.bracketLines`); and **`DisplayMath.swift`** — display equations rebuilt from pixels
-  (axis from the `=`, main-row atoms, fractions, `∫`/`∑` told by shape with their limits, `lim`/`max`/`min`
-  with the limit under them; only used where `MathLayout` can't: an operator, a limit, or a numerator Vision
-  boxed with its row).
-- Numbers after DisplayMath: existing 44/66 (CER 0.033), held-out 9/35 (CER 0.113), no-harm 3/6.
-  CaptureKit tests 162/162.
-- Tracing: temporary `// TRACE` lines (see "Test harness" below) — none are committed.
+  are assigned to glyphs by cost instead of one character per glyph — a wide full-size glyph may take
+  2–3 characters (touching italics `2x`), a dropped glyph 0; costs from width, shape class (bar, speck),
+  height class, and Vision's spaces having to fall on real gaps. `glyphTexts` works on one *slot* per character.
+- **Touching scripts** (`ScriptRecovery.splitRaisedTails`): at low resolution `x²` is one blob; a run of
+  columns on its right that stays half a capital off the baseline and rises ≥ 0.45 cap above the rest is
+  cut off. Cap and baseline are measured *without* that glyph (alone it looks like the tallest letter).
+- **Shape repairs** in `glyphTexts`: prime `′`, `|`, `Δ` (a filled base), `θ` (two stacked holes, trig
+  lines only), `∫` (tall stroke on a line with `dx`), `π` (read `T`, but has two legs — `isPi`), raised
+  `⁺`/`⁻` charges, `log` look-alikes (`10g₂8`) and `ln` read as `In` before its argument (`repairingLog`).
+- **Dashes, dots, separators, markers** (`ScriptRecovery.dashesAndDots`): em/en dash from width, `·` from
+  size, `3.760` ↔ `3,760` from the separator's shape (a comma has a tail; the baseline is useless with
+  old-style figures), en-dash list markers, checkboxes Vision reads as `•` (`☐` hollow, `☑` ticked,
+  a solid UI box dropped — `checkbox`), and a leading icon (taller than the text's capitals, `isIcon`) dropped.
+- **Missing full stop** (`ScriptRecovery.missingFullStop`): a round baseline speck after a line ending in
+  a quote, bracket or digit (`the teachers’.`, `= 7/10.`).
+- **Table cells Vision didn't box** (`TextRecognizer.cellLines`): only when some row holds two lines;
+  loose ink on a text row, a cell's gap from its neighbours, lined up with a line in another row; read
+  with the `a = ` prefix at its real size and baseline (`ScriptRecovery.readInk(…, baseline:)`), `V`→`v`
+  by height, italic `y` without a tail → `v`. Fixed `2023` header (H25), `v` (T07), `p`/`v` (H27).
+- **Display math** (`DisplayMath.swift`): equations rebuilt from pixels — axis from the `=`, fractions,
+  `∫`/`∑` by shape with limits, `lim`/`max`/`min` with the limit under them, matrices between tall
+  brackets (`[1 2; 3 4]`). Only used where `MathLayout` can't.
+- **Math line tidying** (`MathLayout.swift`, applied in `TextReflow.prose` to lines `isMath` accepts):
+  `repairedMathSymbols` (`A n B` → `A ∩ B`, `A U B` → `A ∪ B`, `x E R` → `x ∈ ℝ`, a stray `.` after `=`,
+  a space after a comma between terms) then `spacedOperators` (`F= ma` → `F = ma`, binary `+ - × ÷`
+  spaced, unary signs and hyphenated words left alone).
+- **Code** (`TextReflow.cleanedCode`, `ScriptRecovery.monospaceSpacing`, `TextRecognizer.bracketLines`):
+  spaces rebuilt from monospace cells, bracket balancing, file extensions, hex ids, triple quotes, lone
+  `{` `}` `},` lines from loose ink.
+- **Layout** (`TextReflow`): compounds broken at a line-end hyphen keep it unless the system word list
+  (`WordList.swift`, `/usr/share/dict/words` + stemming) knows the joined word; two lines alone more than
+  4.8 character widths apart are two paragraphs; a caption Vision lists after the next column goes back
+  under its figure (`columnOrdered`); a sidebar beside a table (short items at the layout's edge, mostly
+  not lined up with its rows) is kept out of the grid (`sidebar`), and a column no wider than two words is
+  a list of labels, not wrapped text.
+- New no-harm case **N07** (`tools/ocr-bench/Sources/ocr-bench/HeldOutCases.swift`): icon sidebar —
+  icons must not come out as letters.
+- Tracing: temporary `// TRACE` lines inserted by a scratch script and removed before every commit —
+  none are committed.
 
 ## What this is
 
@@ -196,67 +217,43 @@ tools/ocr-bench/.build/debug/ocr-bench dump M17           # raw Vision boxes/can
 - Tried and reverted: skipping inline fractions when counts mismatch broke M21 `(1 + r/n)ⁿᵗ`. The H10
   damage actually came from misalignment.
 
-## Remaining failures, diagnosed
+## Remaining failures, diagnosed (as of `2026-09-29-icons.json`)
 
 ### Caused by our pipeline (fixable)
 
-1. **M17 regression: `log₂ 8` → `10g,8`.** It was `log₂8` at the re-review. The likely cause is
-   the directional `same()` or the sure-line "keep Vision's letters" rule: Vision reads `10g,8`, the
-   re-read `log28`, and now Vision's `10g` wins. Check the line's confidence with `ocr-bench dump M17`.
-   A narrow fix idea: allow `1`/`l` and `0`/`o` when the whole word re-reads as a known function name
-   (`log`, `ln`, `lim`, `sin`, `cos`, `tan`).
-2. **H13 (a typical IB — International Baccalaureate — exam line): every exponent is lost** in `f(x) = 2x³ − 3x² − 12x + 5`.
-   - Italic math letters touch, so `2x` is one blob. Glyph and character counts can't match, so the
-     all-or-nothing rule keeps Vision's `2x3-322`.
-   - Word segmentation also fails: operator gaps are wider than word gaps.
-   - **Proposed fix:** re-read *runs* instead of glyphs. Render the straightened line with each
-     normal run and each script run as separate pieces (or re-read each run on its own). Map
-     re-read tokens to runs, not characters to glyphs. That makes it robust to merged glyphs.
-   - This is the highest-value remaining math fix. M19 `3x?` / `2X` is likely the same problem.
-3. **H10: inline fractions inside a sentence** (`3/10,` read as `To`).
-   - Vision's per-word boxes (`VNRecognizedText.boundingBox(for:)`) were measured: about ±12 px off
-     for words, and useless for math tokens (the whole range comes back). They can't anchor segmentation.
-   - Idea: anchor on operator characters (`−`, `=`) against bar-shaped glyphs and map the segments
-     between them.
-4. **H14: footnote `¹` read as `'`.** The apostrophe demotion rule (`width < 0.25 cap`) also catches
-   a narrow superscript `1`. Try `width < 0.25 cap && height < 0.55 cap`.
-5. **H25: a header cell (`2023`) is missing.** Undiagnosed. Check `dump H25` to see whether Vision or
-   the grid dropped it.
-6. **H27 / T07: single-letter table cells** (`ρ`, `v`, `p`) come out empty. Vision skips lone glyphs.
-   Idea: re-read the empty cells of a grid with the `a = ` prefix trick.
-7. **H30** (sidebar + settings pane mis-gridded), **H31** (figure caption placed last), **H15** (two
-   paragraphs merged: with only 2 lines there is no pitch reference), **M12** (matrix line joins).
-8. **H06: no output at all.** Vision with correction on returns 0 observations for `|v| = √(v₁² + …)`.
-   Consider retrying with correction off when the first pass finds nothing (it returns a 0.3-confidence
-   read).
-9. **H08: chemistry charges** (`Fe³⁺` read `Fe3t`). Be careful: tuning on held-out cases inflates the
-   score.
+1. **Merged italic letters** that aren't scripts: `2X` for `2x` (M19), `f(x)` loses its prime when the
+   prime touches the italic `f` (H13). The alignment can give a wide glyph two characters, but case and
+   prime repairs work per glyph.
+2. **Nested scripts**: `e^(−x²)` comes out `e⁻ˣ²` (H09 line 1), and line 2 isn't recovered at all.
+3. **A full stop after a stacked fraction on a prose line** (M18 `…/(x − 3).`): `missingFullStop` only
+   looks right of Vision's own box, and the fraction sits between.
+4. **`log₂32` → `log232`** (H02): the subscript is found but the rewrite is refused by the no-harm guard.
+5. **`2 sin² 0`** for `2sin²θ` (H03 line 2): the last θ isn't recognized (θ needs two holes; this one is
+   read as `0` in a word the alignment splits differently).
+6. **`e^(In)`** for `e^(iπ)` (M16): a superscript `π` read as `n` — `isPi` only runs on `T`, deliberately
+   (an `n` has two legs too).
+7. **H15** `3x` for `3×` (the glyph is a real ×; Vision reads x), `B0. 12` (Vision's correction inserts a space).
+8. **H35** (icons only) returns `-O-` — Vision reads a crosshair icon as text; `isIcon` needs other text
+   on the line to measure against.
+9. **M06** `2O₁` for `2a₁`, `n/2(` spacing.
 
-### Vision limits (need the math model or a dictionary, owner decision)
+### Vision limits (need the math model or a dictionary — owner decision)
 
-- Letters and symbols Vision can't read: π θ Δ ∑ ∫ ∀ ε ∈ ℝ ⌘ ⌥ ⇧ (H01, H03, H04, H11, H12, H29, M03,
-  M08–M11, M16, M17 θ, M20).
-- Big-operator limits, `lim` with `h→0` below, matrices.
-- Missing single-brace lines in JSON (H23).
-- `Ana lonescu` / `loana` (I→l), `Ș`/`Ț` → `S`/`T` (Romanian isn't a Vision language), em dash → `-`.
-- `%%` → `88`, lone `}` read as `i`, `$HOME` → `$HoME`.
+- Symbols Vision can't read at all: ∑ ∀ ε ⌘ ⌥ ⇧ Greek in general (H01, H06 and M10 return nothing or
+  junk, H29 `⌘Z` → `HZ`), cube roots (M07).
+- `Ana lonescu` / `loana` (I→l), `Ș`/`Ț` → `S`/`T` (Romanian isn't a Vision language), `A0` → `AO`
+  (N03, H16), `%%` → `88` (N05), `%d` → `d` (C06), `$HOME` → `$HoME` (C08), `SI` → `Si` (T07), a
+  misspelling (P05), `Q` → `2` (H27).
+- Code odds and ends: H20/H22/H23/C03 are one or two characters off (a brace read as `(`, etc.).
 
 ## Next steps (in order)
 
-1. Fix the M17 regression. Rerun and diff against the end-of-day baseline.
-2. Add unit tests for today's logic:
-   - `ScriptRecovery.isFaithful`: the old-style-digit refusal, the equal-count normal mismatch, the
-     subsequence with skipped `=`, the directional `same` (`O` from `0` allowed, `0` from `O` refused),
-     and the shaky-line distance rule.
-   - `ScriptRecovery.distance`.
-   - The TextReflow punctuation-only tight join (`3rd` + `of March.` keeps its space; `printf("%d\n"` +
-     `, *p);` doesn't).
-   - The recognizer's shaky-line path, using a rendered image test like
-     `superscriptsAndSubscriptsComeFromThePixels` in `TextRecognizerTests.swift`.
-3. The H13 run-level re-read (step 2 of the list above). It is the biggest remaining math win.
-4. The smaller pipeline items (H14, H25, H27, H06, H30/H31).
-5. **Fresh third review.** Launch a new independent reviewer with the brief of
-   `docs/reviews/2026-09-28-ocr-rereview.md`. It must write **new** held-out cases, because the
-   `H*` set has now been looked at while fixing.
-6. Ask the owner about the bundled math model. Then update CHANGELOG, root `CLAUDE.md` and this file,
-   merge `ocr-structure-math` into `main`, and tag if the owner wants a release.
+1. **Fresh third review** (running/ran on 2026-09-29): a new independent reviewer with the brief of
+   `docs/reviews/2026-09-28-ocr-rereview.md`, writing **new** held-out cases (the `H*` set has been looked
+   at while fixing). Its report: `docs/reviews/2026-09-29-ocr-review.md`.
+2. Fix what it finds, diffing every change against the newest baseline (`python3 tools/ocr-bench/diff.py
+   baselines/<newest>.json`).
+3. Ask the owner about a bundled on-device math model for what Vision can't read (∑ ε Greek, big
+   operators). Nothing has been decided; no model is in the repo.
+4. Merge `ocr-structure-math` into `main`, update CHANGELOG (an "Unreleased" entry exists) and tag if the
+   owner wants a release. The Windows port's OCR was **not** updated.

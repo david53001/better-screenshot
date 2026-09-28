@@ -32,8 +32,21 @@ next steps: `docs/PROGRESS-2026-09-28-ocr.md`. Work in progress on branch `ocr-s
   symbol repairs — every full-size character must still be what Vision read — so `−2.1%`, `5,140` in
   old-style digits, `the 3rd of March.` and JSON strings paste unchanged. When Vision itself is unsure
   of a line (`21120` for `2H₂O`), a confident re-read of it may correct letters too.
-- Not solved (needs a real math-recognition model): Greek letters and big operators Vision can't read
-  (π, θ, ∑, ∫, ∀, ε), limits under `lim`, matrices; single-glyph misreads (`Ana lonescu`, `[` → `L`).
+- **Display math from the pixels:** integrals and sums with their limits (`∫₀¹ x² dx`, `∑ᵢ₌₁ⁿ`),
+  `lim` with `h → 0` under it, matrices between tall brackets (`[1 2; 3 4]`); `θ`, `π`, `Δ`, `′` and
+  `∫` told apart by shape; `ln` / `log` that Vision reads as `In` / `10g`; set symbols read as letters
+  (`A n B` → `A ∩ B`, `x E R` → `x ∈ ℝ`); operators on math lines spaced as typeset (`F = ma`).
+  Superscripts that touch their letter in low-resolution captures (`x²` as one blob) are cut off.
+- **Tables and forms:** cells Vision skips (a lone `v`, a `2023` header) are read from their ink; a
+  sidebar beside a settings table stays a list of its own; checkboxes paste as `☐` / `☑`, and a UI
+  checkbox or icon in front of a label is dropped instead of becoming `•` or `A`; `3.760` vs `3,760`
+  told by the separator's shape.
+- **Prose details:** em/en dashes and `·` from their size (`14:00–17:00`, `–` list markers), a full stop
+  Vision drops after a closing quote or fraction, compounds broken at a line-end hyphen keep it
+  (`light-dependent`), a figure caption stays under its figure in a two-column page.
+- Not solved (needs a real math-recognition model): symbols Vision can't read at all (∑ written small,
+  ∀, ε, most Greek, ⌘ ⌥ ⇧), cube roots, nested exponents (`e^(−x²)`); single-glyph misreads
+  (`Ana lonescu`, `A0` → `AO`).
 
 ## v3.0.0 — 2026-09-26 · Editor & recording overhaul, video editor, guided tours
 
