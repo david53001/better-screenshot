@@ -88,6 +88,21 @@ let textReflowTests: [TestCase] = [
         ]
         t.equal(TextReflow.columnOrdered(table).map(\.text), ["Name", "Score", "Ana", "84"])
     },
+    TestCase("aSidebarBesideATableIsAListOfItsOwn") { t in
+        // Settings: a sidebar whose items fall between the table's rows.
+        let lines = [
+            line("General", top: 0.10, left: 0.03, right: 0.10, height: 0.055),
+            line("Appearance", top: 0.23, left: 0.03, right: 0.14, height: 0.055),
+            line("Wi-Fi", top: 0.35, left: 0.03, right: 0.08, height: 0.055),
+            line("Bluetooth", top: 0.47, left: 0.03, right: 0.12, height: 0.055),
+            line("Appearance", top: 0.31, left: 0.35, right: 0.46, height: 0.055),
+            line("Accent colour", top: 0.44, left: 0.35, right: 0.49, height: 0.055),
+            line("Auto", top: 0.31, left: 0.90, right: 0.95, height: 0.055),
+            line("Multicolour", top: 0.44, left: 0.84, right: 0.95, height: 0.055),
+        ]
+        t.equal(TextReflow.paragraphs(lines).joined(separator: "\n"),
+                "General\nAppearance\nWi-Fi\nBluetooth\nAppearance\tAuto\nAccent colour\tMulticolour")
+    },
     TestCase("numberedMarkerStartsNewParagraph") { t in
         let lines = [
             line("1. First item that wraps onto", top: 0.10, left: 0.1, right: 0.7),

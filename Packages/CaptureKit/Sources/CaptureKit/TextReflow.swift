@@ -251,9 +251,9 @@ public enum TextReflow {
     }
 
     /// Visual rows, top to bottom, each left to right.
-    static func rows(_ segs: [Seg]) -> [[Int]] {
+    static func rows(_ segs: [Seg], skipping skipped: Set<Int> = []) -> [[Int]] {
         var rows: [[Int]] = []
-        for i in segs.indices.sorted(by: { segs[$0].box.midY < segs[$1].box.midY }) {
+        for i in segs.indices.filter({ !skipped.contains($0) }).sorted(by: { segs[$0].box.midY < segs[$1].box.midY }) {
             if let last = rows.last, last.contains(where: { isSameRow(segs[$0].box, segs[i].box) }) {
                 rows[rows.count - 1].append(i)
             } else {
@@ -263,8 +263,37 @@ public enum TextReflow {
         return rows.map { $0.sorted { segs[$0].box.minX < segs[$1].box.minX } }
     }
 
+    /// A sidebar beside a table (Settings' General · Appearance · Wi-Fi): a
+    /// column of short items at the layout's left or right edge, most of which
+    /// line up with no row of what is beside it. It is never part of a grid.
+    static func sidebar(_ segs: [Seg]) -> Set<Int> {
+        guard segs.count >= 6 else { return [] }
+        let left = segs.map(\.box.minX).min()!, right = segs.map(\.box.maxX).max()!
+        for edge in [true, false] {
+            let column = segs.indices.filter { i in
+                let b = segs[i].box, c = segs[i].charWidth
+                return edge ? b.minX - left < 1.5 * c : right - b.maxX < 1.5 * c
+            }
+            guard column.count >= 3, column.allSatisfy({ segs[$0].words <= 3 }) else { continue }
+            let boxes = column.map { segs[$0].box }
+            let inner = boxes.map(\.maxX).max()!, outer = boxes.map(\.minX).min()!
+            let beside = segs.indices.filter { i in
+                !column.contains(i) && (edge ? segs[i].box.minX > inner + 2 * segs[i].charWidth
+                                             : segs[i].box.maxX < outer - 2 * segs[i].charWidth)
+            }
+            guard beside.count >= 3, beside.count + column.count == segs.count else { continue }
+            let aligned = column.filter { i in
+                beside.contains { j in
+                    abs(segs[i].box.midY - segs[j].box.midY) < 0.25 * min(segs[i].box.height, segs[j].box.height)
+                }
+            }
+            if 2 * aligned.count < column.count { return Set(column) }
+        }
+        return []
+    }
+
     static func grids(_ segs: [Seg]) -> [Grid] {
-        let rows = rows(segs)
+        let rows = rows(segs, skipping: sidebar(segs))
         var grids: [Grid] = []
         var i = 0
         while i < rows.count {
@@ -716,7 +745,11 @@ public enum TextReflow {
         // A row of bare numbers (a matrix row, a score) isn't a sentence.
         guard prev.text.contains(where: \.isLetter) else { return false }
         let charWidth = prev.charWidth
-        let right = column.filter { overlapsHorizontally($0.box, prev.box) }.map(\.box.maxX).max() ?? prev.box.maxX
+        let widest = column.filter { overlapsHorizontally($0.box, prev.box) }.max { $0.box.maxX < $1.box.maxX }
+        let right = widest?.box.maxX ?? prev.box.maxX
+        // A column no wider than two words is a list of labels (a sidebar's
+        // General · Appearance · Wi-Fi), not wrapped text.
+        if (widest ?? prev).words <= 2, next.text.first?.isUppercase == true { return false }
         if prev.box.maxX < right - charWidth {
             let firstWord = next.text.prefix { !$0.isWhitespace }
             return prev.box.maxX + CGFloat(firstWord.count + 1) * charWidth > right - 0.5 * charWidth
