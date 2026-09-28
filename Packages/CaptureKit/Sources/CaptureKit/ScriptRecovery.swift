@@ -193,10 +193,11 @@ enum ScriptRecovery {
                     out[i] = "—"
                 } else if g.width >= 0.65 * cap, !text.contains("="), !text.contains("+"),
                           before?.isNumber == true && after?.isNumber == true
+                            || j == 0 && after == " " && wordLength(chars, after: i + 1) >= 1
                             || before == " " && after == " " && wordLength(chars, before: i - 1) >= 2
                             && wordLength(chars, after: i + 1) >= 2 {
-                    // A range (`14:00–17:00`) or a break between words; a minus
-                    // (`x – 3`) sits among numbers and single letters.
+                    // A range (`14:00–17:00`), a break between words or a list
+                    // marker; a minus (`x – 3`) sits among numbers and single letters.
                     out[i] = "–"
                 }
             } else if read[j] == "•", j == 0, let box = checkbox(line.glyphs[k], in: line) {

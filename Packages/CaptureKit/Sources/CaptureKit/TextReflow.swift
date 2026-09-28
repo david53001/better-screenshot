@@ -661,6 +661,9 @@ public enum TextReflow {
             // column's usual line pitch — a sentence end plus extra space is a break.
             let pitches = zip(column, column.dropFirst()).map { $1.box.midY - $0.box.midY }.filter { $0 > 0 }.sorted()
             if pitches.count >= 2, line.box.midY - prev.box.midY > 1.12 * pitches[pitches.count / 2] { return false }
+            // Two lines alone: past double spacing (≈ 4.4 character widths) is
+            // a gap between paragraphs.
+            if pitches.count < 2, line.box.midY - prev.box.midY > 4.8 * min(prev.charWidth, line.charWidth) { return false }
         }
         if isFontChange(prev, line) { return false }
         if startsWithListMarker(line.text) { return false }

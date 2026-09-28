@@ -56,6 +56,18 @@ let textReflowTests: [TestCase] = [
             "☑ Call the dentist",
         ])
     },
+    TestCase("twoLinesPastDoubleSpacingAreTwoParagraphs") { t in
+        // Character width 0.016; "Then" would not fit after the first line.
+        func pair(pitch: CGFloat) -> [TextReflow.Line] {
+            [line("It rained all day in the town, so we stayed in.", top: 0.1, left: 0.1, right: 0.852, height: 0.06),
+             line("Then the sun came out and we went for a long walk.", top: 0.1 + pitch, left: 0.1, right: 0.9,
+                  height: 0.06)]
+        }
+        // Double spaced (4 character widths): still one paragraph.
+        t.equal(TextReflow.paragraphs(pair(pitch: 0.064)).count, 1)
+        // Six character widths apart: a gap between paragraphs.
+        t.equal(TextReflow.paragraphs(pair(pitch: 0.096)).count, 2)
+    },
     TestCase("numberedMarkerStartsNewParagraph") { t in
         let lines = [
             line("1. First item that wraps onto", top: 0.10, left: 0.1, right: 0.7),
