@@ -171,6 +171,19 @@ enum ScriptRecovery {
         return measure(glyphs, blobs: blobs, map: map)
     }
 
+    /// Vision drops a full stop after a closing quote or a stacked fraction
+    /// (`the teachers’.`, `= 7/10.`): a round speck on the baseline right of
+    /// the line's last glyph, after text ending in a quote, bracket or digit.
+    static func missingFullStop(_ text: String, rect: CGRect, in image: CGImage, excluding others: [CGRect] = []) -> Bool {
+        guard let end = text.last, end.isNumber || "'’\")".contains(end), text.contains(where: \.isLetter),
+              let line = lineGlyphs(rect: rect, in: image, excluding: others) else { return false }
+        let sorted = line.glyphs.sorted { $0.box.maxX < $1.box.maxX }
+        guard sorted.count >= 3 else { return false }
+        let g = sorted[sorted.count - 1].box, before = sorted[sorted.count - 2].box, cap = line.capHeight
+        return g.width < 0.3 * cap && g.height < 0.3 * cap && g.height < 1.6 * g.width && g.width < 1.6 * g.height
+            && abs(g.maxY - line.baseline) < 0.15 * cap && g.minX > before.maxX
+    }
+
     /// Dashes and dots Vision flattens, told apart by size: an em dash is
     /// about a capital wide or more, an en dash about three quarters (`14:00–17:00`,
     /// ` – ` between words), a hyphen half; a middle dot `·` is a speck, a

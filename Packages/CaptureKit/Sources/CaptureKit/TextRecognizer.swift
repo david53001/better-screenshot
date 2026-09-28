@@ -35,6 +35,9 @@ public enum TextRecognizer {
             }.map { pixels(lines[$0].box) }
             // Vision's own read stays in `text` (layout and code go by it); the
             // rebuilt math goes in `recovered` for prose and tables.
+            if ScriptRecovery.missingFullStop(lines[i].text, rect: rect, in: source, excluding: others) {
+                lines[i].text += "."
+            }
             if let fixed = ScriptRecovery.dashesAndDots(lines[i].text, rect: rect, in: source, excluding: others) {
                 lines[i].text = fixed
             }
@@ -178,7 +181,11 @@ public enum TextRecognizer {
         let size = CGSize(width: image.width, height: image.height)
         let boxes = lines.map { CGRect(x: $0.box.minX * size.width, y: $0.box.minY * size.height,
                                        width: $0.box.width * size.width, height: $0.box.height * size.height) }
-        guard boxes.count >= 4, let first = boxes.first else { return [] }
+        // Only a grid has cells: some row holds two lines a gap apart.
+        let paired = boxes.contains { a in
+            boxes.contains { b in min(a.maxY, b.maxY) - max(a.minY, b.minY) > 0.5 * min(a.height, b.height) && b.minX > a.maxX }
+        }
+        guard paired, boxes.count >= 3, let first = boxes.first else { return [] }
         let heights = boxes.map(\.height).sorted()
         let h = heights[heights.count / 2]
         let union = boxes.dropFirst().reduce(first) { $0.union($1) }
