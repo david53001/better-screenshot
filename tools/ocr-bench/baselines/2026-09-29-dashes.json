@@ -8,7 +8,7 @@
     "expected" : "Market Structures\nA monopoly exists when a single firm supplies the entire market and there are high barriers to entry that prevent new firms from competing.\nExamples include local water utilities and patented pharmaceuticals.",
     "glyphCER" : 0,
     "id" : "P01",
-    "ms" : 705,
+    "ms" : 704,
     "pass" : true
   },
   {
@@ -20,7 +20,7 @@
     "expected" : "Why the Ocean Is Salty\nRain is slightly acidic, so as it falls on land it slowly dissolves rocks and minerals. Rivers carry these dissolved salts to the sea, where they accumulate over millions of years.\nEvaporation removes water but leaves the salt behind, which is why the concentration stays high. Hydrothermal vents on the sea floor add further minerals.\nToday the average salinity of seawater is about 35 grams per kilogram.",
     "glyphCER" : 0,
     "id" : "P02",
-    "ms" : 472,
+    "ms" : 475,
     "pass" : true
   },
   {
@@ -32,7 +32,7 @@
     "expected" : "Photosynthesis converts light energy into chemical energy stored in glucose. The light-dependent reactions take place in the thylakoid membranes, while the Calvin cycle operates in the stroma of the chloroplast.",
     "glyphCER" : 0,
     "id" : "P03",
-    "ms" : 302,
+    "ms" : 305,
     "pass" : true
   },
   {
@@ -44,7 +44,7 @@
     "expected" : "Opening hours\nThe library is open from 8:00 to 18:00 on weekdays and from 10:00 to 14:00 on Saturdays. During exam season, the reading room stays open until 21:00.\nPlease return borrowed books within 14 days.",
     "glyphCER" : 0,
     "id" : "P04",
-    "ms" : 221,
+    "ms" : 222,
     "pass" : true
   },
   {
@@ -56,7 +56,7 @@
     "expected" : "Cell Division\nMitosis and meiosis compared\nMitosis produces two genetically identical diploid cells and is used for growth and repair. Meiosis produces four genetically different haploid gametes.\nSource: IB Biology Course Companion, chapter 1.6",
     "glyphCER" : 0.004739336492890996,
     "id" : "P05",
-    "ms" : 315,
+    "ms" : 319,
     "pass" : false
   },
   {
@@ -68,7 +68,7 @@
     "expected" : "It was late in the afternoon when the train finally pulled into the station. Maria gathered her bags and stepped onto the empty platform, where the air smelled of rain and coal smoke.\nNobody had come to meet her. She checked the letter again, reading the address twice, and then set off towards the town.\nThe streets were quiet and the shops had already closed.",
     "glyphCER" : 0,
     "id" : "P06",
-    "ms" : 410,
+    "ms" : 439,
     "pass" : true
   },
   {
@@ -80,7 +80,7 @@
     "expected" : "Causes of World War I\n• Militarism: the major powers built up large armies and navies in an arms race before 1914\n• Alliances divided Europe into two armed camps\n• Imperialism created rivalry over colonies and trade routes in Africa and Asia\n• Nationalism",
     "glyphCER" : 0,
     "id" : "L01",
-    "ms" : 602,
+    "ms" : 605,
     "pass" : true
   },
   {
@@ -92,7 +92,7 @@
     "expected" : "Method\n1. Measure 50 ml of hydrochloric acid into a conical flask using a measuring cylinder.\n2. Add a 3 cm strip of magnesium ribbon and start the stopwatch immediately.\n3. Record the time taken for the ribbon to disappear completely.\n4. Repeat the experiment at four different temperatures.",
     "glyphCER" : 0,
     "id" : "L02",
-    "ms" : 284,
+    "ms" : 291,
     "pass" : true
   },
   {
@@ -104,7 +104,7 @@
     "expected" : "• Fruit\n\t◦ Apples\n\t◦ Pears\n\t\t▪ Conference\n\t\t▪ Williams\n• Vegetables\n\t◦ Carrots",
     "glyphCER" : 0,
     "id" : "L03",
-    "ms" : 647,
+    "ms" : 649,
     "pass" : true
   },
   {
@@ -116,7 +116,7 @@
     "expected" : "3. A survey asked 120 students how they travel to school.\n(a) Write down the number of students who walk to school.\t[1]\n(b) Find the probability that a randomly chosen student travels by bus.\t[2]\n(c) Two students are chosen at random. Find the probability that both of them cycle to school.\t[3]",
     "glyphCER" : 0,
     "id" : "L04",
-    "ms" : 346,
+    "ms" : 343,
     "pass" : true
   },
   {
@@ -140,7 +140,7 @@
     "expected" : "Packing list:\n– Passport and printed boarding pass\n– Phone charger, headphones and a universal travel adapter for European sockets\n* Snacks for the flight\n– Two pairs of comfortable walking shoes",
     "glyphCER" : 0.018292682926829267,
     "id" : "L06",
-    "ms" : 263,
+    "ms" : 262,
     "pass" : false
   },
   {
@@ -152,7 +152,7 @@
     "expected" : "import Foundation\n\nstruct Student {\n    let name: String\n    var grades: [Int]\n\n    var average: Double {\n        guard !grades.isEmpty else { return 0 }\n        return Double(grades.reduce(0, +)) \/ Double(grades.count)\n    }\n}",
     "glyphCER" : 0,
     "id" : "C01",
-    "ms" : 528,
+    "ms" : 526,
     "pass" : true
   },
   {
@@ -164,7 +164,7 @@
     "expected" : "def grade(score):\n    # IB boundaries for Paper 1\n    if score >= 80:\n        return \"7\"\n    elif score >= 65 and score != 70:\n        return \"6\"\n    return 'below 6'\n\nresults = {name: grade(s) for name, s in scores.items()}\nprint(f\"{len(results)} students graded\")",
     "glyphCER" : 0,
     "id" : "C02",
-    "ms" : 715,
+    "ms" : 714,
     "pass" : true
   },
   {
@@ -176,7 +176,7 @@
     "expected" : "const total = items.reduce((sum, item) => sum + item.price * item.qty, 0);\nif (total === 0) {\n  return null;\n}\nconst label = `Total: ${total.toFixed(2)} EUR`;\nconsole.log(label);",
     "glyphCER" : 0.013333333333333334,
     "id" : "C03",
-    "ms" : 533,
+    "ms" : 525,
     "pass" : false
   },
   {
@@ -188,7 +188,7 @@
     "expected" : "$ python3 main.py\nTraceback (most recent call last):\n  File \"main.py\", line 3, in <module>\n    print(total \/ count)\nZeroDivisionError: division by zero\n$ echo $?\n1",
     "glyphCER" : 0,
     "id" : "C04",
-    "ms" : 450,
+    "ms" : 455,
     "pass" : true
   },
   {
@@ -200,7 +200,7 @@
     "expected" : "function fib(n) {\n  if (n < 2) return n;\n  return fib(n - 1) + fib(n - 2);\n}\n\nconsole.log(fib(10)); \/\/ 55",
     "glyphCER" : 0,
     "id" : "C05",
-    "ms" : 828,
+    "ms" : 826,
     "pass" : true
   },
   {
@@ -212,7 +212,7 @@
     "expected" : "#include <stdio.h>\n\nint main(void) {\n    int x = 42;\n    int *p = &x;\n    printf(\"%d\\n\", *p);\n    return 0;\n}",
     "glyphCER" : 0.013333333333333334,
     "id" : "C06",
-    "ms" : 805,
+    "ms" : 811,
     "pass" : false
   },
   {
@@ -224,7 +224,7 @@
     "expected" : "name: CI\non: [push, pull_request]\njobs:\n  build:\n    runs-on: macos-15\n    steps:\n      - uses: actions\/checkout@v4\n      - name: Run tests\n        run: swift test --parallel",
     "glyphCER" : 0,
     "id" : "C07",
-    "ms" : 474,
+    "ms" : 473,
     "pass" : true
   },
   {
@@ -236,7 +236,7 @@
     "expected" : "$ grep -rnE '^[a-z_]+\\(' src\/ | sort -u > funcs.txt\n$ find . -name \"*.log\" -mtime +7 -delete\n$ curl -fsSL https:\/\/example.com\/install.sh | bash -s -- --prefix=$HOME\/.local",
     "glyphCER" : 0.020689655172413793,
     "id" : "C08",
-    "ms" : 488,
+    "ms" : 486,
     "pass" : false
   },
   {
@@ -248,7 +248,7 @@
     "expected" : "Country\tCapital\tPopulation (M)\nRomania\tBucharest\t19.0\nHungary\tBudapest\t9.6\nBulgaria\tSofia\t6.4",
     "glyphCER" : 0,
     "id" : "T01",
-    "ms" : 1233,
+    "ms" : 1212,
     "pass" : true
   },
   {
@@ -260,7 +260,7 @@
     "expected" : "Item\tQty\tUnit price\tTotal\nNotebook\t3\t2.50\t7.50\nGraphing calculator\t1\t119.00\t119.00\nPens (pack of 10)\t2\t4.25\t8.50\nTotal\t\t\t135.00",
     "glyphCER" : 0,
     "id" : "T02",
-    "ms" : 657,
+    "ms" : 654,
     "pass" : true
   },
   {
@@ -272,7 +272,7 @@
     "expected" : "Student\tTest 1\tTest 2\tTest 3\tAverage\nAna Ionescu\t78\t85\t91\t84.7\nMihai Popa\t64\t70\t68\t67.3\nElena Dumitru\t92\t88\t95\t91.7\nAndrei Stan\t55\t61\t73\t63.0",
     "glyphCER" : 0.00909090909090909,
     "id" : "T03",
-    "ms" : 1142,
+    "ms" : 1160,
     "pass" : false
   },
   {
@@ -284,7 +284,7 @@
     "expected" : "Task\tOwner\tDue\tNotes\nCollect survey data\tAna\t12 Oct\tUse the Google Form link from the class page\nWrite introduction\t\t15 Oct\nMake graphs\tMihai\t\tBar charts only",
     "glyphCER" : 0,
     "id" : "T04",
-    "ms" : 162,
+    "ms" : 164,
     "pass" : true
   },
   {
@@ -296,7 +296,7 @@
     "expected" : "Time\tMonday\tTuesday\tWednesday\n08:00\tMaths\tEnglish\tPhysics\n09:30\tBiology\tMaths\tHistory\n11:00\tChemistry\tArt\tMaths",
     "glyphCER" : 0,
     "id" : "T05",
-    "ms" : 1090,
+    "ms" : 1091,
     "pass" : true
   },
   {
@@ -308,7 +308,7 @@
     "expected" : "Feature\tMitosis\tMeiosis\nNumber of divisions\tOne\tTwo\nDaughter cells produced\tTwo diploid cells\tFour haploid cells\nGenetic variation\tNone, the cells are identical clones\tCrossing over and independent assortment",
     "glyphCER" : 0,
     "id" : "T06",
-    "ms" : 195,
+    "ms" : 197,
     "pass" : true
   },
   {
@@ -320,7 +320,7 @@
     "expected" : "Symbol\tQuantity\tSI unit\nF\tforce\tN\nE\tenergy\tJ\nP\tpower\tW\nv\tvelocity\tm\/s",
     "glyphCER" : 0.037037037037037035,
     "id" : "T07",
-    "ms" : 461,
+    "ms" : 470,
     "pass" : false
   },
   {
@@ -332,7 +332,7 @@
     "expected" : "E = mc²",
     "glyphCER" : 0,
     "id" : "M01",
-    "ms" : 71,
+    "ms" : 70,
     "pass" : true
   },
   {
@@ -344,7 +344,7 @@
     "expected" : "x² + y² = z²",
     "glyphCER" : 0,
     "id" : "M02",
-    "ms" : 71,
+    "ms" : 63,
     "pass" : true
   },
   {
@@ -356,7 +356,7 @@
     "expected" : "The area of a circle is A = πr², so doubling r multiplies the area by 4.",
     "glyphCER" : 0.017857142857142856,
     "id" : "M03",
-    "ms" : 114,
+    "ms" : 113,
     "pass" : false
   },
   {
@@ -380,7 +380,7 @@
     "expected" : "m = (a + b)\/2",
     "glyphCER" : 0,
     "id" : "M05",
-    "ms" : 146,
+    "ms" : 148,
     "pass" : true
   },
   {
@@ -392,7 +392,7 @@
     "expected" : "aₙ = a₁ + (n − 1)d\nSₙ = n\/2 (2a₁ + (n − 1)d)",
     "glyphCER" : 0.03333333333333333,
     "id" : "M06",
-    "ms" : 641,
+    "ms" : 642,
     "pass" : false
   },
   {
@@ -404,7 +404,7 @@
     "expected" : "√(x + 1) = 3\n∛8 = 2",
     "glyphCER" : 0.08333333333333333,
     "id" : "M07",
-    "ms" : 188,
+    "ms" : 193,
     "pass" : false
   },
   {
@@ -416,7 +416,7 @@
     "expected" : "∫₀¹ x² dx = 1\/3",
     "glyphCER" : 0,
     "id" : "M08",
-    "ms" : 283,
+    "ms" : 288,
     "pass" : true
   },
   {
@@ -428,7 +428,7 @@
     "expected" : "∑ᵢ₌₁ⁿ i = n(n + 1)\/2",
     "glyphCER" : 0,
     "id" : "M09",
-    "ms" : 310,
+    "ms" : 305,
     "pass" : true
   },
   {
@@ -439,7 +439,7 @@
     "expected" : "∀ε > 0 ∃δ > 0: |x − a| < δ ⇒ |f(x) − L| < ε",
     "glyphCER" : 1,
     "id" : "M10",
-    "ms" : 50,
+    "ms" : 39,
     "pass" : false
   },
   {
@@ -451,7 +451,7 @@
     "expected" : "a ≤ b, c ≥ d, x ≠ y, 3 ± 0.5, 6 × 7 ÷ 2, x → ∞, x ∈ ℝ",
     "glyphCER" : 0.06451612903225806,
     "id" : "M11",
-    "ms" : 103,
+    "ms" : 112,
     "pass" : false
   },
   {
@@ -463,7 +463,7 @@
     "expected" : "A = [1 2; 3 4]\ndet A = −2",
     "glyphCER" : 0,
     "id" : "M12",
-    "ms" : 253,
+    "ms" : 259,
     "pass" : true
   },
   {
@@ -475,7 +475,7 @@
     "expected" : "2H₂ + O₂ → 2H₂O\nCO₂ + H₂O → H₂CO₃",
     "glyphCER" : 0,
     "id" : "M13",
-    "ms" : 465,
+    "ms" : 462,
     "pass" : true
   },
   {
@@ -487,7 +487,7 @@
     "expected" : "g = 9.81 m\/s²\n1 mm = 10⁻³ m\nc = 3.00 × 10⁸ m s⁻¹",
     "glyphCER" : 0,
     "id" : "M14",
-    "ms" : 520,
+    "ms" : 523,
     "pass" : true
   },
   {
@@ -499,7 +499,7 @@
     "expected" : "dy\/dx = 3x² − 4\nf′(x) = 2x + 1",
     "glyphCER" : 0,
     "id" : "M15",
-    "ms" : 420,
+    "ms" : 426,
     "pass" : true
   },
   {
@@ -511,7 +511,7 @@
     "expected" : "e^(iπ) + 1 = 0\n2ⁿ⁺¹ − 1",
     "glyphCER" : 0.125,
     "id" : "M16",
-    "ms" : 274,
+    "ms" : 279,
     "pass" : false
   },
   {
@@ -523,7 +523,7 @@
     "expected" : "sin²θ + cos²θ = 1\nlog₂ 8 = 3",
     "glyphCER" : 0,
     "id" : "M17",
-    "ms" : 391,
+    "ms" : 390,
     "pass" : true
   },
   {
@@ -535,7 +535,7 @@
     "expected" : "1. Solve 3x² − 12 = 0.\n2. Simplify (x² − 9)\/(x − 3).\n3. Find dy\/dx when y = sin(2x).",
     "glyphCER" : 0.015625,
     "id" : "M18",
-    "ms" : 598,
+    "ms" : 603,
     "pass" : false
   },
   {
@@ -547,7 +547,7 @@
     "expected" : "If f(x) = x³ − 2x, then f′(x) = 3x² − 2 and the stationary points satisfy 3x² = 2.",
     "glyphCER" : 0.031746031746031744,
     "id" : "M19",
-    "ms" : 157,
+    "ms" : 158,
     "pass" : false
   },
   {
@@ -559,7 +559,7 @@
     "expected" : "lim_(x→0) (sin x)\/x = 1",
     "glyphCER" : 0,
     "id" : "M20",
-    "ms" : 230,
+    "ms" : 239,
     "pass" : true
   },
   {
@@ -571,7 +571,7 @@
     "expected" : "A = P(1 + r\/n)ⁿᵗ",
     "glyphCER" : 0,
     "id" : "M21",
-    "ms" : 177,
+    "ms" : 179,
     "pass" : true
   },
   {
@@ -583,7 +583,7 @@
     "expected" : "Solve x² − 5x + 6 = 0, giving x₁ = 2 and x₂ = 3.",
     "glyphCER" : 0,
     "id" : "M22",
-    "ms" : 118,
+    "ms" : 116,
     "pass" : true
   },
   {
@@ -595,7 +595,7 @@
     "expected" : "The Water Cycle\nWater evaporates from oceans, lakes and rivers when it is heated by the Sun. Plants also release water vapour through their leaves in a process called transpiration.\nAs the warm, moist air rises it cools, and the vapour condenses into tiny droplets that form clouds. When the droplets combine and grow heavy enough, they fall back to the ground as precipitation.\nSome of this water flows over the surface into rivers, while the rest soaks into the ground and becomes groundwater, eventually returning to the sea.",
     "glyphCER" : 0,
     "id" : "Y01",
-    "ms" : 512,
+    "ms" : 506,
     "pass" : true
   },
   {
@@ -607,7 +607,7 @@
     "expected" : "Sports Day\nSports day will take place on Friday 14 October on the main field. All students should bring water and a hat.\nLibrary News\nThe library has added 200 new books this term, including graphic novels and revision guides for the IB exams.\nLost Property\nUnclaimed items will be donated at the end of the month. Please check the box outside the gym.",
     "glyphCER" : 0,
     "id" : "Y02",
-    "ms" : 277,
+    "ms" : 274,
     "pass" : true
   },
   {
@@ -619,7 +619,7 @@
     "expected" : "Scarcity and Choice\nBecause resources are limited, every decision to use them one way means giving up the chance to use them another way. Economists call this trade-off the opportunity cost of the decision.\nFor example, a student who spends the evening working a paid shift gives up time that could have been spent revising for an exam.\nKey term\nOpportunity cost is the value of the next best alternative given up when making a choice.",
     "glyphCER" : 0,
     "id" : "Y03",
-    "ms" : 474,
+    "ms" : 472,
     "pass" : true
   },
   {
@@ -631,7 +631,7 @@
     "expected" : "Figure 2 shows how the equilibrium price changes when demand increases.\nFigure 2. An increase in demand shifts the demand curve to the right, raising both price and quantity.\nThe new equilibrium is found where the new demand curve crosses the supply curve.",
     "glyphCER" : 0,
     "id" : "Y04",
-    "ms" : 255,
+    "ms" : 253,
     "pass" : true
   },
   {
@@ -655,7 +655,7 @@
     "expected" : "Display name:\tDavid Popescu\nEmail:\tdavid@example.com\nTheme:\tDark\nStart at login\nCancel\tSave",
     "glyphCER" : 0.012658227848101266,
     "id" : "Y06",
-    "ms" : 105,
+    "ms" : 97,
     "pass" : false
   },
   {
@@ -667,7 +667,7 @@
     "expected" : "Nuclear Power\nAdvantages\n• Low carbon emissions\n• Reliable baseload supply\n• High energy density\nDisadvantages\n• Radioactive waste\n• High construction cost\n• Risk of accidents",
     "glyphCER" : 0,
     "id" : "Y07",
-    "ms" : 418,
+    "ms" : 414,
     "pass" : true
   },
   {
@@ -679,7 +679,7 @@
     "expected" : "Today 16:42\nHey, are we still meeting at 5 to work on the chemistry lab write-up?\nYes! At the library, second floor.\nGreat, I'll bring the notes.\nPerfect, see you there",
     "glyphCER" : 0,
     "id" : "Y08",
-    "ms" : 172,
+    "ms" : 174,
     "pass" : true
   },
   {
@@ -691,7 +691,7 @@
     "expected" : "Reminder: the extended essay first draft is due on Monday. Upload it to ManageBac as a PDF and include your word count on the title page.\nLate submissions will not receive written feedback.",
     "glyphCER" : 0,
     "id" : "R01",
-    "ms" : 210,
+    "ms" : 192,
     "pass" : true
   },
   {
@@ -727,7 +727,7 @@
     "expected" : "Warning: this solution is corrosive.\nSafe to handle with gloves.\nOptional: wear safety glasses.",
     "glyphCER" : 0,
     "id" : "R04",
-    "ms" : 102,
+    "ms" : 100,
     "pass" : true
   },
   {
@@ -739,7 +739,7 @@
     "expected" : "În școală, elevii își țin caietele în bănci și ascultă lecția de fizică.\nMâine vom învăța despre câmpul electric și despre sarcinile electrice.",
     "glyphCER" : 0,
     "id" : "R05",
-    "ms" : 187,
+    "ms" : 184,
     "pass" : true
   },
   {
@@ -751,7 +751,7 @@
     "expected" : "Der Bär läuft über die Brücke.\nLe garçon a mangé une crème brûlée.\nEl niño tiene cinco años.",
     "glyphCER" : 0,
     "id" : "R06",
-    "ms" : 175,
+    "ms" : 187,
     "pass" : true
   },
   {
@@ -763,7 +763,7 @@
     "expected" : "https:\/\/www.ibo.org\/programmes\/diploma-programme\/",
     "glyphCER" : 0,
     "id" : "R07",
-    "ms" : 30,
+    "ms" : 32,
     "pass" : true
   },
   {
@@ -775,7 +775,7 @@
     "expected" : "Join the Robotics Club\nMeetings every Thursday at 15:30 in room B12. Everyone is welcome, no experience needed.",
     "glyphCER" : 0,
     "id" : "R08",
-    "ms" : 190,
+    "ms" : 187,
     "pass" : true
   },
   {
@@ -786,7 +786,7 @@
     "expected" : "",
     "glyphCER" : 0,
     "id" : "R09",
-    "ms" : 17,
+    "ms" : 18,
     "pass" : true
   },
   {
@@ -798,7 +798,7 @@
     "expected" : "uₙ = u₁rⁿ⁻¹\nS∞ = u₁\/(1 − r), |r| < 1",
     "glyphCER" : 0.5185185185185185,
     "id" : "H01",
-    "ms" : 635,
+    "ms" : 630,
     "pass" : false
   },
   {
@@ -810,7 +810,7 @@
     "expected" : "Using logₐ(xy) = logₐx + logₐy, we find that log₂32 = 5 and ln e³ = 3.",
     "glyphCER" : 0.037037037037037035,
     "id" : "H02",
-    "ms" : 139,
+    "ms" : 138,
     "pass" : false
   },
   {
@@ -822,7 +822,7 @@
     "expected" : "tan θ = (sin θ)\/(cos θ)\ncos 2θ = 1 − 2sin²θ",
     "glyphCER" : 0.03125,
     "id" : "H03",
-    "ms" : 522,
+    "ms" : 530,
     "pass" : false
   },
   {
@@ -834,7 +834,7 @@
     "expected" : "∫ x³ dx = x⁴\/4 + C",
     "glyphCER" : 0,
     "id" : "H04",
-    "ms" : 303,
+    "ms" : 304,
     "pass" : true
   },
   {
@@ -846,7 +846,7 @@
     "expected" : "P(A|B) = P(A ∩ B)\/P(B)\nP(A′) = 1 − P(A)",
     "glyphCER" : 0.06666666666666667,
     "id" : "H05",
-    "ms" : 495,
+    "ms" : 497,
     "pass" : false
   },
   {
@@ -869,7 +869,7 @@
     "expected" : "The trolley accelerates at 2.5 m s⁻², so its kinetic energy Eₖ = ½mv² reaches 4.5 × 10⁵ J.",
     "glyphCER" : 0,
     "id" : "H07",
-    "ms" : 158,
+    "ms" : 163,
     "pass" : true
   },
   {
@@ -881,7 +881,7 @@
     "expected" : "Ba²⁺ + SO₄²⁻ → BaSO₄\nFe³⁺ + 3OH⁻ → Fe(OH)₃",
     "glyphCER" : 0,
     "id" : "H08",
-    "ms" : 609,
+    "ms" : 617,
     "pass" : true
   },
   {
@@ -893,7 +893,7 @@
     "expected" : "y = e^(−x²)\nf′(x) = −2xe^(−x²)",
     "glyphCER" : 0.15789473684210525,
     "id" : "H09",
-    "ms" : 418,
+    "ms" : 396,
     "pass" : false
   },
   {
@@ -905,7 +905,7 @@
     "expected" : "If the probability of rain is 3\/10, then the probability of no rain is 1 − 3\/10 = 7\/10.",
     "glyphCER" : 0.014492753623188406,
     "id" : "H10",
-    "ms" : 264,
+    "ms" : 263,
     "pass" : false
   },
   {
@@ -917,7 +917,7 @@
     "expected" : "f′(x) = lim_(h→0) (f(x + h) − f(x))\/h",
     "glyphCER" : 0,
     "id" : "H11",
-    "ms" : 437,
+    "ms" : 436,
     "pass" : true
   },
   {
@@ -929,7 +929,7 @@
     "expected" : "The equation ax² + bx + c = 0 has two distinct real roots when Δ = b² − 4ac > 0.",
     "glyphCER" : 0,
     "id" : "H12",
-    "ms" : 179,
+    "ms" : 181,
     "pass" : true
   },
   {
@@ -941,7 +941,7 @@
     "expected" : "4. Let f(x) = 2x³ − 3x² − 12x + 5.\n(a) Find f′(x).\t[2]\n(b) Hence find the coordinates of the local minimum of the graph of f.\t[4]",
     "glyphCER" : 0.01,
     "id" : "H13",
-    "ms" : 440,
+    "ms" : 443,
     "pass" : false
   },
   {
@@ -965,7 +965,7 @@
     "expected" : "On the 1st and 2nd of May it reached 25 °C in Bucharest, so the café sold 3× more iced tea.\nThe new ThinkPad™ costs €1,299 (about 20% more), and Room B0.12 is on the ground floor.",
     "glyphCER" : 0.006993006993006993,
     "id" : "H15",
-    "ms" : 309,
+    "ms" : 312,
     "pass" : false
   },
   {
@@ -977,7 +977,7 @@
     "expected" : "In Section C, each OXO cube adds 2 g of salt; a 5 m² SOS banner needs 0.5 L of paint.\nPrint it on A0 paper so the CO₂ graph and Table X are readable from 10 m away.",
     "glyphCER" : 0.007936507936507936,
     "id" : "H16",
-    "ms" : 248,
+    "ms" : 235,
     "pass" : false
   },
   {
@@ -989,7 +989,7 @@
     "expected" : "“It’s not Maria’s fault,” said Ioana. “We’ll finish the lab report by 5 o’clock — I promise.”\nThe ’90s rock ’n’ roll revival didn’t last, but the students’ enthusiasm did.",
     "glyphCER" : 0.007042253521126761,
     "id" : "H17",
-    "ms" : 167,
+    "ms" : 166,
     "pass" : false
   },
   {
@@ -1013,7 +1013,7 @@
     "expected" : "1. The table shows the heights of 30 plants.\n\t(a) Calculate the mean height.\n\t\t(i) Show that the median is 42 cm.\n\t\t(ii) Hence find the interquartile range.\n\t(b) Draw a box-and-whisker diagram.\n2. A second sample of 20 plants was measured.",
     "glyphCER" : 0,
     "id" : "H19",
-    "ms" : 282,
+    "ms" : 284,
     "pass" : true
   },
   {
@@ -1025,7 +1025,7 @@
     "expected" : "SELECT s.name, COUNT(*) AS n_courses\nFROM students s\nJOIN enrolments e ON e.student_id = s.id\nWHERE s.year >= 11 AND s.name <> 'O''Brien'\nGROUP BY s.name\nHAVING COUNT(*) > 2\nORDER BY n_courses DESC;",
     "glyphCER" : 0.006060606060606061,
     "id" : "H20",
-    "ms" : 511,
+    "ms" : 512,
     "pass" : false
   },
   {
@@ -1037,7 +1037,7 @@
     "expected" : "~\/ib-ia $ git log --oneline -3\na1b2c3d Fix off-by-one in parser\n9f8e7d6 Add CSV export (#42)\n0c1d2e3 Initial commit\n~\/ib-ia $ python3 -c \"print(2**10)\"\n1024",
     "glyphCER" : 0,
     "id" : "H21",
-    "ms" : 786,
+    "ms" : 785,
     "pass" : true
   },
   {
@@ -1049,7 +1049,7 @@
     "expected" : "def mean(values):\n    \"\"\"Return the arithmetic mean.\"\"\"\n    if not values:\n        raise ValueError(\"empty list\")\n    total = sum(v for v in values if v is not None)\n    return total \/ len(values)\n\nprint(f\"{mean([3, 4, 5]):.2f}\")  # 4.00",
     "glyphCER" : 0.00558659217877095,
     "id" : "H22",
-    "ms" : 730,
+    "ms" : 729,
     "pass" : false
   },
   {
@@ -1061,7 +1061,7 @@
     "expected" : "{\n  \"name\": \"ocr-bench\",\n  \"version\": \"1.0.2\",\n  \"private\": true,\n  \"scripts\": {\n    \"test\": \"node --test\",\n    \"lint\": \"eslint src\/\"\n  },\n  \"files\": [\"dist\", \"README.md\"],\n  \"timeout\": 0.75\n}",
     "glyphCER" : 0.006711409395973154,
     "id" : "H23",
-    "ms" : 520,
+    "ms" : 523,
     "pass" : false
   },
   {
@@ -1073,7 +1073,7 @@
     "expected" : "Q3 Sales by Region\nRegion\tUnits\tRevenue (€)\tChange\nNorth\t1,204\t36,120.00\t+4.5%\nSouth\t986\t29,580.50\t−2.1%\nEast\t2,310\t69,300.00\t+12.0%\nWest\t745\t22,350.25\t0.0%",
     "glyphCER" : 0,
     "id" : "H24",
-    "ms" : 1491,
+    "ms" : 1504,
     "pass" : true
   },
   {
@@ -1085,7 +1085,7 @@
     "expected" : "(in € thousands)\t2024\t2023\nRevenue\t12,450\t11,020\nCost of sales\t(7,310)\t(6,880)\nGross profit\t5,140\t4,140\nOperating expenses\t(3,905)\t(3,760)\nNet income\t1,235\t380",
     "glyphCER" : 0.037037037037037035,
     "id" : "H25",
-    "ms" : 918,
+    "ms" : 917,
     "pass" : false
   },
   {
@@ -1097,7 +1097,7 @@
     "expected" : "Task\tStatus\tDue\tOwner\nRead chapter 5\tDone\tOct 3\tAna\nDraft lab report\tIn progress\tOct 10\nBook the gym\tNot started\tOct 14\tMihai",
     "glyphCER" : 0,
     "id" : "H26",
-    "ms" : 743,
+    "ms" : 750,
     "pass" : true
   },
   {
@@ -1109,7 +1109,7 @@
     "expected" : "Quantity\tSymbol\tSI unit\nDensity\tρ\tkg m⁻³\nSpeed\tv\tm s⁻¹\nMomentum\tp\tkg m s⁻¹\nCharge\tQ\tC",
     "glyphCER" : 0.09090909090909091,
     "id" : "H27",
-    "ms" : 1198,
+    "ms" : 1210,
     "pass" : false
   },
   {
@@ -1121,7 +1121,7 @@
     "expected" : "Delete “Lab Report.docx”?\nThis item will be deleted immediately. You can’t undo this action.\nDon’t ask again\nCancel\tDelete",
     "glyphCER" : 0,
     "id" : "H28",
-    "ms" : 119,
+    "ms" : 120,
     "pass" : true
   },
   {
@@ -1133,7 +1133,7 @@
     "expected" : "Undo Typing\t⌘Z\nCut\t⌘X\nCopy\t⌘C\nPaste\t⌘V\nPaste and Match Style\t⌥⇧⌘V\nSelect All\t⌘A",
     "glyphCER" : 0.20634920634920634,
     "id" : "H29",
-    "ms" : 176,
+    "ms" : 181,
     "pass" : false
   },
   {
@@ -1145,7 +1145,7 @@
     "expected" : "General\nAppearance\nWi-Fi\nBluetooth\nDisplays\nAppearance\nAppearance\tAuto\nAccent colour\tMulticolour\nShow scroll bars\tWhen scrolling\nClick in the scroll bar to\tJump to the next page",
     "glyphCER" : 0.271523178807947,
     "id" : "H30",
-    "ms" : 970,
+    "ms" : 983,
     "pass" : false
   },
   {
@@ -1157,7 +1157,7 @@
     "expected" : "1. Introduction\nEnzymes are biological catalysts that speed up chemical reactions without being used up. Their activity depends strongly on temperature and pH.\nFigure 1. Apparatus used to measure the rate of reaction.\nIn this investigation the effect of temperature on the activity of the enzyme catalase was measured by collecting the oxygen produced when hydrogen peroxide is broken down at five different temperatures.\n2. Method\nA water bath was used to keep each test tube at a constant temperature for ten minutes before the enzyme was added.",
     "glyphCER" : 0.20869565217391303,
     "id" : "H31",
-    "ms" : 420,
+    "ms" : 438,
     "pass" : false
   },
   {
@@ -1169,7 +1169,7 @@
     "expected" : "Newton’s Second Law\nF = ma\n• where F is the net force in newtons (N)\n• m is the mass in kilograms (kg)\n• a is the acceleration in m s⁻²",
     "glyphCER" : 0,
     "id" : "H32",
-    "ms" : 461,
+    "ms" : 463,
     "pass" : false
   },
   {
@@ -1181,20 +1181,20 @@
     "expected" : "„Ștefan cel Mare” a domnit în Moldova între 1457 și 1504.\nȚara Românească și Transilvania au fost unite în 1600 de Mihai Viteazul, însă unirea n-a durat.",
     "glyphCER" : 0.015748031496062992,
     "id" : "H33",
-    "ms" : 156,
+    "ms" : 160,
     "pass" : false
   },
   {
-    "actual" : "I never said she stole my money - someone else did.",
+    "actual" : "I never said she stole my money — someone else did.",
     "area" : "robustness",
-    "cer" : 0.0196078431372549,
+    "cer" : 0,
     "density" : 2,
     "desc" : "video frame: outlined white subtitle on a dark gradient",
     "expected" : "I never said she stole my money — someone else did.",
-    "glyphCER" : 0.024390243902439025,
+    "glyphCER" : 0,
     "id" : "H34",
-    "ms" : 181,
-    "pass" : false
+    "ms" : 182,
+    "pass" : true
   },
   {
     "actual" : "-O-",
@@ -1205,7 +1205,7 @@
     "expected" : "",
     "glyphCER" : 1,
     "id" : "H35",
-    "ms" : 32,
+    "ms" : 33,
     "pass" : false
   },
   {
@@ -1217,7 +1217,7 @@
     "expected" : "In 1848 the city had 5,140 inhabitants; by 1914 it had 31,705 and four railway stations.",
     "glyphCER" : 0,
     "id" : "N01",
-    "ms" : 111,
+    "ms" : 113,
     "pass" : true
   },
   {
@@ -1229,7 +1229,7 @@
     "expected" : "Inflation fell from 7.4% to 2.1% in 2024, while unemployment stayed at 5.6% all year.",
     "glyphCER" : 0,
     "id" : "N02",
-    "ms" : 179,
+    "ms" : 177,
     "pass" : true
   },
   {
@@ -1241,7 +1241,7 @@
     "expected" : "Use A0 sheets for the CO₂ poster and B0 sheets for the H₂O one.",
     "glyphCER" : 0.04,
     "id" : "N03",
-    "ms" : 157,
+    "ms" : 162,
     "pass" : false
   },
   {
@@ -1253,7 +1253,7 @@
     "expected" : "When the limestone is heated strongly it decomposes into calcium oxide and releases carbon dioxide (CO₂).",
     "glyphCER" : 0,
     "id" : "N04",
-    "ms" : 137,
+    "ms" : 139,
     "pass" : true
   },
   {
@@ -1265,7 +1265,7 @@
     "expected" : "printf(\"%d%%\\n\", 100);\narea = r ** 2 * 3.14  # r squared\nrate = 0.05  # 5% per year",
     "glyphCER" : 0.031746031746031744,
     "id" : "N05",
-    "ms" : 218,
+    "ms" : 223,
     "pass" : false
   },
   {
@@ -1277,7 +1277,7 @@
     "expected" : "The students’ results beat the 1990s’ averages; it’s James’s notebook, not the teachers’.",
     "glyphCER" : 0.012987012987012988,
     "id" : "N06",
-    "ms" : 109,
+    "ms" : 110,
     "pass" : false
   }
 ]
