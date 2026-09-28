@@ -68,6 +68,26 @@ let textReflowTests: [TestCase] = [
         // Six character widths apart: a gap between paragraphs.
         t.equal(TextReflow.paragraphs(pair(pitch: 0.096)).count, 2)
     },
+    TestCase("aCaptionUnderAFigureStaysInItsColumn") { t in
+        // Vision's order: the left column down to the figure, the whole right
+        // column, then the caption under the figure.
+        let lines = [
+            line("Left column text.", top: 0.10, left: 0.05, right: 0.45),
+            line("Right column starts here", top: 0.10, left: 0.55, right: 0.95),
+            line("and runs on down the", top: 0.18, left: 0.55, right: 0.95),
+            line("page past the figure.", top: 0.26, left: 0.55, right: 0.90),
+            line("Figure 1. A caption.", top: 0.80, left: 0.05, right: 0.40),
+        ]
+        t.equal(TextReflow.columnOrdered(lines).map(\.text),
+                ["Left column text.", "Figure 1. A caption.", "Right column starts here", "and runs on down the",
+                 "page past the figure."])
+        // A table read row by row has no stack beside a cell: order kept.
+        let table = [
+            line("Name", top: 0.1, left: 0.05, right: 0.2), line("Score", top: 0.1, left: 0.6, right: 0.8),
+            line("Ana", top: 0.2, left: 0.05, right: 0.15), line("84", top: 0.2, left: 0.6, right: 0.66),
+        ]
+        t.equal(TextReflow.columnOrdered(table).map(\.text), ["Name", "Score", "Ana", "84"])
+    },
     TestCase("numberedMarkerStartsNewParagraph") { t in
         let lines = [
             line("1. First item that wraps onto", top: 0.10, left: 0.1, right: 0.7),

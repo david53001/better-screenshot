@@ -95,7 +95,7 @@ public enum TextReflow {
     }
 
     static func layout(_ lines: [Line], imageSize: CGSize, ruleLength: ((CGRect) -> CGFloat)? = nil) -> [Piece] {
-        var segs = segments(lines, imageSize: imageSize)
+        var segs = segments(columnOrdered(lines), imageSize: imageSize)
         if let ruleLength { segs = stackingFractions(segs, ruleLength: ruleLength) }
         segs = attachingDetachedScripts(segs)
         segs = droppingLineNumbers(segs)
@@ -110,6 +110,31 @@ public enum TextReflow {
             pieces += flow(run.map { segs[$0] })
         }
         return titlesAboveGrids(pieces.sorted { $0.order < $1.order })
+    }
+
+    /// Vision reads a left column only down to a gap (a figure) and lists what
+    /// is under the gap (its caption) after the whole right column: a line
+    /// that follows a stack of three or more lines beside it, and sits under
+    /// the line before that stack, goes back into its own column.
+    static func columnOrdered(_ input: [Line]) -> [Line] {
+        var lines = input
+        func overlaps(_ a: CGRect, _ b: CGRect) -> Bool { min(a.maxX, b.maxX) > max(a.minX, b.minX) }
+        var i = 1
+        while i < lines.count {
+            let line = lines[i].box
+            // Columns have a gutter; code's closing `}` sits just left of its block.
+            let gutter = 2 * line.width / CGFloat(max(lines[i].text.count, 1))
+            var start = i
+            while start > 0, !overlaps(lines[start - 1].box, line) { start -= 1 }
+            let stack = lines[start..<i].map(\.box)
+            if start > 0, stack.count >= 3, lines[i].text.count >= 4, stack.allSatisfy({ $0.minX >= line.maxX + gutter }),
+               zip(stack, stack.dropFirst()).allSatisfy({ overlaps($0, $1) && $1.minY > $0.minY }),
+               stack[0].minY < line.minY, lines[start - 1].box.maxY <= line.minY {
+                lines.insert(lines.remove(at: i), at: start)
+            }
+            i += 1
+        }
+        return lines
     }
 
     /// Vision sometimes lists a table's title in the middle of its
