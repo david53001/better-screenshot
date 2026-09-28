@@ -3,6 +3,31 @@
 **Read this first if you are picking this work up.** It is written for a fresh session with no memory
 of the one that produced it.
 
+## Latest status (session 2, overnight 2026-09-28 → 29) — read this first
+
+The owner asked to keep working overnight and then run a fresh independent reviewer. Progress so far
+(each item committed on `ocr-structure-math`; newest baseline `tools/ocr-bench/baselines/2026-09-29-alignment.json`):
+
+- **Character↔glyph alignment** (`ScriptRecovery.alignment`, a small dynamic program): Vision's characters
+  are assigned to glyphs by cost instead of requiring one character per glyph. A full-size glyph takes 1
+  character, 2–3 when it is that wide (touching italics `2x`), 0 when Vision dropped it; a script glyph 1
+  (0 = dropped, re-read); a stacked fraction any number. Costs: width vs the median letter width; shape
+  class (bar = `=`/`−`, speck = `.`/`,`); height class (ascender/capital letters on x-height glyphs and the
+  reverse, descender mismatch; digits neutral because of old-style figures); Vision's spaces must fall on
+  real gaps; a script never takes a character right after a space. `glyphTexts` builds one *slot* per
+  character on its glyph and runs the old repairs on slots.
+- Fixed with it: H10 `3/10, … 1 − 3/10 = 7/10` (fractions inside a sentence), H13 `2x³ − 3x² − 12x + 5`
+  (plus a re-read correcting a digit Vision read for the letter just before a script: `322` → `3x²`),
+  H14 footnotes `¹ ²`, H18 `19th`.
+- θ: a glyph with two holes stacked vertically on a line containing sin/cos/tan… (`InkMap.holes`);
+  ∫: a stroke > 2.2× cap height read `/`/`J`/`S` on a line with `dx`; `log` look-alikes (`10g`, `l0g`) before
+  a subscript or `(`; ordinals (`3rd`, `19th`) stay plain; ready-made superscripts (`™`, `°`) kept; ink of
+  other Vision boxes on the same row is excluded unless that box is a short raised exponent; an
+  apostrophe is never a script's base; the old-style-digit refusal applies only inside numbers (`log₂8` ok).
+- Numbers: existing 37/66 (CER 0.055), held-out 5/35 (CER 0.142), no-harm 3/6 (CER 0.011);
+  12 better / 0 worse vs the end-of-day baseline. CaptureKit tests 161/161.
+- Tracing: temporary `// TRACE` lines (see "Test harness" below) — none are committed.
+
 ## What this is
 
 **Capture Text** is the app's OCR (optical character recognition) feature, bound to ⌘⇧7. The user drags a
