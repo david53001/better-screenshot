@@ -86,6 +86,11 @@ public enum TextRecognizer {
                     lines[i].rawText = spaced
                 }
             }
+            // Into reading order: after the last line above it in its column.
+            for bracket in bracketLines(lines, in: source) {
+                let above = lines.lastIndex { $0.box.midY < bracket.box.midY && $0.box.maxX > bracket.box.minX }
+                lines.insert(bracket, at: above.map { $0 + 1 } ?? 0)
+            }
         }
         let codes = qrRequest.results ?? []
         let qrs = codes.compactMap { $0.payloadStringValue }
@@ -100,6 +105,60 @@ public enum TextRecognizer {
     }
 
     private static let timesSign = try! NSRegularExpression(pattern: #"(?<=\d) x (?=\d)"#)
+
+    /// Lines holding only brackets (`}`, `{`, `},`), which Vision doesn't box:
+    /// ink near the text that no line covers, read on its own.
+    private static func bracketLines(_ lines: [TextReflow.Line], in image: CGImage) -> [TextReflow.Line] {
+        let size = CGSize(width: image.width, height: image.height)
+        let boxes = lines.map { CGRect(x: $0.box.minX * size.width, y: $0.box.minY * size.height,
+                                       width: $0.box.width * size.width, height: $0.box.height * size.height) }
+        guard let first = boxes.first else { return [] }
+        let heights = boxes.map(\.height).sorted()
+        let h = heights[heights.count / 2]
+        let union = boxes.dropFirst().reduce(first) { $0.union($1) }
+        // A character cell: brackets are centred in theirs, lines start at theirs.
+        let cells = zip(boxes, lines).filter { $1.text.count >= 4 }.map { $0.width / CGFloat($1.text.count) }.sorted()
+        let cell = cells.isEmpty ? 0.6 * h : cells[cells.count / 2]
+        let region = union.insetBy(dx: -h, dy: -1.5 * h).integral.intersection(CGRect(origin: .zero, size: size))
+        guard let map = InkMap(image, rect: region) else { return [] }
+        let covered = boxes.map { $0.offsetBy(dx: -region.minX, dy: -region.minY).insetBy(dx: -0.3 * h, dy: -0.1 * h) }
+        let loose = map.blobs().filter { blob in
+            blob.pixels.count >= 3 && !covered.contains { $0.contains(CGPoint(x: blob.box.midX, y: blob.box.midY)) }
+        }.sorted { $0.box.minX < $1.box.minX }
+        // Loose ink in clusters: pieces that share a row and sit close together.
+        var clusters: [[InkMap.Blob]] = []
+        for blob in loose {
+            if let i = clusters.firstIndex(where: { cluster in
+                let box = cluster.dropFirst().reduce(cluster[0].box) { $0.union($1.box) }
+                return min(box.maxY, blob.box.maxY) - max(box.minY, blob.box.minY) > 0.3 * min(box.height, blob.box.height)
+                    && blob.box.minX - box.maxX < 0.8 * h
+            }) {
+                clusters[i].append(blob)
+            } else {
+                clusters.append([blob])
+            }
+        }
+        var found: [TextReflow.Line] = []
+        for cluster in clusters {
+            let box = cluster.dropFirst().reduce(cluster[0].box) { $0.union($1.box) }
+            guard box.height >= 0.5 * h, box.height <= 1.4 * h, box.width <= 2.5 * h else { continue }
+            var text = ScriptRecovery.readInk(cluster, width: map.width, capHeight: 0.7 * h, { readLine($0)?.text }) ?? ""
+            if text.range(of: #"^[\[\]{}()]{1,3}[,;]?$"#, options: .regularExpression) == nil {
+                // Vision reads a lone thin brace as `l` or `)`: go by its outline.
+                guard let main = cluster.max(by: { $0.pixels.count < $1.pixels.count }),
+                      let shape = ScriptRecovery.brace(main, mapWidth: map.width),
+                      cluster.allSatisfy({ $0.box == main.box || $0.box.minX > main.box.maxX && $0.box.height < 0.4 * h })
+                else { continue }
+                text = String(shape) + (cluster.count > 1 ? "," : "")
+            }
+            var pixel = box.offsetBy(dx: region.minX, dy: region.minY).insetBy(dx: 0, dy: -(h - box.height) / 2)
+            let start = pixel.minX + box.width / CGFloat(max(text.count, 1)) / 2 - cell / 2
+            pixel = CGRect(x: start, y: pixel.minY, width: cell * CGFloat(text.count), height: pixel.height)
+            found.append(TextReflow.Line(text: text, box: CGRect(x: pixel.minX / size.width, y: pixel.minY / size.height,
+                                                                 width: pixel.width / size.width, height: pixel.height / size.height)))
+        }
+        return found
+    }
 
     /// A QR code covering this much of the selection is what the user was after.
     static let dominantQRArea: CGFloat = 0.2

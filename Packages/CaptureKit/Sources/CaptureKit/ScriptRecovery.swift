@@ -204,6 +204,35 @@ enum ScriptRecovery {
         return out == text ? nil : out
     }
 
+    /// `{` or `}` from its outline: a point at mid-height on one side, and the
+    /// stems above and below it near the middle (a parenthesis curves smoothly).
+    static func brace(_ blob: InkMap.Blob, mapWidth: Int) -> Character? {
+        let box = blob.box, w = Int(box.width), h = Int(box.height)
+        guard h >= 8, w >= 3, box.height >= 1.8 * box.width else { return nil }
+        var left = [Int](repeating: w, count: h), right = [Int](repeating: -1, count: h)
+        for p in blob.pixels {
+            let x = p % mapWidth - Int(box.minX), y = p / mapWidth - Int(box.minY)
+            guard y >= 0, y < h else { continue }
+            left[y] = min(left[y], x)
+            right[y] = max(right[y], x)
+        }
+        // The point: the row in the middle band reaching furthest out on one
+        // side. A brace's point is far from its stem (the other side of that
+        // row); a parenthesis there is one stroke thick.
+        let band = Array((h * 2 / 5)...(h * 3 / 5))
+        let quarter = [h / 4, h * 3 / 4]
+        let step = max(1, w / 6)
+        if let row = band.min(by: { left[$0] < left[$1] }), left[row] <= w / 6,
+           quarter.allSatisfy({ left[$0] >= left[row] + step }), right[row] - left[row] >= (2 * w) / 5 {
+            return "{"
+        }
+        if let row = band.max(by: { right[$0] < right[$1] }), right[row] >= w - 1 - w / 6,
+           quarter.allSatisfy({ right[$0] <= right[row] - step }), right[row] - left[row] >= (2 * w) / 5 {
+            return "}"
+        }
+        return nil
+    }
+
     /// Two holes stacked one above the other in a full-size glyph: `θ` (Vision
     /// reads it `0`, `o` or `A`). A slashed zero's holes sit side by side.
     static func isTheta(_ glyph: Glyph, _ line: Line) -> Bool {
@@ -775,10 +804,18 @@ enum ScriptRecovery {
     /// scaled up to text size. Vision won't read a lone glyph, so the image
     /// starts with a typeset `a = ` for context, stripped from the result.
     private static func rereadBlobs(_ members: [Int], _ line: Line, _ reread: (CGImage) -> String?) -> String? {
-        let box = members.dropFirst().reduce(line.blobs[members[0]].box) { $0.union(line.blobs[$1].box) }
-        let scale = max(1, min(3, line.capHeight / max(box.height, 1)))
-        let margin = max(16, Int(line.capHeight))
-        let font = CTFontCreateWithName("Helvetica" as CFString, line.capHeight / 0.72, nil)
+        readInk(members.map { line.blobs[$0] }, width: line.map.width, capHeight: line.capHeight, reread)
+    }
+
+    /// Reads loose ink (pixel indices into a map `width` wide) the same way:
+    /// scaled to text size behind a typeset `a = `.
+    static func readInk(_ blobs: [InkMap.Blob], width mapWidth: Int, capHeight: CGFloat,
+                        _ reread: (CGImage) -> String?) -> String? {
+        guard let first = blobs.first else { return nil }
+        let box = blobs.dropFirst().reduce(first.box) { $0.union($1.box) }
+        let scale = max(1, min(3, capHeight / max(box.height, 1)))
+        let margin = max(16, Int(capHeight))
+        let font = CTFontCreateWithName("Helvetica" as CFString, capHeight / 0.72, nil)
         let prefix = CTLineCreateWithAttributedString(NSAttributedString(
             string: "a = ", attributes: [NSAttributedString.Key(kCTFontAttributeName as String): font]))
         let prefixWidth = CTLineGetTypographicBounds(prefix, nil, nil, nil)
@@ -794,10 +831,10 @@ enum ScriptRecovery {
         ctx.textPosition = CGPoint(x: CGFloat(margin), y: CGFloat(margin))
         CTLineDraw(prefix, ctx)
         let left = CGFloat(margin) + prefixWidth
-        for m in members {
-            for p in line.blobs[m].pixels {
-                let x = (CGFloat(p % line.map.width) - box.minX) * scale + left
-                let y = (CGFloat(p / line.map.width) - box.minY) * scale + CGFloat(margin)
+        for blob in blobs {
+            for p in blob.pixels {
+                let x = (CGFloat(p % mapWidth) - box.minX) * scale + left
+                let y = (CGFloat(p / mapWidth) - box.minY) * scale + CGFloat(margin)
                 ctx.fill(CGRect(x: x, y: CGFloat(height) - y - scale, width: scale, height: scale))
             }
         }

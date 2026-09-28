@@ -209,6 +209,25 @@ let textReflowTests: [TestCase] = [
         t.equal(TextReflow.paragraphs(lines),
                 ["def grade(score):\n    if score >= 80:\n        return \"7\"\n\nprint(grade(90))"])
     },
+    TestCase("bracketOnlyLinesSetTheBlocksIndentation") { t in
+        // A JSON object: the braces (recovered from the pixels) sit two cells
+        // left of the keys. Pixels of a 560 × 430 capture.
+        let w: CGFloat = 560, h: CGFloat = 430
+        func px(_ text: String, _ x: CGFloat, _ y: CGFloat, _ width: CGFloat) -> TextReflow.Line {
+            TextReflow.Line(text: text, box: CGRect(x: x / w, y: y / h, width: width / w, height: 27 / h))
+        }
+        let lines = [
+            px("{", 37, 32, 15),
+            px(#""name": "ocr-bench","#, 66, 70, 312),
+            px(#""scripts": {"#, 63, 175, 190),
+            px(#""test": "node --test","#, 98, 213, 342),
+            px("},", 69, 284, 31),
+            px(#""timeout": 0.75"#, 66, 357, 236),
+            px("}", 37, 391, 15),
+        ]
+        t.equal(TextReflow.paragraphs(lines, imageSize: CGSize(width: w, height: h)).joined(separator: "\n"),
+                "{\n  \"name\": \"ocr-bench\",\n  \"scripts\": {\n    \"test\": \"node --test\",\n  },\n  \"timeout\": 0.75\n}")
+    },
     TestCase("codeUsesTheUncorrectedRead") { t in
         let lines = [
             TextReflow.Line(text: "const total = items. reduce (sum) = 0;",

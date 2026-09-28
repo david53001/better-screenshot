@@ -204,7 +204,11 @@ public enum TextReflow {
                 let left = run.map { segs[$0].box.minX }.min()!
                 let right = run.map { segs[$0].box.maxX }.max()!
                 let overlap = min(right, s.box.maxX) - max(left, s.box.minX)
-                if overlap > 0.5 * min(s.box.width, right - left), s.box.minY > prev.box.midY {
+                // A lone `{` and the keys indented under it share a column too.
+                func bracketsOnly(_ x: Seg) -> Bool { x.text.allSatisfy { "{}[]()[],; ".contains($0) } }
+                let nearLeft = (bracketsOnly(s) || run.allSatisfy { bracketsOnly(segs[$0]) })
+                    && abs(s.box.minX - left) <= 4 * max(s.charWidth, prev.charWidth)
+                if overlap > 0.5 * min(s.box.width, right - left) || nearLeft, s.box.minY > prev.box.midY {
                     runs[runs.count - 1].append(i)
                     continue
                 }
