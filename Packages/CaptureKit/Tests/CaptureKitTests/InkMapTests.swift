@@ -43,4 +43,19 @@ let inkMapTests: [TestCase] = [
             t.equal(map.blobs().map { $0.box }, [CGRect(x: 5, y: 4, width: 20, height: 3)])
         }
     },
+    TestCase("holesAreTheBackgroundInkWallsOff") { t in
+        // A ring (`o`) has one hole; a ring with a bar across the middle (`θ`)
+        // two; a C-shape none.
+        func map(_ rows: [String]) -> (InkMap, [Int], CGRect) {
+            let w = rows[0].count, h = rows.count
+            let ink = rows.flatMap { $0.map { $0 == "#" } }
+            return (InkMap(width: w, height: h, ink: ink), ink.indices.filter { ink[$0] }, CGRect(x: 0, y: 0, width: w, height: h))
+        }
+        let ring = map(["#####", "#...#", "#...#", "#...#", "#####"])
+        t.equal(ring.0.holes(of: ring.1, in: ring.2).count, 1)
+        let theta = map(["#####", "#...#", "#####", "#...#", "#####"])
+        t.equal(theta.0.holes(of: theta.1, in: theta.2).count, 2)
+        let c = map(["#####", "#....", "#....", "#....", "#####"])
+        t.equal(c.0.holes(of: c.1, in: c.2).count, 0)
+    },
 ]

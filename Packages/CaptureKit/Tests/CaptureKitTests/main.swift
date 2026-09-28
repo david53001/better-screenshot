@@ -18,6 +18,7 @@ runTests("CaptureKitTests",
     recognitionResolverTests +
     textReflowTests +
     mathLayoutTests +
+    displayMathTests +
     scriptRecoveryTests +
     inkMapTests +
     homoglyphsTests +

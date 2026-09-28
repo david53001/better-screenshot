@@ -583,7 +583,7 @@ enum DisplayMath {
     }
 
     private static let functionArgument = try! NSRegularExpression(
-        pattern: #"(?<![A-Za-z])(sin|cos|tan|sec|csc|cot|log|ln|exp)(?=[a-zθ])"#)
+        pattern: #"(?<![A-Za-z])(sin|cos|tan|sec|csc|cot|log|ln|exp)(?=[a-zθ](?![A-Za-z]))"#)
 
     /// `i = 1` → `i=1` for a script run.
     private static func compact(_ s: String) -> String { s.replacingOccurrences(of: " ", with: "") }

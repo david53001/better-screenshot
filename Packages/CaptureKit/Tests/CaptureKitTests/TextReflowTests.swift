@@ -228,6 +228,23 @@ let textReflowTests: [TestCase] = [
         t.equal(TextReflow.paragraphs(lines, imageSize: CGSize(width: w, height: h)).joined(separator: "\n"),
                 "{\n  \"name\": \"ocr-bench\",\n  \"scripts\": {\n    \"test\": \"node --test\",\n  },\n  \"timeout\": 0.75\n}")
     },
+    TestCase("oneLookAlikeSwapBalancesACodeLinesBrackets") { t in
+        t.equal(TextReflow.withBalancedBrackets("on: Lpush, pull_request]"), "on: [push, pull_request]")
+        t.equal(TextReflow.withBalancedBrackets("guard ok else i return 0 }"), "guard ok else { return 0 }")
+        t.equal(TextReflow.withBalancedBrackets("print(mean([3, 4, 51))"), "print(mean([3, 4, 5]))")
+        // Nothing unmatched, or nothing to swap: unchanged.
+        t.equal(TextReflow.withBalancedBrackets("} else {"), "} else {")
+        t.equal(TextReflow.withBalancedBrackets("    return i }"), "    return i }")
+        t.equal(TextReflow.withBalancedBrackets("f(x) = [1, 2]"), "f(x) = [1, 2]")
+    },
+    TestCase("codeCleanupFixesFileNamesHashesAndDocstrings") { t in
+        t.equal(TextReflow.cleanedCode("$ python3 main-py"), "$ python3 main.py")
+        t.equal(TextReflow.cleanedCode("run: swift test --parallel"), "run: swift test --parallel")
+        t.equal(TextReflow.withHexDigits("alb2c3d Fix off-by-one"), "a1b2c3d Fix off-by-one")
+        t.equal(TextReflow.withHexDigits("allowed deadbeef"), "allowed deadbeef")
+        t.equal(TextReflow.withTripleQuotes(#"''"Return the mean.''''"#), #""""Return the mean.""""#)
+        t.equal(TextReflow.withTripleQuotes("'''raw'''"), "'''raw'''")
+    },
     TestCase("codeUsesTheUncorrectedRead") { t in
         let lines = [
             TextReflow.Line(text: "const total = items. reduce (sum) = 0;",
