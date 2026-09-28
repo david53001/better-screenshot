@@ -16,6 +16,15 @@ private let stackedFraction = [
 ]
 
 let mathLayoutTests: [TestCase] = [
+    TestCase("mathOperatorsAreSpacedAsTypeset") { t in
+        t.equal(TextReflow.spacedOperators("F= ma"), "F = ma")
+        t.equal(TextReflow.spacedOperators("(x²-9)/(x - 3)"), "(x² - 9)/(x - 3)")
+        t.equal(TextReflow.spacedOperators("f(x)= 2x³-3x²+5"), "f(x) = 2x³ - 3x² + 5")
+        // Unary signs, compound relations and hyphenated words stay as they are.
+        t.equal(TextReflow.spacedOperators("y = -3 + (-x)"), "y = -3 + (-x)")
+        t.equal(TextReflow.spacedOperators("a <= b, c != d"), "a <= b, c != d")
+        t.equal(TextReflow.spacedOperators("the x-axis ≥ 0"), "the x-axis ≥ 0")
+    },
     TestCase("stackedFractionWithABarBecomesOneLine") { t in
         // The bar region handed over is twice the fraction's width; a bar as
         // wide as the fraction is half of it.
@@ -35,7 +44,7 @@ let mathLayoutTests: [TestCase] = [
             line("-= 3x²-4", top: 0.265, left: 0.237, right: 0.839, height: 0.17),
             line("dx", top: 0.406, left: 0.165, right: 0.306, height: 0.135),
         ]
-        t.equal(TextReflow.paragraphs(lines, ruleLength: { $0.width / 2 }), ["dy/dx = 3x²-4"])
+        t.equal(TextReflow.paragraphs(lines, ruleLength: { $0.width / 2 }), ["dy/dx = 3x² - 4"])
     },
     TestCase("fractionPartsGetParenthesesOnlyWhenNeeded") { t in
         t.equal(TextReflow.fractionPart("2a"), "2a")

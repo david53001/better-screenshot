@@ -120,6 +120,52 @@ extension TextReflow {
     private static let mathMarks = CharacterSet(charactersIn: "=≤≥≠→⇒⇔±×÷∑∫√∞")
         .union(CharacterSet(charactersIn: String(ScriptRecovery.superscripts.values) + String(ScriptRecovery.subscripts.values)))
 
+    /// Operators on a math line spaced the way it is typeset (`F= ma` →
+    /// `F = ma`, `(x²-9)` → `(x² - 9)`): relations always, `+` and `-` only
+    /// between two operands (`-3`, `(-x)`, `= -1` stay tight), never inside a
+    /// word (`x-axis`, `Cobb-Douglas`).
+    static func spacedOperators(_ text: String) -> String {
+        let chars = Array(text)
+        func operand(_ c: Character?) -> Bool {
+            guard let c else { return false }
+            return c.isLetter || c.isNumber || ")]′'!".contains(c)
+                || ScriptRecovery.superscripts.values.contains(c) || ScriptRecovery.subscripts.values.contains(c)
+        }
+        func opens(_ c: Character?) -> Bool {
+            guard let c else { return false }
+            return c.isLetter || c.isNumber || "([√".contains(c)
+        }
+        var out = ""
+        var i = 0
+        while i < chars.count {
+            let c = chars[i]
+            var before = i - 1
+            while before >= 0, chars[before] == " " { before -= 1 }
+            var after = i + 1
+            while after < chars.count, chars[after] == " " { after += 1 }
+            let prev: Character? = before >= 0 ? chars[before] : nil
+            let next: Character? = after < chars.count ? chars[after] : nil
+            let relation = "=≤≥≠≈→⇒⇔".contains(c) && prev != nil && next != nil
+                && !"=<>!".contains(prev!) && !"=<>".contains(next!)
+            var binary = false
+            if c == "+" || c == "-", operand(prev), opens(next) {
+                // Letters touching both sides, one side a word: a hyphen.
+                let left = chars[..<i].reversed().prefix { $0.isLetter }.count
+                let right = chars[(i + 1)...].prefix { $0.isLetter }.count
+                binary = !(left >= 1 && right >= 1 && max(left, right) >= 2)
+            }
+            if relation || binary {
+                while out.last == " " { out.removeLast() }
+                out += " \(c) "
+                i = after
+            } else {
+                out.append(c)
+                i += 1
+            }
+        }
+        return out
+    }
+
     /// A line of mostly-math: separate display equations are separate lines.
     static func isMath(_ text: String) -> Bool {
         text.unicodeScalars.contains { mathMarks.contains($0) } && text.split(separator: " ").filter { $0.count > 3 && $0.allSatisfy(\.isLetter) }.count <= 1
