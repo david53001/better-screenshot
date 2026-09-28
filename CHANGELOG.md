@@ -2,6 +2,39 @@
 
 All notable changes to BetterScreenshot. Versions are git tags; releases are published on [GitHub](../../releases).
 
+## Unreleased · Capture Text understands structure and math
+
+Review that drove this: `docs/reviews/2026-09-28-ocr-review.md` (3/10), re-review
+`docs/reviews/2026-09-28-ocr-rereview.md` (4/10); test corpus + harness: `tools/ocr-bench/`; status and
+next steps: `docs/PROGRESS-2026-09-28-ocr.md`. Work in progress on branch `ocr-structure-math`.
+
+- **Reading order is kept.** Vision already returns lines column by column; Capture Text used to
+  re-sort them top to bottom, which interleaved two-column pages, sidebars and two-column slides
+  mid-sentence. A paragraph that runs into the next column now joins up.
+- **Tables paste as tables:** one row per line, cells separated by tabs (pastes into Sheets/Numbers as
+  a grid), empty cells kept, wrapped cells kept in their row. Labels and values in a form, a header and
+  its page number, and IB-style (International Baccalaureate exam) marks `[2]` at the right of a question join their line with a tab.
+- **Code keeps its shape:** one line per line, indentation rebuilt from where each line starts, blank
+  lines kept, a line-number gutter dropped, and code lines re-read without autocorrect (no more
+  `items. reduce (`, `-parallel`, `‹module›`, `return ø;`).
+- **Math:** superscripts and subscripts are recovered from the pixels (`x²`, `aₙ`, `10⁻³`, `m s⁻¹`,
+  `H₂O`, `ⁿ⁺¹`, `^(iπ)` where Unicode has no glyph); stacked fractions become `(a + b)/2` (also small
+  inline ones like `dy/dx`); square roots `√(b² − 4ac)`; `±` / `≠` instead of `+` / `‡`; `3.00 x 10⁸` →
+  `3.00 × 10⁸`; separate display equations stay on separate lines. Letters Vision reads as capitals at
+  x-height (`cOS`, `X₂`) are lowercased in math lines; `C0₂` → `CO₂`.
+- **Cyrillic/Greek look-alike letters** Vision slips into Latin text (`СО₂`) are mapped to Latin when
+  you don't read those scripts.
+- **Paragraphs:** no more stray line breaks when Vision boxes a short last line smaller; separate short
+  lines (addresses, one-line statements) no longer merge; nested lists keep their levels (tabs).
+- **QR codes:** a small QR on a poster or slide no longer replaces all its text — the link is added
+  after the text. A QR that fills the selection still copies just its link.
+- **The math layer doesn't damage ordinary text:** a rewrite may only add super/subscripts and known
+  symbol repairs — every full-size character must still be what Vision read — so `−2.1%`, `5,140` in
+  old-style digits, `the 3rd of March.` and JSON strings paste unchanged. When Vision itself is unsure
+  of a line (`21120` for `2H₂O`), a confident re-read of it may correct letters too.
+- Not solved (needs a real math-recognition model): Greek letters and big operators Vision can't read
+  (π, θ, ∑, ∫, ∀, ε), limits under `lim`, matrices; single-glyph misreads (`Ana lonescu`, `[` → `L`).
+
 ## v3.0.0 — 2026-09-26 · Editor & recording overhaul, video editor, guided tours
 
 Design: `docs/superpowers/specs/2026-09-24-betterscreenshot-editor-recording-v3-design.md`; Windows

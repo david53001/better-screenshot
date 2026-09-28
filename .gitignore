@@ -9,3 +9,6 @@ xcuserdata/
 /dist/
 .vscode/
 /.claude/worktrees/
+/tools/ocr-bench/.build/
+/tools/ocr-bench/out/
+/tools/ocr-bench/*.log

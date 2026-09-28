@@ -17,6 +17,10 @@ runTests("CaptureKitTests",
     tempImageWriterTests +
     recognitionResolverTests +
     textReflowTests +
+    mathLayoutTests +
+    scriptRecoveryTests +
+    inkMapTests +
+    homoglyphsTests +
     textRecognizerTests +
     windowPickingTests +
     overlayDismissScaleTests +

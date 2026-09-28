@@ -23,13 +23,17 @@ public enum RecognitionResult: Equatable {
     }
 }
 
-/// Pure decision rule for Capture Text: any QR code wins over recognized text;
-/// text lines (one per paragraph after `TextReflow`) join with newlines; blank
-/// lines drop.
+/// Pure decision rule for Capture Text. Text lines (one per paragraph, table
+/// row or code block after `TextReflow`) join with newlines; blank ones drop.
+/// A QR code that fills the selection is what the user was after, so its
+/// payload wins; a small one on a poster or slide is appended to the text
+/// instead of replacing it.
 public enum RecognitionResolver {
-    public static func resolve(qrPayloads: [String], textLines: [String]) -> RecognitionResult {
-        if let qr = qrPayloads.first { return .qr(qr) }
+    public static func resolve(qrPayloads: [String], textLines: [String], qrDominant: Bool = false) -> RecognitionResult {
         let lines = textLines.filter { !$0.isEmpty }
-        return lines.isEmpty ? .none : .text(lines.joined(separator: "\n"))
+        if let qr = qrPayloads.first, qrDominant || lines.isEmpty { return .qr(qr) }
+        guard !lines.isEmpty else { return .none }
+        let text = lines.joined(separator: "\n")
+        return .text(([text] + qrPayloads.filter { !text.contains($0) }).joined(separator: "\n"))
     }
 }

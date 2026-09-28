@@ -39,6 +39,32 @@ private func renderWrappedImage() -> CGImage {
     return ctx.makeImage()!
 }
 
+/// `E = mc²` over `H₂O`, the scripts drawn smaller and shifted the way a
+/// word processor sets them.
+private func renderScriptsImage() -> CGImage {
+    let size = CGSize(width: 520, height: 240)
+    let ctx = CGContext(data: nil, width: Int(size.width), height: Int(size.height),
+                        bitsPerComponent: 8, bytesPerRow: 0,
+                        space: CGColorSpaceCreateDeviceRGB(),
+                        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    ctx.setFillColor(CGColor.white)
+    ctx.fill(CGRect(origin: .zero, size: size))
+    NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+    let body: [NSAttributedString.Key: Any] = [.font: NSFont(name: "Helvetica", size: 56)!, .foregroundColor: NSColor.black]
+    func script(_ offset: CGFloat) -> [NSAttributedString.Key: Any] {
+        [.font: NSFont(name: "Helvetica", size: 36)!, .foregroundColor: NSColor.black, .baselineOffset: offset]
+    }
+    let top = NSMutableAttributedString(string: "E = mc", attributes: body)
+    top.append(NSAttributedString(string: "2", attributes: script(24)))
+    top.draw(at: CGPoint(x: 30, y: 140))
+    let bottom = NSMutableAttributedString(string: "H", attributes: body)
+    bottom.append(NSAttributedString(string: "2", attributes: script(-12)))
+    bottom.append(NSAttributedString(string: "O", attributes: body))
+    bottom.draw(at: CGPoint(x: 30, y: 40))
+    NSGraphicsContext.current = nil
+    return ctx.makeImage()!
+}
+
 private func renderQRImage(_ payload: String) -> CGImage {
     let filter = CIFilter(name: "CIQRCodeGenerator")!
     filter.setValue(payload.data(using: .utf8)!, forKey: "inputMessage")
@@ -116,6 +142,18 @@ let textRecognizerTests: [TestCase] = {
                 t.fail("TextRecognizer threw: \(error)")
             }
         },
+        TestCase("superscriptsAndSubscriptsComeFromThePixels") { t in
+            do {
+                let result = try TextRecognizer.recognize(in: renderScriptsImage())
+                t.equal(result.clipboardString, "E = mc²\nH₂O")
+            } catch {
+                t.fail("TextRecognizer threw: \(error)")
+            }
+        },
+        TestCase("aLoneXBetweenNumbersIsATimesSign") { t in
+            t.equal(TextRecognizer.withTimesSigns("c = 3.00 x 10⁸ m/s"), "c = 3.00 × 10⁸ m/s")
+            t.equal(TextRecognizer.withTimesSigns("the x axis and 3 x-values"), "the x axis and 3 x-values")
+        },
         TestCase("blankImageIsNone") { t in
             do {
                 let result = try TextRecognizer.recognize(in: renderTextImage(""))
@@ -136,11 +174,11 @@ let textRecognizerTests: [TestCase] = {
                     t.fail("TextRecognizer threw: \(error)")
                 }
             },
-            TestCase("qrBeatsTextInMixedImage") { t in
+            TestCase("aSmallQRKeepsTheTextBesideIt") { t in
                 do {
                     let mixed = composite(renderTextImage("plain words"), renderQRImage("qr-payload"))
                     let result = try TextRecognizer.recognize(in: mixed)
-                    t.equal(result, RecognitionResult.qr("qr-payload"))
+                    t.equal(result, RecognitionResult.text("plain words\nqr-payload"))
                 } catch {
                     t.fail("TextRecognizer threw: \(error)")
                 }

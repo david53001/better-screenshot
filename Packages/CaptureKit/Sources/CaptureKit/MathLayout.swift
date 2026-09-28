@@ -1,0 +1,127 @@
+import CoreGraphics
+import Foundation
+
+/// Two-dimensional math that Vision returns as separate lines: stacked
+/// fractions (`a + b` over a bar over `2`, with `m =` beside them) and
+/// exponents Vision boxed on their own (`ⁿᵗ` after `(1 + r/n)`). Rebuilt into
+/// one line of linear math: `m = (a + b)/2`.
+extension TextReflow {
+    /// `ruleLength` returns the longest horizontal run of ink in a region
+    /// (pixels, top-left origin). A bar about as wide as the fraction is what
+    /// tells a fraction from two stacked lines or a matrix; a table border runs
+    /// far past its cells.
+    static func stackingFractions(_ segs: [Seg], ruleLength: (CGRect) -> CGFloat) -> [Seg] {
+        var segs = segs
+        var found = true
+        while found {
+            found = false
+            search: for n in segs.indices {
+                for d in segs.indices where d != n {
+                    let top = segs[n].box, bottom = segs[d].box
+                    let h = max(top.height, bottom.height)
+                    let gap = bottom.minY - top.maxY
+                    guard bottom.minY > top.midY, gap <= 1.3 * h, gap >= -0.3 * h,
+                          abs(top.midX - bottom.midX) <= 0.2 * max(top.width, bottom.width) else { continue }
+                    let left = min(top.minX, bottom.minX), width = max(top.maxX, bottom.maxX) - left
+                    let bar = CGRect(x: left - 0.5 * width, y: min(top.maxY, bottom.minY) - 0.15 * h,
+                                     width: 2 * width, height: abs(gap) + 0.3 * h)
+                    let run = ruleLength(bar)
+                    guard run >= 0.7 * width, run <= 1.4 * width + h,
+                          let merged = replacingFraction(numerator: n, denominator: d, barY: bar.midY, in: segs)
+                    else { continue }
+                    segs = merged
+                    found = true
+                    break search
+                }
+            }
+        }
+        return segs
+    }
+
+    /// Nil when nothing sits on the bar's line — a bare pair of lines with a
+    /// rule between them is more likely a heading and a table than math.
+    private static func replacingFraction(numerator n: Int, denominator d: Int, barY: CGFloat, in segs: [Seg]) -> [Seg]? {
+        let num = segs[n], den = segs[d]
+        let text = fractionPart(num.shown) + "/" + fractionPart(den.shown)
+        var fraction = Seg(text: text, shown: text, raw: nil, box: num.box.union(den.box), order: min(num.order, den.order))
+        var drop: Set<Int> = [n, d]
+        // What sits on the fraction bar's line to the left (`m =`) and right (`= 1`).
+        let beside = segs.indices.filter { !drop.contains($0) && segs[$0].box.minY < barY && segs[$0].box.maxY > barY }
+        if let l = beside.filter({ segs[$0].box.maxX <= fraction.box.minX + 0.3 * segs[$0].box.height
+                                   && fraction.box.minX - segs[$0].box.maxX <= 1.5 * segs[$0].box.height })
+            .max(by: { segs[$0].box.maxX < segs[$1].box.maxX }) {
+            fraction.text = segs[l].text + " " + fraction.text
+            fraction.shown = segs[l].shown + " " + fraction.shown
+            fraction.box = fraction.box.union(segs[l].box)
+            fraction.order = min(fraction.order, segs[l].order)
+            drop.insert(l)
+        }
+        if let r = beside.filter({ !drop.contains($0) && segs[$0].box.maxX > fraction.box.maxX
+                                   && segs[$0].box.minX >= num.box.minX && segs[$0].box.minX >= den.box.minX
+                                   && segs[$0].box.minX - fraction.box.maxX <= 1.5 * segs[$0].box.height })
+            .min(by: { segs[$0].box.minX < segs[$1].box.minX }) {
+            var text = segs[r].shown
+            // Vision sometimes reads the bar itself as a leading minus (`-= 3x`).
+            if segs[r].box.minX < fraction.box.maxX - 0.2 * segs[r].box.height,
+               let first = text.first, "-−–—_".contains(first) {
+                text = String(text.dropFirst()).trimmingCharacters(in: .whitespaces)
+            }
+            fraction.text += " " + text
+            fraction.shown += " " + text
+            fraction.box = fraction.box.union(segs[r].box)
+            fraction.order = min(fraction.order, segs[r].order)
+            drop.insert(r)
+        }
+        guard drop.count > 2 else { return nil }
+        return (segs.indices.filter { !drop.contains($0) }.map { segs[$0] } + [fraction]).sorted { $0.order < $1.order }
+    }
+
+    /// `a + b` → `(a + b)`; `2a`, `dy`, `n(n + 1)` stay bare.
+    static func fractionPart(_ text: String) -> String {
+        var depth = 0
+        for c in text {
+            if "([{".contains(c) { depth += 1 } else if ")]}".contains(c) { depth -= 1 }
+            else if depth == 0, c == " " || "+-−±×·÷/=<>".contains(c) { return "(" + text + ")" }
+        }
+        return text
+    }
+
+    /// A short box sitting raised (or lowered) right after another line is its
+    /// exponent (or index) that Vision boxed on its own.
+    static func attachingDetachedScripts(_ segs: [Seg]) -> [Seg] {
+        var segs = segs
+        var i = 0
+        while i < segs.count {
+            let s = segs[i]
+            guard s.words == 1, s.text.count <= 4,
+                  let a = segs.indices.first(where: { j in
+                      let base = segs[j].box
+                      // Only a symbol, digit or bracket carries an exponent (not `=`).
+                      guard j != i, let end = segs[j].text.last, end.isLetter || end.isNumber || ")]".contains(end)
+                      else { return false }
+                      return s.box.height <= 0.8 * base.height
+                          && s.box.minX >= base.maxX - 0.2 * base.height
+                          && s.box.minX - base.maxX <= 0.6 * base.height
+                          && (s.box.maxY <= base.midY + 0.1 * base.height && s.box.maxY > base.minY - 0.5 * base.height
+                              || s.box.minY >= base.midY - 0.1 * base.height && s.box.maxY > base.maxY + 0.1 * base.height)
+                  }) else { i += 1; continue }
+            let superscript = s.box.maxY <= segs[a].box.midY + 0.1 * segs[a].box.height
+            let script = ScriptRecovery.script(s.text, superscript: superscript)
+            // ScriptRecovery may already have read it as part of the line.
+            if !segs[a].shown.hasSuffix(script) { segs[a].shown += script }
+            segs[a].box = segs[a].box.union(s.box)
+            segs[a].order = min(segs[a].order, s.order)
+            segs.remove(at: i)
+            i = 0
+        }
+        return segs.sorted { $0.order < $1.order }
+    }
+
+    private static let mathMarks = CharacterSet(charactersIn: "=≤≥≠→⇒⇔±×÷∑∫√∞")
+        .union(CharacterSet(charactersIn: String(ScriptRecovery.superscripts.values) + String(ScriptRecovery.subscripts.values)))
+
+    /// A line of mostly-math: separate display equations are separate lines.
+    static func isMath(_ text: String) -> Bool {
+        text.unicodeScalars.contains { mathMarks.contains($0) } && text.split(separator: " ").filter { $0.count > 3 && $0.allSatisfy(\.isLetter) }.count <= 1
+    }
+}

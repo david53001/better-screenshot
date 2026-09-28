@@ -129,6 +129,42 @@ code line-per-line; its known limit is that a code block's longest line merges w
 were measured on the owner's slide screenshot (intra-paragraph pitch jitter ≤ 1.07×, paragraph break 1.33×).
 Vision's confidence is useless for filtering photo junk (it scores "CREAM STEA" at 1.00) — don't try. Same
 release added the README **Update** section (re-run the install one-liner).
+*(Superseded by the 2026-09-28 rework below: the height-ratio rule and the top-to-bottom sort are gone.)*
+
+**Capture Text structure + math** (2026-09-28, **work in progress on branch `ocr-structure-math`**, not
+merged/tagged; review `docs/reviews/2026-09-28-ocr-review.md` scored the old pipeline 3/10, re-review
+`docs/reviews/2026-09-28-ocr-rereview.md` 4/10; **handoff, numbers and ordered next steps in
+`docs/PROGRESS-2026-09-28-ocr.md` — read it before touching Capture Text**). **Test harness: `tools/ocr-bench/`** — renders 66+ cases offscreen and
+runs the real `TextRecognizer.recognize`; `tools/ocr-bench/run.sh` prints pass counts and CER (character
+error rate) per area. Rerun it after *any* Capture Text change — the unit tests alone were 120/120 green
+while the corpus passed 10/66. Owner decision: **math pastes as Unicode text, not LaTeX** (`x²`, `aₙ`,
+`(a + b)/2`, `√(x + 1)`; `^(…)`/`_(…)` only where Unicode has no glyph). Pipeline, all in CaptureKit:
+`TextRecognizer` (Vision pass; second pass with language correction **off** only when `TextReflow.containsCode`,
+matched back by box IoU (intersection over union) into `Line.rawText`; per-line `ScriptRecovery`; ` x ` between numbers → `×`) →
+`TextReflow.paragraphs(lines, imageSize:, ruleLength:)`. Invariants that were bugs before: **keep Vision's
+observation order** (it is column-aware reading order — never re-sort by y); **all geometry in pixels**
+(normalized x and y differ by the aspect ratio); same-row fragments join **left to right**. `TextReflow`
+then finds grids (≥2 rows of separated cells whose x-bands line up → tab rows; prose-y bands = side-by-side
+columns, left alone; prose + short right-hand tags = "annotated" rows), code (regex signals + monospace
+char width → indentation from left edges, blank lines from pitch), prose (gap/pitch/font-change/list/indent
+rules + the next-word fit test, which is skipped for math lines and replaced by punctuation/case for a
+column's longest line). `MathLayout.swift` rebuilds stacked fractions (needs a bar ≈ the fraction's width
+*and* something beside it on the bar's line — a table border runs far wider) and detached exponents.
+`ScriptRecovery.swift` (+ `InkMap.swift`: Otsu binarization, 8-connected blobs) finds glyphs per line,
+marks raised/lowered ones against the full-size glyph before them, and re-reads a straightened copy through
+Vision when Vision's own characters can't be trusted; it also turns a radical blob into `√(…)`, `+` with a
+bar under into `±`, `‡` into `≠`/`±`, and an inline stacked fraction into `n/2` (single glyphs are read with
+a typeset `a = ` prefix because Vision won't read a lone glyph). Every mapping is per word and all-or-nothing:
+when glyphs and characters don't line up one-to-one, Vision's word is kept untouched. **No-harm guard
+(`ScriptRecovery.isFaithful`):** a rewrite may only add scripts and known repairs — every full-size glyph keeps
+Vision's character — except on lines Vision itself scored < 0.9 confidence, where a re-read Vision is sure of
+(≥ 0.9) may correct letters. The rebuilt text goes in `Line.recovered`; `Line.text` stays Vision's read
+(layout and code detection use it). Diff every corpus run against a saved baseline
+(`tools/ocr-bench/diff.py`) — aggregate pass counts hide regressions. `Homoglyphs.swift` maps
+Cyrillic/Greek look-alikes to Latin unless the user reads those scripts. QR: payload wins only when the code
+covers ≥ 20% of the selection; otherwise it is appended to the text. Known gaps: Greek/big operators Vision
+can't read (π θ ∑ ∫ ∀ ε), limits, matrices, cube roots; hyphenated compounds split at a line end lose the
+hyphen (needs a dictionary). The Windows port's OCR was **not** updated.
 
 **Text fonts/boxes + floating recording controls + Trim** (built 2026-09-24 on `main`, untagged,
 directly without a new spec at the owner's request — Trim follows its 2026-06-05 spec with one owner
