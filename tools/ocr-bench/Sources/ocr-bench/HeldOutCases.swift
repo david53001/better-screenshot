@@ -443,4 +443,17 @@ let noHarm: [Case] = [
          css: "#cap{font-family:Georgia;font-size:17px;line-height:1.6} p{margin:0}",
          html: #"<p>The students’ results beat the 1990s’ averages; it’s James’s notebook, not the teachers’.</p>"#,
          expected: ["The students’ results beat the 1990s’ averages; it’s James’s notebook, not the teachers’."]),
+
+    // Written after the table-cell pass (ink Vision didn't box, read on its own):
+    // icons in a list's column must not come out as letters.
+    Case(id: "N07", area: .layout, desc: "no-harm: sidebar with drawn icons, a header and counts", width: 360,
+         css: "#cap{font-family:-apple-system,'SF Pro Text',Helvetica;font-size:14px;background:#f2f2f4;padding:18px 20px} .h{font-size:11px;font-weight:600;color:#888;margin-bottom:6px} .r{display:flex;align-items:center;height:30px} .i{width:16px;height:16px;margin-right:10px;box-sizing:border-box} .n{margin-left:auto;color:#888}",
+         html: #"""
+         <div class="h">Favourites</div>
+         <div class="r"><div class="i" style="border:2px solid #2f7cf6;border-radius:3px"></div>Desktop<span class="n">12</span></div>
+         <div class="r"><div class="i" style="border:2px solid #2f7cf6;border-radius:50%"></div>Documents<span class="n">48</span></div>
+         <div class="r"><div class="i" style="background:#2f7cf6;border-radius:50%"></div>Downloads<span class="n">7</span></div>
+         <div class="r"><div class="i" style="border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:14px solid #2f7cf6"></div>Pictures<span class="n">230</span></div>
+         """#,
+         expected: tabOrSpace("Favourites\nDesktop\t12\nDocuments\t48\nDownloads\t7\nPictures\t230")),
 ]

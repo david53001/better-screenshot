@@ -263,18 +263,22 @@ enum ScriptRecovery {
     /// bullet `•` twice that. Math lines are left alone (a minus is en-dash wide).
     static func dashesAndDots(_ text: String, rect: CGRect, in image: CGImage, excluding others: [CGRect] = []) -> String? {
         let separators = text.range(of: #"\d[.,]\d{3}(?!\d)"#, options: .regularExpression) != nil
-        guard text.contains("-") || text.contains("•") || separators, !TextReflow.isMath(text)
+        let marker = text.range(of: #"^\S "#, options: .regularExpression) != nil
+        guard text.contains("-") || text.contains("•") || separators || marker, !TextReflow.isMath(text)
         else { return nil }
         let chars = Array(text)
         let positions = chars.indices.filter { !chars[$0].isWhitespace }
         let read = positions.map { chars[$0] }
         guard let line = lineGlyphs(rect: rect, in: image, excluding: others),
               let spans = alignment(Array(line.glyphs.indices), read, spaces: spacePositions(text), line) else { return nil }
-        var out = chars, solid = false
+        var out = chars, dropMarker = false
         for (k, span) in spans.enumerated() where span.count == 1 {
             let j = span.lowerBound, i = positions[j], g = line.glyphs[k].box, cap = line.capHeight
             let before: Character? = i > 0 ? chars[i - 1] : nil, after: Character? = i + 1 < chars.count ? chars[i + 1] : nil
-            if read[j] == "-", g.height < 0.3 * cap {
+            if j == 0, marker, isIcon(k, in: line) {
+                // An icon Vision read as a character (`•`, `A`): not text.
+                dropMarker = true
+            } else if read[j] == "-", g.height < 0.3 * cap {
                 if g.width >= 0.95 * cap {
                     out[i] = "—"
                 } else if g.width >= 0.65 * cap, !text.contains("="), !text.contains("+"),
@@ -287,7 +291,7 @@ enum ScriptRecovery {
                     out[i] = "–"
                 }
             } else if read[j] == "•", j == 0, let box = checkbox(line.glyphs[k], in: line) {
-                if let box { out[i] = box } else { solid = true }
+                if let box { out[i] = box } else { dropMarker = true }
             } else if read[j] == "•", j > 0, g.height < 0.2 * cap, g.width < 0.25 * cap {
                 out[i] = "·"
             } else if read[j] == "." || read[j] == ",", before?.isNumber == true, after?.isNumber == true {
@@ -301,9 +305,19 @@ enum ScriptRecovery {
             }
         }
         var result = String(out)
-        // A solid square is a ticked control (a settings checkbox), not a character.
-        if solid { result = String(result.drop { $0 == "•" || $0 == " " }) }
+        // An icon or a solid square (a ticked settings checkbox) is not a character.
+        if dropMarker { result = String(result.drop { $0 != " " }.drop { $0 == " " }) }
         return result == text ? nil : result
+    }
+
+    /// A line's first glyph is an icon when it stands taller than the line's
+    /// capitals (measured without it — alone, it would pass for the tallest letter).
+    private static func isIcon(_ k: Int, in line: Line) -> Bool {
+        var rest = line.glyphs
+        rest.remove(at: k)
+        guard rest.count >= 3, let text = measure(rest, blobs: line.blobs, map: line.map) else { return false }
+        let g = line.glyphs[k].box
+        return g.height > 1.25 * text.capHeight || g.width > 1.5 * text.capHeight
     }
 
     /// What Vision read as a leading `•` when it is a square: `☐` hollow, `☑`
