@@ -70,6 +70,13 @@ public enum TextRecognizer {
             if withTimesSigns(shown) != shown { lines[i].recovered = withTimesSigns(shown) }
         }
         lines = lines.indices.filter { !absorbed.contains($0) }.map { lines[$0] }
+        // Table cells Vision didn't box (a lone `v`, a `2023` header): ink in
+        // another cell's column, on a row of text, read on its own.
+        for cell in cellLines(lines, in: source) {
+            let before = lines.lastIndex { $0.box.midY < cell.box.minY
+                || $0.box.maxX < cell.box.minX && abs($0.box.midY - cell.box.midY) < 0.5 * cell.box.height }
+            lines.insert(cell, at: before.map { $0 + 1 } ?? 0)
+        }
         // Displayed formulas Vision boxed in pieces (limits, stacked fractions).
         lines = DisplayMath.rebuilding(lines, in: source) { readLine($0)?.text }
         // Language correction "fixes" code into prose (`items.reduce(` →
@@ -159,6 +166,72 @@ public enum TextRecognizer {
             var pixel = box.offsetBy(dx: region.minX, dy: region.minY).insetBy(dx: 0, dy: -(h - box.height) / 2)
             let start = pixel.minX + box.width / CGFloat(max(text.count, 1)) / 2 - cell / 2
             pixel = CGRect(x: start, y: pixel.minY, width: cell * CGFloat(text.count), height: pixel.height)
+            found.append(TextReflow.Line(text: text, box: CGRect(x: pixel.minX / size.width, y: pixel.minY / size.height,
+                                                                 width: pixel.width / size.width, height: pixel.height / size.height)))
+        }
+        return found
+    }
+
+    /// Ink Vision left unboxed that sits in a table cell: on the row of a line,
+    /// clear of it, and under or over another line in some other row.
+    private static func cellLines(_ lines: [TextReflow.Line], in image: CGImage) -> [TextReflow.Line] {
+        let size = CGSize(width: image.width, height: image.height)
+        let boxes = lines.map { CGRect(x: $0.box.minX * size.width, y: $0.box.minY * size.height,
+                                       width: $0.box.width * size.width, height: $0.box.height * size.height) }
+        guard boxes.count >= 4, let first = boxes.first else { return [] }
+        let heights = boxes.map(\.height).sorted()
+        let h = heights[heights.count / 2]
+        let union = boxes.dropFirst().reduce(first) { $0.union($1) }
+        let region = union.insetBy(dx: -3 * h, dy: -0.5 * h).integral.intersection(CGRect(origin: .zero, size: size))
+        guard let map = InkMap(image, rect: region) else { return [] }
+        let local = boxes.map { $0.offsetBy(dx: -region.minX, dy: -region.minY) }
+        let covered = local.map { $0.insetBy(dx: -0.3 * h, dy: -0.15 * h) }
+        let blobs = map.blobs()
+        let loose = blobs.filter { blob in
+            blob.pixels.count >= 3 && blob.box.height <= 1.5 * h && blob.box.width <= 3 * h
+                && !covered.contains { $0.intersects(blob.box) }
+        }.sorted { $0.box.minX < $1.box.minX }
+        var clusters: [[InkMap.Blob]] = []
+        for blob in loose {
+            if let i = clusters.firstIndex(where: { cluster in
+                let box = cluster.dropFirst().reduce(cluster[0].box) { $0.union($1.box) }
+                return min(box.maxY, blob.box.maxY) - max(box.minY, blob.box.minY) > 0.3 * min(box.height, blob.box.height)
+                    && blob.box.minX - box.maxX < 0.6 * h
+            }) {
+                clusters[i].append(blob)
+            } else {
+                clusters.append([blob])
+            }
+        }
+        var found: [TextReflow.Line] = []
+        for cluster in clusters {
+            let box = cluster.dropFirst().reduce(cluster[0].box) { $0.union($1.box) }
+            guard box.height >= 0.35 * h, box.height <= 1.3 * h else { continue }
+            func overlap(_ a: CGFloat, _ b: CGFloat, _ c: CGFloat, _ d: CGFloat) -> CGFloat { min(b, d) - max(a, c) }
+            // Its row: a line beside it, of a like height, a cell's gap away.
+            let row = local.filter { overlap($0.minY, $0.maxY, box.minY, box.maxY) > 0.5 * box.height
+                && $0.height < 1.6 * h && $0.height > 0.6 * box.height }
+            guard !row.isEmpty, row.allSatisfy({ $0.minX - box.maxX > 0.8 * h || box.minX - $0.maxX > 0.8 * h })
+            else { continue }
+            // Its column: a line in another row it lines up with.
+            guard local.contains(where: { overlap($0.minX, $0.maxX, box.minX, box.maxX) > 0.3 * min($0.width, box.width)
+                && overlap($0.minY, $0.maxY, box.minY, box.maxY) < 0 }) else { continue }
+            // The row's baseline and cap height, from the ink of the line beside it.
+            guard let beside = row.min(by: { abs($0.midX - box.midX) < abs($1.midX - box.midX) }) else { continue }
+            let letters = blobs.filter { beside.contains(CGPoint(x: $0.box.midX, y: $0.box.midY)) }
+            guard letters.count >= 2 else { continue }
+            let bottoms = letters.map(\.box.maxY).sorted()
+            let baseline = bottoms[bottoms.count / 2]
+            let tops = letters.filter { abs($0.box.maxY - baseline) < 0.1 * h }.map { baseline - $0.box.minY }.sorted()
+            guard let capHeight = tops.last else { continue }
+            guard var text = ScriptRecovery.readInk(cluster, width: map.width, capHeight: capHeight, baseline: baseline, {
+                readLine($0).flatMap { $0.confidence >= 0.5 ? $0.text : nil }
+            }), text.contains(where: { $0.isLetter || $0.isNumber }) else { continue }
+            // A lone `v` is a `V` to Vision; its height says which.
+            if text.count == 1, "CKOPSUVWXZ".contains(text), box.height < 0.85 * capHeight { text = text.lowercased() }
+            // An italic `v` reads as `y`, but it has no tail below the baseline.
+            if text == "y", box.maxY < baseline + 0.1 * capHeight { text = "v" }
+            let pixel = box.offsetBy(dx: region.minX, dy: region.minY).insetBy(dx: 0, dy: -max(0, h - box.height) / 2)
             found.append(TextReflow.Line(text: text, box: CGRect(x: pixel.minX / size.width, y: pixel.minY / size.height,
                                                                  width: pixel.width / size.width, height: pixel.height / size.height)))
         }

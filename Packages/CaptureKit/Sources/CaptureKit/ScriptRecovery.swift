@@ -176,7 +176,9 @@ enum ScriptRecovery {
     /// ` – ` between words), a hyphen half; a middle dot `·` is a speck, a
     /// bullet `•` twice that. Math lines are left alone (a minus is en-dash wide).
     static func dashesAndDots(_ text: String, rect: CGRect, in image: CGImage, excluding others: [CGRect] = []) -> String? {
-        guard text.contains("-") || text.dropFirst(2).contains("•"), !TextReflow.isMath(text) else { return nil }
+        let separators = text.range(of: #"\d[.,]\d{3}(?!\d)"#, options: .regularExpression) != nil
+        guard text.contains("-") || text.dropFirst(2).contains("•") || separators, !TextReflow.isMath(text)
+        else { return nil }
         let chars = Array(text)
         let positions = chars.indices.filter { !chars[$0].isWhitespace }
         let read = positions.map { chars[$0] }
@@ -199,6 +201,14 @@ enum ScriptRecovery {
                 }
             } else if read[j] == "•", j > 0, g.height < 0.2 * cap, g.width < 0.25 * cap {
                 out[i] = "·"
+            } else if read[j] == "." || read[j] == ",", before?.isNumber == true, after?.isNumber == true {
+                // A separator between digits: a comma has a tail, a full stop is
+                // round (the baseline is no help with old-style figures).
+                if read[j] == ".", g.height > 0.3 * cap, g.height > 1.4 * g.width {
+                    out[i] = ","
+                } else if read[j] == ",", g.height < 0.25 * cap, g.height < 1.2 * g.width {
+                    out[i] = "."
+                }
             }
         }
         let result = String(out)
@@ -863,34 +873,41 @@ enum ScriptRecovery {
     }
 
     /// Reads loose ink (pixel indices into a map `width` wide) the same way:
-    /// scaled to text size behind a typeset `a = `.
-    static func readInk(_ blobs: [InkMap.Blob], width mapWidth: Int, capHeight: CGFloat,
+    /// scaled to text size behind a typeset `a = `. Given the `baseline` of the
+    /// text it came from (and that text's cap height), it keeps its size and
+    /// place instead, so an `x` isn't blown up into an `X`.
+    static func readInk(_ blobs: [InkMap.Blob], width mapWidth: Int, capHeight: CGFloat, baseline: CGFloat? = nil,
                         _ reread: (CGImage) -> String?) -> String? {
         guard let first = blobs.first else { return nil }
         let box = blobs.dropFirst().reduce(first.box) { $0.union($1.box) }
-        let scale = max(1, min(3, capHeight / max(box.height, 1)))
-        let margin = max(16, Int(capHeight))
-        let font = CTFontCreateWithName("Helvetica" as CFString, capHeight / 0.72, nil)
+        let base = baseline ?? box.maxY
+        let scale = baseline == nil ? max(1, min(3, capHeight / max(box.height, 1))) : max(1, min(3, 30 / max(capHeight, 1)))
+        let cap = baseline == nil ? capHeight : capHeight * scale
+        let margin = max(16, Int(cap))
+        let font = CTFontCreateWithName("Helvetica" as CFString, cap / 0.72, nil)
         let prefix = CTLineCreateWithAttributedString(NSAttributedString(
             string: "a = ", attributes: [NSAttributedString.Key(kCTFontAttributeName as String): font]))
         let prefixWidth = CTLineGetTypographicBounds(prefix, nil, nil, nil)
+        let below = max(0, box.maxY - base) * scale
+        let above = baseline == nil ? box.height * scale : max(cap, (base - box.minY) * scale)
         let width = Int((box.width * scale + prefixWidth).rounded(.up)) + 2 * margin
-        let height = Int((box.height * scale).rounded(.up)) + 2 * margin
+        let height = Int((above + below).rounded(.up)) + 2 * margin
         guard let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
                                   space: CGColorSpaceCreateDeviceGray(),
                                   bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return nil }
         ctx.setFillColor(gray: 1, alpha: 1)
         ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
         ctx.setFillColor(gray: 0, alpha: 1)
-        // Sit the prefix on the part's baseline (its bottom edge).
-        ctx.textPosition = CGPoint(x: CGFloat(margin), y: CGFloat(margin))
+        // Sit the prefix on the part's baseline (its bottom edge by default).
+        let baseY = CGFloat(margin) + below
+        ctx.textPosition = CGPoint(x: CGFloat(margin), y: baseY)
         CTLineDraw(prefix, ctx)
         let left = CGFloat(margin) + prefixWidth
         for blob in blobs {
             for p in blob.pixels {
                 let x = (CGFloat(p % mapWidth) - box.minX) * scale + left
-                let y = (CGFloat(p / mapWidth) - box.minY) * scale + CGFloat(margin)
-                ctx.fill(CGRect(x: x, y: CGFloat(height) - y - scale, width: scale, height: scale))
+                let y = baseY + (base - CGFloat(p / mapWidth) - 1) * scale
+                ctx.fill(CGRect(x: x, y: y, width: scale, height: scale))
             }
         }
         guard let text = ctx.makeImage().flatMap(reread), let equals = text.firstIndex(of: "=") else { return nil }
