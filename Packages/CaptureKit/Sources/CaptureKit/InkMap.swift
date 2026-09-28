@@ -106,4 +106,42 @@ struct InkMap {
         }
         return blobs.sorted { $0.box.minX < $1.box.minX }
     }
+
+    /// The enclosed holes of a shape made of `pixels` (indices into this map)
+    /// inside `box`: background regions the ink walls off from the box's edge
+    /// (`o` has one, `θ` and `8` two). Specks under 2% of the box are noise.
+    func holes(of pixels: [Int], in box: CGRect) -> [CGRect] {
+        let x0 = Int(box.minX), y0 = Int(box.minY), w = Int(box.width), h = Int(box.height)
+        guard w > 2, h > 2 else { return [] }
+        var cell = [Int8](repeating: 0, count: w * h) // 0 background, 1 ink, 2 reached
+        for p in pixels {
+            let x = p % width - x0, y = p / width - y0
+            if x >= 0, x < w, y >= 0, y < h { cell[y * w + x] = 1 }
+        }
+        func fill(_ start: Int, mark: Int8) -> [Int] {
+            var region: [Int] = [], stack = [start]
+            cell[start] = mark
+            while let q = stack.popLast() {
+                region.append(q)
+                let x = q % w, y = q / w
+                for (nx, ny) in [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)]
+                    where nx >= 0 && nx < w && ny >= 0 && ny < h && cell[ny * w + nx] == 0 {
+                    cell[ny * w + nx] = mark
+                    stack.append(ny * w + nx)
+                }
+            }
+            return region
+        }
+        for x in 0..<w { for y in [0, h - 1] where cell[y * w + x] == 0 { _ = fill(y * w + x, mark: 2) } }
+        for y in 0..<h { for x in [0, w - 1] where cell[y * w + x] == 0 { _ = fill(y * w + x, mark: 2) } }
+        var holes: [CGRect] = []
+        for start in 0..<(w * h) where cell[start] == 0 {
+            let region = fill(start, mark: 3)
+            guard Double(region.count) >= max(2, 0.02 * Double(w * h)) else { continue }
+            let xs = region.map { $0 % w }, ys = region.map { $0 / w }
+            holes.append(CGRect(x: x0 + xs.min()!, y: y0 + ys.min()!,
+                                width: xs.max()! - xs.min()! + 1, height: ys.max()! - ys.min()! + 1))
+        }
+        return holes
+    }
 }

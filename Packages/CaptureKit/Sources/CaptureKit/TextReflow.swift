@@ -597,6 +597,8 @@ public enum TextReflow {
     private static func wrapped(_ prev: Seg, before next: Seg, column: [Seg]) -> Bool {
         // Display equations stand alone; they don't wrap into each other.
         if isMath(prev.shown) && isMath(next.shown) { return false }
+        // A row of bare numbers (a matrix row, a score) isn't a sentence.
+        guard prev.text.contains(where: \.isLetter) else { return false }
         let charWidth = prev.charWidth
         let right = column.filter { overlapsHorizontally($0.box, prev.box) }.map(\.box.maxX).max() ?? prev.box.maxX
         if prev.box.maxX < right - charWidth {

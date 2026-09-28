@@ -22,10 +22,17 @@ public enum TextRecognizer {
         var lines = reflowLines(textRequest.results ?? [])
         let confidences = (textRequest.results ?? []).compactMap { $0.topCandidates(1).first?.confidence }
         var absorbed = Set<Int>()
+        func pixels(_ b: CGRect) -> CGRect {
+            CGRect(x: b.minX * size.width, y: b.minY * size.height, width: b.width * size.width, height: b.height * size.height)
+        }
         for i in lines.indices {
             let b = lines[i].box
-            let rect = CGRect(x: b.minX * size.width, y: b.minY * size.height,
-                              width: b.width * size.width, height: b.height * size.height)
+            let rect = pixels(b)
+            // Words Vision boxed on their own beside this line keep their ink —
+            // except a detached exponent: short and raised (`nt` of `(1 + r/n)ⁿᵗ`).
+            let others = lines.indices.filter { j in
+                j != i && (lines[j].text.count > 4 || lines[j].box.midY > b.minY + 0.35 * b.height)
+            }.map { pixels(lines[$0].box) }
             // Vision's own read stays in `text` (layout and code go by it); the
             // rebuilt math goes in `recovered` for prose and tables.
             var recovered: String?
@@ -33,14 +40,16 @@ public enum TextRecognizer {
                 // A shaky first read (`21120` for `2H₂O`, confidence 0.5) may be
                 // replaced by re-reads Vision is sure of.
                 var sure = true
-                recovered = ScriptRecovery.recover(lines[i].text, rect: rect, in: source, confident: false) {
+                recovered = ScriptRecovery.recover(lines[i].text, rect: rect, in: source, excluding: others,
+                                                   confident: false) {
                     let read = readLine($0)
                     if (read?.confidence ?? 0) < 0.9 { sure = false }
                     return read?.text
                 }
                 if !sure { recovered = nil }
             }
-            recovered = recovered ?? ScriptRecovery.recover(lines[i].text, rect: rect, in: source) { readLine($0)?.text }
+            recovered = recovered ?? ScriptRecovery.recover(lines[i].text, rect: rect, in: source,
+                                                                  excluding: others) { readLine($0)?.text }
             if let text = recovered {
                 lines[i].recovered = text
                 // An exponent Vision also boxed on its own (`nt` raised beside

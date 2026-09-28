@@ -28,6 +28,9 @@ enum ScriptRecovery {
         /// An inline stacked fraction (`n` over a bar over `2`): the blobs of
         /// its numerator and denominator.
         var fraction: (numerator: [Int], denominator: [Int])? = nil
+        /// A fraction running past the line's box: part of it belongs to a line
+        /// Vision boxed separately, so its own read is kept.
+        var clipped = false
         /// Not a letter-sized glyph: leave it out of size and baseline estimates.
         var isStructure: Bool { container || fraction != nil }
     }
@@ -40,6 +43,10 @@ enum ScriptRecovery {
         /// Height of capitals and digits; the unit for every threshold.
         var capHeight: CGFloat
         var baseline: CGFloat
+        /// A trigonometric function is on the line, so `0`/`o` may be `θ`.
+        var trig = false
+        /// `dx`, `dt`…: a tall stroke may be an integral sign.
+        var hasDifferential = false
     }
 
     /// `rect` is the line's box in `image` (pixels, top-left origin).
@@ -47,13 +54,15 @@ enum ScriptRecovery {
     /// `confident`: Vision was sure of its read (confidence ≥ 0.9). Only then
     /// must every full-size glyph keep Vision's character; a shaky read
     /// (`21120` for `2H₂O`, confidence 0.5) may be corrected by the re-read.
-    static func recover(_ text: String, rect: CGRect, in image: CGImage, confident: Bool = true,
-                        reread: (CGImage) -> String?) -> String? {
+    /// `others`: the boxes of other lines, whose ink is left out.
+    static func recover(_ text: String, rect: CGRect, in image: CGImage, excluding others: [CGRect] = [],
+                        confident: Bool = true, reread: (CGImage) -> String?) -> String? {
         let pad = rect.height * 0.3
         let crop = rect.insetBy(dx: -pad, dy: -pad).integral
             .intersection(CGRect(x: 0, y: 0, width: image.width, height: image.height))
         guard let map = InkMap(image, rect: crop) else { return nil }
         let core = rect.offsetBy(dx: -crop.minX, dy: -crop.minY)
+        let neighbours = others.map { $0.offsetBy(dx: -crop.minX, dy: -crop.minY) }
         // Ink of this line only: a descender from the line above or an ascender
         // from the line below pokes into the padded crop but ends outside the box.
         let blobs = map.blobs().filter { blob in
@@ -61,13 +70,21 @@ enum ScriptRecovery {
                 && blob.box.maxY > core.minY + 0.1 * core.height && blob.box.minY < core.maxY - 0.1 * core.height
                 && blob.box.minY > core.minY - 0.25 * core.height && blob.box.maxY < core.maxY + 0.25 * core.height
                 && blob.box.maxX > core.minX - core.height && blob.box.minX < core.maxX + core.height
+                && !neighbours.contains { $0.contains(CGPoint(x: blob.box.midX, y: blob.box.midY)) && !core.contains(CGPoint(x: blob.box.midX, y: blob.box.midY)) }
         }
-        let glyphs = self.glyphs(blobs, lineHeight: core.height)
+        var glyphs = self.glyphs(blobs, lineHeight: core.height)
+        for i in glyphs.indices where glyphs[i].fraction != nil {
+            let box = glyphs[i].box
+            glyphs[i].clipped = box.minY < core.minY - 0.1 * core.height || box.maxY > core.maxY + 0.1 * core.height
+        }
         guard glyphs.count >= 2, var line = measure(glyphs, blobs: blobs, map: map) else { return nil }
         let hasScripts = classify(&line)
+        line.trig = text.range(of: #"(?<![A-Za-z])(?:sin|cos|tan|sec|csc|cot)"#, options: .regularExpression) != nil
+        line.hasDifferential = text.range(of: #"(?<![A-Za-z])d[a-zθ](?![a-z])"#, options: .regularExpression) != nil
         // Symbols Vision reads as look-alikes: a square root as `V`, `±` as `+`,
-        // `≠` and `±` as `‡`.
+        // `≠` and `±` as `‡`, `θ` as `0`.
         let hasSymbols = line.glyphs.contains(where: \.isStructure) || text.contains("‡") || text.contains("+")
+            || line.trig || line.hasDifferential
         guard hasScripts || hasSymbols else { return nil }
 
         var words = text.split(whereSeparator: \.isWhitespace).map { Array($0) }
@@ -93,9 +110,28 @@ enum ScriptRecovery {
             glyphTexts(pair.0, read: pair.1, spaces: spaces[g], line, fixCase: hasScripts, confident: confident, reread)
         }
         guard pieces.contains(where: { $0 != nil }) else { return nil }
-        let out = assemble(groups, pieces: pieces, words: words, line)
+        let out = repairingLog(assemble(groups, pieces: pieces, words: words, line))
         return out == text ? nil : out
     }
+
+    /// Two holes stacked one above the other in a full-size glyph: `θ` (Vision
+    /// reads it `0`, `o` or `A`). A slashed zero's holes sit side by side.
+    static func isTheta(_ glyph: Glyph, _ line: Line) -> Bool {
+        guard glyph.box.height >= 0.6 * line.capHeight, !glyph.isStructure else { return false }
+        let holes = line.map.holes(of: glyph.blobs.flatMap { line.blobs[$0].pixels }, in: glyph.box)
+            .sorted { $0.midY < $1.midY }
+        guard holes.count == 2 else { return false }
+        return abs(holes[0].midX - holes[1].midX) < 0.3 * glyph.box.width && holes[0].maxY <= holes[1].minY + 1
+    }
+
+    /// `log` with a subscript base or an argument, whatever look-alikes Vision
+    /// read for it (`10g₂8`, `l0gₐx`).
+    static func repairingLog(_ text: String) -> String {
+        logLookAlike.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "log")
+    }
+
+    private static let logLookAlike = try! NSRegularExpression(
+        pattern: #"(?<![\p{L}\p{N}])[l1I|][o0O]g(?=[₀-₉ₐₑₒₓₕₖₗₘₙₚₛₜ(])"#)
 
     /// Joins the words back into a line, opening `√(` at a radical and closing
     /// it after the last glyph under its bar.
@@ -206,7 +242,9 @@ enum ScriptRecovery {
             defer {
                 // Only a full-size glyph can carry scripts (not the dot of an `i`).
                 let glyph = line.glyphs[i]
-                if glyph.kind == .normal && !glyph.isStructure && glyph.box.height >= 0.4 * cap { base = glyph }
+                // …nor an apostrophe, which doesn't sit on the baseline.
+                if glyph.kind == .normal && !glyph.isStructure && glyph.box.height >= 0.4 * cap
+                    && glyph.box.maxY > line.baseline - 0.3 * cap { base = glyph }
             }
             guard let b = base, !g.isStructure, i > 0,
                   g.box.minX - line.glyphs[i - 1].box.maxX < 0.6 * cap else { continue }
@@ -260,107 +298,197 @@ enum ScriptRecovery {
     /// One word: its glyphs and Vision's characters for it (`spaces[i]`: a
     /// space before character `i`). Returns the text for each glyph, or nil to
     /// keep Vision's word as it is.
+    ///
+    /// Characters are matched to glyphs by `alignment`, not one-to-one: italic
+    /// letters touch (`2x` is one blob), a stacked fraction is one glyph Vision
+    /// reads as anything from nothing to a whole numerator, and Vision drops
+    /// small scripts. Each character becomes a slot on its glyph; a script or
+    /// fraction glyph always has exactly one slot.
     private static func glyphTexts(_ group: [Int], read: [Character], spaces: Set<Int>, _ line: Line,
                                    fixCase: Bool, confident: Bool, _ reread: (CGImage) -> String?) -> [String]? {
-        var kinds = group.map { line.glyphs[$0].kind }
-        var chars = read
-        var specks = Set<Int>()
-        var spaces = spaces
-        if read.count == group.count {
-            // Vision's spaces must fall on word gaps. One inside a word means a
-            // merged glyph and a dropped one cancelled out, and every character
-            // after it sits on the wrong glyph (`is 1 − 3/10` → `is 13/10…`).
-            let gaps = group.indices.dropFirst().map { line.glyphs[group[$0]].box.minX - line.glyphs[group[$0 - 1]].box.maxX }
-            let letterGaps = gaps.indices.filter { !spaces.contains($0 + 1) }.map { gaps[$0] }.sorted()
-            let letterGap = letterGaps.isEmpty ? 0 : letterGaps[letterGaps.count / 2]
-            guard letterGaps.count < 8 // too few to know a letter gap (`x² − 9`)
-                    || spaces.allSatisfy({ $0 < 1 || $0 >= group.count || gaps[$0 - 1] > letterGap + 0.1 * line.capHeight })
-            else { return nil }
-            // A speck on the baseline is a comma or full stop, whatever Vision
-            // made of it next to a fraction (`3/10,` read as `To`).
-            for i in kinds.indices where kinds[i] == .normal && (read[i].isLetter || read[i].isNumber) {
-                let glyph = line.glyphs[group[i]]
-                guard !glyph.isStructure, glyph.box.height < 0.4 * line.capHeight,
-                      glyph.box.minY > line.baseline - 0.5 * line.capHeight else { continue }
-                chars[i] = glyph.box.maxY > line.baseline + 0.12 * line.capHeight ? "," : "."
-                specks.insert(i)
+        let original = read
+        var read = read, spaces = spaces
+        if !confident, group.contains(where: { line.glyphs[$0].kind != .normal }),
+           let text = rereadGroup(group, kinds: group.map { line.glyphs[$0].kind }, line, reread) {
+            // A shaky first read (`21120` for `2H₂O`): a sure re-read of the
+            // straightened word replaces it, if it isn't unrecognisably different.
+            let fixed = Array(text.filter { !$0.isWhitespace })
+            if distance(String(fixed), String(read)) * 4 <= read.count * 3 {
+                read = fixed
+                spaces = spacePositions(text)
             }
-            // Punctuation is meant to sit high or low: a narrow comma or dot, a
-            // small apostrophe or degree sign. (A digit-sized `'` or `,` is
-            // Vision misreading `x²` / `log₂`.)
-            for i in kinds.indices where kinds[i] != .normal {
-                let box = line.glyphs[group[i]].box, cap = line.capHeight
-                if ",.;:".contains(read[i]) && box.height < 0.55 * cap
-                    || "'’‘\"“”`°*^".contains(read[i]) && (box.height < 0.45 * cap || box.width < 0.25 * cap) {
-                    kinds[i] = .normal
-                }
-            }
-            // Vision's character for a script glyph can't be trusted when it is
-            // punctuation (`'` / `?` for `²`), a descender letter or `z` for a
-            // lowered digit (`a₁` → `ay`, `CO₂` → `COz`), or a lone sign
-            // (`sin⁻0` for `sin²θ` would read as an inverse sine).
-            func runHasAlphanumeric(_ i: Int) -> Bool {
-                var lo = i, hi = i
-                while lo > 0, kinds[lo - 1] == kinds[i] { lo -= 1 }
-                while hi + 1 < kinds.count, kinds[hi + 1] == kinds[i] { hi += 1 }
-                return read[lo...hi].contains { $0.isLetter || $0.isNumber }
-            }
-            let misread = kinds.indices.contains { i in
-                guard kinds[i] != .normal else { return false }
-                return !isScriptable(read[i]) || kinds[i] == .sub && "gjpqyzZ".contains(read[i])
-                    || read[i] == "=" || "+-−".contains(read[i]) && !runHasAlphanumeric(i)
-            }
-            if misread {
-                guard let text = rereadGroup(group, kinds: kinds, line, reread) else { return nil }
-                let fixed = Array(text.filter { !$0.isWhitespace })
-                if fixed.count == group.count {
-                    // A sure first read keeps its full-size glyphs (`π` read
-                    // `T`, re-read `n`); only the scripts come from the re-read.
-                    chars = confident ? kinds.indices.map { kinds[$0] == .normal ? read[$0] : fixed[$0] } : fixed
-                    spaces = confident ? spaces : spacePositions(text)
-                } else if let aligned = align(fixed, to: read, kinds: kinds) {
-                    // The re-read got some other glyph wrong (`π` → `ni`): keep
-                    // Vision's first read and take only the scripts from it.
-                    chars = aligned
-                } else {
-                    return nil
-                }
-            }
-        } else {
-            // Vision dropped or merged glyphs (`E = mc` for `E = mc²`).
-            guard kinds.contains(where: { $0 != .normal }),
-                  let text = rereadGroup(group, kinds: kinds, line, reread) else { return nil }
-            chars = Array(text.filter { !$0.isWhitespace })
-            guard chars.count == group.count else { return nil }
-            spaces = spacePositions(text)
         }
-        if fixCase { chars = lowercasingSmallCapitals(chars, kinds, group, line) }
-        for i in chars.indices where kinds[i] == .normal {
-            let glyph = line.glyphs[group[i]]
+        guard let spans = alignment(group, read, spaces: spaces, line) else { return nil }
+        var slotGlyph: [Int] = [], slotOf: [Int] = [], chars: [Character] = [], kinds: [Glyph.Kind] = []
+        var slotSpaces = Set<Int>()
+        var badSpans = Set<Int>()
+        for (k, index) in group.enumerated() {
+            let glyph = line.glyphs[index], span = spans[k]
+            let single = glyph.kind != .normal || glyph.fraction != nil
+            let positions = single ? [span.lowerBound] : Array(span)
+            if single && glyph.fraction == nil && span.count != 1 { badSpans.insert(chars.count) }
+            for (n, position) in positions.enumerated() {
+                if position > 0 && spaces.contains(position) && (n == 0 || !single) { slotSpaces.insert(chars.count) }
+                slotGlyph.append(index)
+                slotOf.append(k)
+                kinds.append(glyph.kind)
+                chars.append(span.count == 0 || !read.indices.contains(position) ? "?" : read[position])
+            }
+        }
+        var repaired = Set<Int>()
+        // A symbol that is a superscript already (`™`, `®`, `°`, `²`): keep
+        // Vision's character for the run and drop the run's other slots.
+        var dropped = Set<Int>()
+        for i in chars.indices where kinds[i] != .normal && "™®©°ªº¹²³⁰⁴⁵⁶⁷⁸⁹ⁿ℠".contains(chars[i]) {
+            var lo = i, hi = i
+            while lo > 0, kinds[lo - 1] == kinds[i] { lo -= 1 }
+            while hi + 1 < kinds.count, kinds[hi + 1] == kinds[i] { hi += 1 }
+            for j in lo...hi where j != i && chars[j] == "?" { dropped.insert(j); repaired.insert(j) }
+            for j in lo...hi { kinds[j] = .normal }
+            repaired.insert(i)
+        }
+        let firstRead = chars
+        var spacesOut = slotSpaces
+        // A speck on the baseline is a comma or full stop, whatever Vision
+        // made of it next to a fraction (`3/10,` read as `To`).
+        for i in kinds.indices where kinds[i] == .normal && (chars[i].isLetter || chars[i].isNumber)
+            && slotGlyph.filter({ $0 == slotGlyph[i] }).count == 1 {
+            let glyph = line.glyphs[slotGlyph[i]]
+            guard !glyph.isStructure, glyph.box.height < 0.4 * line.capHeight,
+                  glyph.box.minY > line.baseline - 0.5 * line.capHeight else { continue }
+            chars[i] = glyph.box.maxY > line.baseline + 0.12 * line.capHeight ? "," : "."
+            repaired.insert(i)
+        }
+        // Punctuation is meant to sit high or low: a narrow comma or dot, a
+        // small apostrophe or degree sign. (A digit-sized `'` or `,` is
+        // Vision misreading `x²` / `log₂`.)
+        for i in kinds.indices where kinds[i] != .normal && line.glyphs[slotGlyph[i]].fraction == nil {
+            let box = line.glyphs[slotGlyph[i]].box, cap = line.capHeight
+            if ",.;:".contains(chars[i]) && box.height < 0.55 * cap
+                || "'’‘\"“”`°*^".contains(chars[i]) && (box.height < 0.45 * cap || box.width < 0.25 * cap) {
+                kinds[i] = .normal
+            }
+        }
+        // Vision's character for a script glyph can't be trusted when it is
+        // missing, punctuation (`'` / `?` for `²`), a descender letter or `z`
+        // for a lowered digit (`a₁` → `ay`, `CO₂` → `COz`), `=` (`s⁻²` →
+        // `s=2`), or a lone sign (`sin⁻0` for `sin²θ` would read as an inverse sine).
+        func runHasAlphanumeric(_ i: Int) -> Bool {
+            var lo = i, hi = i
+            while lo > 0, kinds[lo - 1] == kinds[i] { lo -= 1 }
+            while hi + 1 < kinds.count, kinds[hi + 1] == kinds[i] { hi += 1 }
+            return chars[lo...hi].contains { $0.isLetter || $0.isNumber }
+        }
+        let misread = badSpans.contains { kinds[$0] != .normal } || kinds.indices.contains { i in
+            guard kinds[i] != .normal else { return false }
+            return !isScriptable(chars[i]) || kinds[i] == .sub && "gjpqyzZ".contains(chars[i])
+                || chars[i] == "=" || "+-−".contains(chars[i]) && !runHasAlphanumeric(i)
+        }
+        let hasScripts = kinds.contains { $0 != .normal }
+        // Per glyph again: a punctuation demotion above is a glyph's kind now.
+        let glyphKinds = group.indices.map { k in slotOf.firstIndex(of: k).map { kinds[$0] } ?? line.glyphs[group[k]].kind }
+        let text = misread || hasScripts ? rereadGroup(group, kinds: glyphKinds, line, reread) : nil
+        if misread && text == nil { return nil }
+        if let text {
+            let fixed = Array(text.filter { !$0.isWhitespace })
+            var fixedSpaces = spacePositions(text)
+            if !misread {
+                // The scripts were read fine; the re-read only settles the
+                // letter right before them, which Vision reads as a digit when a
+                // script crowds it (`3x²` → `322`).
+                if fixed.count == chars.count {
+                    for i in chars.indices.dropLast() where kinds[i] == .normal && kinds[i + 1] != .normal
+                        && chars[i].isNumber && fixed[i].isLetter && fixed[i + 1] == chars[i + 1] {
+                        chars[i] = fixed[i]
+                        repaired.insert(i)
+                    }
+                }
+            } else if fixed.count == chars.count {
+                // A sure first read keeps its full-size glyphs (`π` read `T`,
+                // re-read `n`); only the scripts come from the re-read.
+                chars = confident ? kinds.indices.map { kinds[$0] == .normal ? chars[$0] : fixed[$0] } : fixed
+                if !confident { spacesOut = fixedSpaces }
+            } else if let again = alignment(group, fixed, spaces: fixedSpaces, line, kinds: glyphKinds) {
+                // The re-read split the glyphs differently: take each script
+                // glyph's character from it (and, on a shaky line, whole glyphs
+                // whose slots match).
+                for i in chars.indices {
+                    let span = again[slotOf[i]]
+                    let slotsHere = slotOf.filter { $0 == slotOf[i] }.count
+                    if kinds[i] != .normal {
+                        guard span.count == 1 else { return nil }
+                        chars[i] = fixed[span.lowerBound]
+                    } else if !confident, span.count == slotsHere {
+                        chars[i] = fixed[span.lowerBound + (i - slotOf.firstIndex(of: slotOf[i])!)]
+                    }
+                }
+                fixedSpaces = []
+            } else if chars.count == read.count, let aligned = align(fixed, to: chars, kinds: kinds) {
+                // The re-read got some other glyph wrong (`π` → `ni`): keep
+                // Vision's first read and take only the scripts from it.
+                chars = aligned
+            } else {
+                return nil
+            }
+        }
+        // Ordinals stay on the line: `3rd`, `19th`, raised or not.
+        for i in chars.indices where kinds[i] == .sup && (i == 0 || kinds[i - 1] != .sup) && i > 0 && chars[i - 1].isNumber {
+            var end = i
+            while end + 1 < chars.count, kinds[end + 1] == .sup { end += 1 }
+            if ["st", "nd", "rd", "th"].contains(String(chars[i...end]).lowercased()) {
+                for j in i...end { kinds[j] = .normal; repaired.insert(j) }
+            }
+        }
+        if fixCase {
+            for i in chars.indices where "CKOPSUVWXZ".contains(chars[i]) && kinds[i] == .normal
+                && slotGlyph.filter({ $0 == slotGlyph[i] }).count == 1
+                && line.glyphs[slotGlyph[i]].box.height < 0.85 * line.capHeight {
+                chars[i] = Character(chars[i].lowercased())
+            }
+        }
+        for i in chars.indices where kinds[i] == .normal && slotGlyph.filter({ $0 == slotGlyph[i] }).count == 1 {
+            let glyph = line.glyphs[slotGlyph[i]]
             if chars[i] == "‡" { chars[i] = glyph.blobs.count == 1 ? "≠" : "±" }
             if chars[i] == "+", isPlusMinus(glyph, line) { chars[i] = "±" }
+            // An integral sign, read `/` or `J`: a glyph over twice the height
+            // of a capital, on a line with a `dx`.
+            if "/|JSf(".contains(chars[i]), glyph.box.height > 2.2 * line.capHeight, line.hasDifferential {
+                chars[i] = "∫"
+                repaired.insert(i)
+            }
+            if line.trig, !"B8g%&θ".contains(chars[i]), glyph.fraction == nil, isTheta(glyph, line) {
+                chars[i] = "θ"
+                repaired.insert(i)
+            }
             // Chemistry: a full-size `0` right next to a subscript is the
             // letter O (`C0₂` → `CO₂`, `H₂0` → `H₂O`).
             if chars[i] == "0", i > 0 && kinds[i - 1] == .sub || i + 1 < chars.count && kinds[i + 1] == .sub {
                 chars[i] = "O"
             }
         }
-        let structure = group.indices.map { line.glyphs[group[$0]].isStructure || specks.contains($0) }
-        guard isFaithful(chars, kinds: kinds, structure: structure, to: read, confident: confident) else { return nil }
-        var out = [String](repeating: "", count: chars.count)
-        for (k, index) in group.enumerated() {
-            guard let parts = line.glyphs[index].fraction else { continue }
+        let structure = chars.indices.map { line.glyphs[slotGlyph[$0]].isStructure || repaired.contains($0) }
+        guard isFaithful(chars, kinds: kinds, structure: structure, to: firstRead, confident: confident) else { return nil }
+        var slotOut = [String](repeating: "", count: chars.count)
+        for i in chars.indices {
+            guard let parts = line.glyphs[slotGlyph[i]].fraction else { continue }
+            if line.glyphs[slotGlyph[i]].clipped {
+                kinds[i] = .normal
+                chars[i] = " "
+                slotOut[i] = "\u{0}" + String(read[spans[slotOf[i]]])
+                continue
+            }
             guard let top = rereadBlobs(parts.numerator, line, reread),
                   let bottom = rereadBlobs(parts.denominator, line, reread) else { return nil }
-            kinds[k] = .normal
-            chars[k] = " "
-            out[k] = "\u{0}" + TextReflow.fractionPart(top) + "/" + TextReflow.fractionPart(bottom)
+            kinds[i] = .normal
+            chars[i] = " "
+            slotOut[i] = "\u{0}" + TextReflow.fractionPart(top) + "/" + TextReflow.fractionPart(bottom)
         }
         var i = 0
         while i < chars.count {
-            let space = spaces.contains(i) && i > 0 && kinds[i] == .normal ? " " : ""
+            if dropped.contains(i) { i += 1; continue }
+            let space = spacesOut.contains(i) && i > 0 && kinds[i] == .normal ? " " : ""
             guard kinds[i] != .normal else {
-                out[i] = out[i].hasPrefix("\u{0}") ? space + out[i].dropFirst() : space + String(chars[i])
+                slotOut[i] = slotOut[i].hasPrefix("\u{0}") ? space + slotOut[i].dropFirst() : space + String(chars[i])
                 i += 1
                 continue
             }
@@ -368,14 +496,130 @@ enum ScriptRecovery {
             while end + 1 < chars.count, kinds[end + 1] == kinds[i] { end += 1 }
             let run = script(String(chars[i...end]), superscript: kinds[i] == .sup)
             if run.count == end - i + 1 {
-                for (j, c) in zip(i...end, run) { out[j] = String(c) }
+                for (j, c) in zip(i...end, run) { slotOut[j] = String(c) }
             } else {
-                out[i] = run
+                slotOut[i] = run
             }
             i = end + 1
         }
+        var out = [String](repeating: "", count: group.count)
+        for (slot, k) in slotOf.enumerated() { out[k] += slotOut[slot] }
         let keepsRadical = group.contains { line.glyphs[$0].container }
-        return out.joined() == String(read) && !keepsRadical ? nil : out
+        return out.joined() == String(original) && !keepsRadical ? nil : out
+    }
+
+    /// Which of `read`'s characters each glyph of `group` accounts for, as
+    /// ranges into `read` — the cheapest assignment by dynamic programming.
+    /// A full-size glyph normally takes one character, two or three when it is
+    /// as wide as that many (touching italics), none when Vision dropped it (a
+    /// full stop); a script glyph one; a stacked fraction any number. Shapes
+    /// must agree (a bar is `=`/`−`, a speck `.`/`,`), and Vision's spaces must
+    /// fall on real gaps. Nil when no assignment is cheap enough.
+    static func alignment(_ group: [Int], _ read: [Character], spaces: Set<Int>, _ line: Line,
+                          kinds: [Glyph.Kind]? = nil) -> [Range<Int>]? {
+        let glyphs = group.map { line.glyphs[$0] }
+        let kinds = kinds ?? glyphs.map(\.kind)
+        let n = glyphs.count, m = read.count
+        guard n > 0 else { return nil }
+        let cap = line.capHeight
+        let widths = zip(glyphs, kinds).filter { $0.1 == .normal && !$0.0.isStructure && $0.0.box.height >= 0.5 * cap }
+            .map(\.0.box.width).sorted()
+        let charWidth = widths.isEmpty ? 0.6 * cap : widths[widths.count / 2]
+        let gaps = glyphs.indices.dropFirst().map { glyphs[$0].box.minX - glyphs[$0 - 1].box.maxX }
+        let sortedGaps = gaps.sorted()
+        let letterGap: CGFloat? = sortedGaps.count >= 8 ? sortedGaps[sortedGaps.count / 2] : nil
+
+        func shapeCost(_ g: Glyph, _ c: Character) -> Double {
+            let h = g.box.height, w = g.box.width
+            let bar = "=-−–—_~".contains(c), speck = ".,·'`’‘".contains(c)
+            if h < 0.45 * cap && w > 1.5 * h { return bar ? 0 : 1.0 }
+            if h < 0.4 * cap && w < 0.5 * cap { return speck ? 0 : 0.4 }
+            if bar { return 1.0 }
+            if speck { return 0.8 }
+            // Height class: `h` on an x-height glyph, or `e` on a tall one, is
+            // the characters sitting on the wrong glyphs. (Digits vary: old-style
+            // figures are x-height.)
+            var total = 0.0
+            let tall = h >= 0.85 * cap, short = h < 0.8 * cap
+            if c.isLetter, c.isASCII {
+                if (c.isUppercase || "bdfhklt".contains(c)) && short { total += 0.5 }
+                if "acemnorsuvwxz".contains(c) && tall && g.box.minY > line.baseline - 1.1 * cap { total += 0.5 }
+                let descends = g.box.maxY > line.baseline + 0.15 * cap
+                if "gjpqy".contains(c) != descends && !"fQJ".contains(c) { total += 0.3 }
+            }
+            return total
+        }
+        func mergeable(_ c: Character) -> Bool { c.isLetter || c.isNumber || "()[]".contains(c) }
+        /// Cost of glyph `k` taking `read[j..<j+count]`, or nil if it can't.
+        func cost(_ k: Int, _ j: Int, _ count: Int) -> Double? {
+            let g = glyphs[k], chars = read[j..<(j + count)]
+            var total: Double
+            if g.fraction != nil {
+                total = count == 0 ? 0.5 : 0.15 * Double(count)
+            } else if g.container {
+                guard count <= 1 else { return nil }
+                total = count == 0 ? 0.3 : "Vv√/\\|".contains(chars.first!) ? 0 : 0.6
+            } else if kinds[k] != .normal {
+                switch count {
+                case 0: total = 0.6
+                case 1: total = isScriptable(chars.first!) ? 0 : 0.3
+                case 2: total = 1.2
+                default: return nil
+                }
+            } else {
+                let r = Double(g.box.width / max(charWidth, 1))
+                switch count {
+                case 0: total = shapeCost(g, ".") == 0 ? 0.4 : 1.5
+                case 1:
+                    let c = chars.first!
+                    let wide = "mwMW%@—=…".contains(c) || shapeCost(g, c) == 0 && "=-−–—_~".contains(c)
+                    total = shapeCost(g, c) + max(0, r - (wide ? 2.6 : 1.8)) * 0.8
+                default:
+                    guard count <= 3, chars.allSatisfy(mergeable) else { return nil }
+                    total = 0.5 * Double(count - 1) + max(0, Double(count) - 0.5 - r) + max(0, r - Double(count) - 1) * 0.5
+                }
+            }
+            // Vision's spaces must fall on word gaps: one inside a word means
+            // the characters after it sit on the wrong glyphs.
+            if count > 0, k > 0, spaces.contains(j), let letterGap, gaps[k - 1] < letterGap + 0.1 * cap { total += 0.7 }
+            // A script hangs on its base: no space between them.
+            if count > 0, kinds[k] != .normal, spaces.contains(j) { total += 1.5 }
+            if g.fraction == nil, count > 1, (j + 1..<(j + count)).contains(where: spaces.contains) { total += 2 }
+            return total
+        }
+
+        let inf = Double.infinity
+        var dp = [[Double]](repeating: [Double](repeating: inf, count: m + 1), count: n + 1)
+        var back = [[Int]](repeating: [Int](repeating: -1, count: m + 1), count: n + 1) // chars taken; -2 = skipped
+        dp[0][0] = 0
+        for k in 0...n {
+            for j in 0...m where dp[k][j] < inf {
+                // Punctuation Vision made up from noise.
+                if j < m, ".,'`’‘·".contains(read[j]), dp[k][j] + 1.0 < dp[k][j + 1] {
+                    dp[k][j + 1] = dp[k][j] + 1.0
+                    back[k][j + 1] = -2
+                }
+                guard k < n else { continue }
+                let most = glyphs[k].fraction != nil ? min(12, m - j) : min(3, m - j)
+                for count in 0...most {
+                    guard let c = cost(k, j, count), dp[k][j] + c < dp[k + 1][j + count] else { continue }
+                    dp[k + 1][j + count] = dp[k][j] + c
+                    back[k + 1][j + count] = count
+                }
+            }
+        }
+        guard dp[n][m] <= 0.3 * Double(n) + 1.0 else { return nil }
+        var spans = [Range<Int>](repeating: 0..<0, count: n)
+        var k = n, j = m
+        while k > 0 || j > 0 {
+            let taken = back[k][j]
+            if taken == -2 { j -= 1; continue }
+            guard taken >= 0 else { return nil }
+            spans[k - 1] = (j - taken)..<j
+            j -= taken
+            k -= 1
+        }
+        return spans
     }
 
     /// Reads a few blobs on their own (a fraction's numerator or denominator),
@@ -415,15 +659,18 @@ enum ScriptRecovery {
 
     /// A rewrite may only add scripts and known symbol repairs: every full-size
     /// glyph must still read as Vision read it (case, `0`/`O` and `+`/`±`/`‡`/`≠`
-    /// aside), and a script digit is never followed by a full-size digit
-    /// (`5,¹40` is Georgia's old-style `1`, not an exponent). Anything else —
+    /// aside), and a script digit inside a number is never followed by a
+    /// full-size digit (`5,¹40` is Georgia's old-style `1`, not an exponent;
+    /// `log₂8` hangs off a letter and is fine). Anything else —
     /// a `%` taken apart into `⁰/o`, a whole line re-read into `/1_Of` — is
     /// worse than Vision's own read, which is then kept.
     static func isFaithful(_ chars: [Character], kinds: [Glyph.Kind], structure: [Bool], to read: [Character],
                            confident: Bool = true) -> Bool {
         for i in chars.indices.dropLast() where kinds[i] != .normal && chars[i].isNumber
             && kinds[i + 1] == .normal && !structure[i + 1] && chars[i + 1].isNumber {
-            return false
+            var start = i
+            while start > 0, kinds[start - 1] == kinds[i] { start -= 1 }
+            if start == 0 || !chars[start - 1].isLetter { return false }
         }
         let normal = chars.indices.filter { kinds[$0] == .normal && !structure[$0] }
         if !confident {
@@ -484,18 +731,6 @@ enum ScriptRecovery {
         let parts = glyph.blobs.map { line.blobs[$0].box }
         guard parts.count >= 2, let bottom = parts.max(by: { $0.maxY < $1.maxY }) else { return false }
         return bottom.width >= 2 * bottom.height && parts.allSatisfy { $0 == bottom || $0.maxY <= bottom.minY + 1 }
-    }
-
-    /// Vision guesses the case of letters whose capital has the same shape
-    /// (`cOS`, `X₂`); one only x-height tall is lower case.
-    private static func lowercasingSmallCapitals(_ chars: [Character], _ kinds: [Glyph.Kind], _ group: [Int],
-                                                 _ line: Line) -> [Character] {
-        var chars = chars
-        for i in chars.indices where "CKOPSUVWXZ".contains(chars[i]) && kinds[i] == .normal
-            && line.glyphs[group[i]].box.height < 0.85 * line.capHeight {
-            chars[i] = Character(chars[i].lowercased())
-        }
-        return chars
     }
 
     /// Lines the re-read up with the first read from the left or the right —
