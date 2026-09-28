@@ -177,14 +177,14 @@ enum ScriptRecovery {
     /// bullet `•` twice that. Math lines are left alone (a minus is en-dash wide).
     static func dashesAndDots(_ text: String, rect: CGRect, in image: CGImage, excluding others: [CGRect] = []) -> String? {
         let separators = text.range(of: #"\d[.,]\d{3}(?!\d)"#, options: .regularExpression) != nil
-        guard text.contains("-") || text.dropFirst(2).contains("•") || separators, !TextReflow.isMath(text)
+        guard text.contains("-") || text.contains("•") || separators, !TextReflow.isMath(text)
         else { return nil }
         let chars = Array(text)
         let positions = chars.indices.filter { !chars[$0].isWhitespace }
         let read = positions.map { chars[$0] }
         guard let line = lineGlyphs(rect: rect, in: image, excluding: others),
               let spans = alignment(Array(line.glyphs.indices), read, spaces: spacePositions(text), line) else { return nil }
-        var out = chars
+        var out = chars, solid = false
         for (k, span) in spans.enumerated() where span.count == 1 {
             let j = span.lowerBound, i = positions[j], g = line.glyphs[k].box, cap = line.capHeight
             let before: Character? = i > 0 ? chars[i - 1] : nil, after: Character? = i + 1 < chars.count ? chars[i + 1] : nil
@@ -199,6 +199,8 @@ enum ScriptRecovery {
                     // (`x – 3`) sits among numbers and single letters.
                     out[i] = "–"
                 }
+            } else if read[j] == "•", j == 0, let box = checkbox(line.glyphs[k], in: line) {
+                if let box { out[i] = box } else { solid = true }
             } else if read[j] == "•", j > 0, g.height < 0.2 * cap, g.width < 0.25 * cap {
                 out[i] = "·"
             } else if read[j] == "." || read[j] == ",", before?.isNumber == true, after?.isNumber == true {
@@ -211,8 +213,33 @@ enum ScriptRecovery {
                 }
             }
         }
-        let result = String(out)
+        var result = String(out)
+        // A solid square is a ticked control (a settings checkbox), not a character.
+        if solid { result = String(result.drop { $0 == "•" || $0 == " " }) }
         return result == text ? nil : result
+    }
+
+    /// What Vision read as a leading `•` when it is a square: `☐` hollow, `☑`
+    /// with a tick inside, `.some(nil)` (dropped) when solid. A round bullet
+    /// has no ink in its box's corners.
+    private static func checkbox(_ glyph: Glyph, in line: Line) -> Character?? {
+        let g = glyph.box
+        guard g.height >= 0.7 * line.capHeight, abs(g.width - g.height) < 0.2 * max(g.width, g.height) else { return nil }
+        let pixels = glyph.blobs.flatMap { line.blobs[$0].pixels }
+        let ink = Set(pixels)
+        let w = line.map.width
+        let reach = max(1, Int(0.12 * g.width))
+        func inked(_ cx: Int, _ cy: Int, _ dx: Int, _ dy: Int) -> Bool {
+            (0...reach).contains { a in (0...reach).contains { b in ink.contains((cy + b * dy) * w + cx + a * dx) } }
+        }
+        let x0 = Int(g.minX), y0 = Int(g.minY), x1 = Int(g.maxX) - 1, y1 = Int(g.maxY) - 1
+        guard inked(x0, y0, 1, 1), inked(x1, y0, -1, 1), inked(x0, y1, 1, -1), inked(x1, y1, -1, -1) else { return nil }
+        let holes = line.map.holes(of: pixels, in: g)
+        let open = holes.reduce(0) { $0 + $1.width * $1.height }
+        if open < 0.3 * g.width * g.height {
+            return Double(pixels.count) > 0.85 * Double(g.width * g.height) ? .some(nil) : nil
+        }
+        return holes.count >= 2 || glyph.blobs.count >= 2 ? "☑" : "☐"
     }
 
     /// Letters in the word ending just before `index` (or starting just after).

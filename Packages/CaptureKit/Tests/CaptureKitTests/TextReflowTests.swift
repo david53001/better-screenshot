@@ -45,6 +45,17 @@ let textReflowTests: [TestCase] = [
             "• It looks at market growth and market share.",
         ])
     },
+    TestCase("checkboxMarkerStartsNewParagraph") { t in
+        let lines = [
+            line("☐ Finish the history essay draft and", top: 0.10, left: 0.1, right: 0.9),
+            line("hand it in", top: 0.16, left: 0.14, right: 0.4),
+            line("☑ Call the dentist", top: 0.22, left: 0.1, right: 0.5),
+        ]
+        t.equal(TextReflow.paragraphs(lines), [
+            "☐ Finish the history essay draft and hand it in",
+            "☑ Call the dentist",
+        ])
+    },
     TestCase("numberedMarkerStartsNewParagraph") { t in
         let lines = [
             line("1. First item that wraps onto", top: 0.10, left: 0.1, right: 0.7),

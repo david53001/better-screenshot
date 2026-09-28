@@ -741,7 +741,7 @@ public enum TextReflow {
     // MARK: - Text helpers
 
     private static let listMarker = try! NSRegularExpression(
-        pattern: #"^(?:[•\-–—*]|\(?\d{1,3}[.)]|\(?[a-zA-Z][.)]|\(?(?:[ivx]{2,4}|[IVX]{2,4})[.)])\s"#)
+        pattern: #"^(?:[•\-–—*☐☑☒]|\(?\d{1,3}[.)]|\(?[a-zA-Z][.)]|\(?(?:[ivx]{2,4}|[IVX]{2,4})[.)])\s"#)
     private static let bulletLookalikes: Set<Character> = ["·", "●", "◦", "▪", "‣"]
 
     static func startsWithListMarker(_ text: String) -> Bool {
