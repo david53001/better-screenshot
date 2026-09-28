@@ -145,6 +145,28 @@ enum ScriptRecovery {
         return Double(bottom) >= 0.8 * Double(w)
     }
 
+    /// `π`, which Vision reads as `T`: a bar across the top on two legs.
+    static func isPi(_ glyph: Glyph, _ line: Line) -> Bool {
+        let box = glyph.box, w = Int(box.width), h = Int(box.height)
+        guard w >= 5, h >= 5 else { return false }
+        var ink = Set<Int>()
+        for b in glyph.blobs { for p in line.blobs[b].pixels { ink.insert(p) } }
+        func row(_ y: Int) -> [Bool] { (0..<w).map { ink.contains((Int(box.minY) + y) * line.map.width + Int(box.minX) + $0) } }
+        let top = (0..<max(2, h / 6)).map { row($0).filter { $0 }.count }.max() ?? 0
+        // Legs: two runs of ink across the lower part, apart by a fifth of the width.
+        let y = h - max(2, h / 5)
+        let cells = row(y)
+        var runs: [Range<Int>] = []
+        var start: Int?
+        for x in 0...w {
+            let on = x < w && cells[x]
+            if on, start == nil { start = x }
+            if !on, let s = start { runs.append(s..<x); start = nil }
+        }
+        return Double(top) >= 0.8 * Double(w) && runs.count == 2
+            && Double(runs[1].lowerBound - runs[0].upperBound) >= 0.2 * Double(w)
+    }
+
     /// The glyphs of the line boxed at `rect`, measured (cap height, baseline).
     static func lineGlyphs(rect: CGRect, in image: CGImage, excluding others: [CGRect] = []) -> Line? {
         let pad = rect.height * 0.3
@@ -770,6 +792,10 @@ enum ScriptRecovery {
             if chars[i] == "+", isPlusMinus(glyph, line) { chars[i] = "±" }
             if chars[i] == "A", isDelta(glyph, line) {
                 chars[i] = "Δ"
+                repaired.insert(i)
+            }
+            if chars[i] == "T", isPi(glyph, line) {
+                chars[i] = "π"
                 repaired.insert(i)
             }
             // An integral sign, read `/` or `J`: a glyph over twice the height
