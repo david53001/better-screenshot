@@ -94,6 +94,8 @@ let scriptRecoveryTests: [TestCase] = [
         t.equal(ScriptRecovery.repairingLog("10g₂8 = 3"), "log₂8 = 3")
         t.equal(ScriptRecovery.repairingLog("l0gₐx + 1og(y)"), "logₐx + log(y)")
         t.equal(ScriptRecovery.repairingLog("add 10g of salt"), "add 10g of salt")
+        t.equal(ScriptRecovery.repairingLog("and In e³ = 3, In(x) = 0"), "and ln e³ = 3, ln(x) = 0")
+        t.equal(ScriptRecovery.repairingLog("In a sense, In (b) we see"), "In a sense, In (b) we see")
     },
     TestCase("touchingItalicsTakeTwoCharactersAndScriptsOne") { t in
         // `2x³ + 1`: the 2 and the x touch (one wide glyph), ³ is raised.

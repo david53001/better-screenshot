@@ -416,10 +416,15 @@ enum ScriptRecovery {
     }
 
     /// `log` with a subscript base or an argument, whatever look-alikes Vision
-    /// read for it (`10g₂8`, `l0gₐx`).
+    /// read for it (`10g₂8`, `l0gₐx`); `ln` before its argument, which Vision
+    /// reads as the word `In` (`In e³ = 3`, `In(x)`).
     static func repairingLog(_ text: String) -> String {
-        logLookAlike.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "log")
+        let log = logLookAlike.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "log")
+        return lnLookAlike.stringByReplacingMatches(in: log, range: NSRange(log.startIndex..., in: log), withTemplate: "ln")
     }
+
+    private static let lnLookAlike = try! NSRegularExpression(
+        pattern: #"(?<![\p{L}\p{N}])[I|]n(?=\(|[ ]?[a-zθ](?:[⁰-⁹¹²³]|\s?[=+)]))"#)
 
     private static let logLookAlike = try! NSRegularExpression(
         pattern: #"(?<![\p{L}\p{N}])[l1I|][o0O]g(?=[₀-₉ₐₑₒₓₕₖₗₘₙₚₛₜ(])"#)
