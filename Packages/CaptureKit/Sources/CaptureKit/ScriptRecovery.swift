@@ -49,6 +49,9 @@ enum ScriptRecovery {
         var trig = false
         /// `dx`, `dt`…: a tall stroke may be an integral sign.
         var hasDifferential = false
+        /// Both x-height letters and taller ones are on the line, so a letter's
+        /// height says whether it has an ascender.
+        var hasXHeight = false
     }
 
     /// `rect` is the line's box in `image` (pixels, top-left origin).
@@ -364,7 +367,11 @@ enum ScriptRecovery {
         let bottoms = glyphs.filter { !$0.isStructure && $0.box.height >= 0.75 * capHeight
                                       && $0.box.width >= 0.4 * $0.box.height }.map(\.box.maxY).sorted()
         guard !bottoms.isEmpty else { return nil }
-        return Line(glyphs: glyphs, blobs: blobs, map: map, capHeight: capHeight, baseline: bottoms[bottoms.count / 2])
+        var line = Line(glyphs: glyphs, blobs: blobs, map: map, capHeight: capHeight, baseline: bottoms[bottoms.count / 2])
+        let letters = glyphs.filter { !$0.isStructure && $0.box.width >= 0.4 * $0.box.height && $0.box.height >= 0.45 * capHeight }
+        line.hasXHeight = letters.filter { $0.box.height < 0.8 * capHeight }.count >= 2
+            && letters.contains { $0.box.height >= 0.9 * capHeight }
+        return line
     }
 
     /// Marks raised / lowered glyphs, each judged against the full-size glyph
@@ -496,7 +503,7 @@ enum ScriptRecovery {
         // A symbol that is a superscript already (`™`, `®`, `°`, `²`): keep
         // Vision's character for the run and drop the run's other slots.
         var dropped = Set<Int>()
-        for i in chars.indices where kinds[i] != .normal && "™®©°ªº¹²³⁰⁴⁵⁶⁷⁸⁹ⁿ℠".contains(chars[i]) {
+        for i in chars.indices where kinds[i] != .normal && "™®©°¹²³⁰⁴⁵⁶⁷⁸⁹ⁿ℠".contains(chars[i]) {
             var lo = i, hi = i
             while lo > 0, kinds[lo - 1] == kinds[i] { lo -= 1 }
             while hi + 1 < kinds.count, kinds[hi + 1] == kinds[i] { hi += 1 }
@@ -719,7 +726,7 @@ enum ScriptRecovery {
             // figures are x-height.)
             var total = 0.0
             let tall = h >= 0.85 * cap, short = h < 0.8 * cap
-            if c.isLetter, c.isASCII {
+            if c.isLetter, c.isASCII, line.hasXHeight {
                 if (c.isUppercase || "bdfhklt".contains(c)) && short { total += 0.5 }
                 if "acemnorsuvwxz".contains(c) && tall && g.box.minY > line.baseline - 1.1 * cap { total += 0.5 }
                 let descends = g.box.maxY > line.baseline + 0.15 * cap
@@ -747,7 +754,8 @@ enum ScriptRecovery {
             } else {
                 let r = Double(g.box.width / max(charWidth, 1))
                 switch count {
-                case 0: total = shapeCost(g, ".") == 0 ? 0.4 : 1.5
+                // Vision skips specks and lone strokes (`|`, a prime) most.
+                case 0: total = shapeCost(g, ".") == 0 || shapeCharacter(group[k], line) != nil ? 0.4 : 1.5
                 case 1:
                     let c = chars.first!
                     let wide = "mwMW%@—=…".contains(c) || shapeCost(g, c) == 0 && "=-−–—_~".contains(c)

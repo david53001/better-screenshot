@@ -67,6 +67,8 @@ public enum TextRecognizer {
             if withTimesSigns(shown) != shown { lines[i].recovered = withTimesSigns(shown) }
         }
         lines = lines.indices.filter { !absorbed.contains($0) }.map { lines[$0] }
+        // Displayed formulas Vision boxed in pieces (limits, stacked fractions).
+        lines = DisplayMath.rebuilding(lines, in: source) { readLine($0)?.text }
         // Language correction "fixes" code into prose (`items.reduce(` →
         // `items. reduce (`, `--parallel` → `-parallel`); when a block reads as
         // code, read the image again without it for those lines.
