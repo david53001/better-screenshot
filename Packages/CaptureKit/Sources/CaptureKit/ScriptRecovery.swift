@@ -755,7 +755,9 @@ enum ScriptRecovery {
                 let r = Double(g.box.width / max(charWidth, 1))
                 switch count {
                 // Vision skips specks and lone strokes (`|`, a prime) most.
-                case 0: total = shapeCost(g, ".") == 0 || shapeCharacter(group[k], line) != nil ? 0.4 : 1.5
+                // …and a `½` is two or three pieces of ink for one character.
+                case 0: total = j > 0 && "½¼¾⅓⅔⅕⅛⅜⅝⅞".contains(read[j - 1]) ? 0.2
+                    : shapeCost(g, ".") == 0 || shapeCharacter(group[k], line) != nil ? 0.4 : 1.5
                 case 1:
                     let c = chars.first!
                     let wide = "mwMW%@—=…".contains(c) || shapeCost(g, c) == 0 && "=-−–—_~".contains(c)

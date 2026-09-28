@@ -227,6 +227,67 @@ enum DisplayMath {
             return nil
         }
 
+        /// A tall bracket (`[`, `(`, `]`, `)`) from its outline: narrow, taller
+        /// than the text, its spine at one side and its ends reaching the other.
+        func bracket(_ m: Int) -> (opening: Bool, square: Bool)? {
+            let b = blobs[m].box
+            // (Taller than ordinary parentheses, which run about 1.3 capitals.)
+            guard b.height >= 2 * unit, b.height >= 1.5 * cap, b.width <= 0.45 * b.height, b.width >= 2,
+                  operatorSymbol(m) == nil else { return nil }
+            let rows = profile(m), h = rows.count, w = Double(max(Int(b.width), 1))
+            let middle = rows[(h * 2 / 5)...(h * 3 / 5)].filter { $0.1 >= 0 }
+            // Each end: its widest row (a bracket's serif, a parenthesis's tip).
+            let ends = [rows.prefix(max(2, h / 8)), rows.suffix(max(2, h / 8))]
+                .compactMap { $0.filter { $0.1 >= 0 }.max { $0.1 - $0.0 < $1.1 - $1.0 } }
+            guard !middle.isEmpty, ends.count == 2 else { return nil }
+            let midCentre = middle.map { Double($0.0 + $0.1) / 2 }.reduce(0, +) / Double(middle.count) / w
+            let endCentre = ends.map { Double($0.0 + $0.1) / 2 }.reduce(0, +) / 2 / w
+            guard abs(midCentre - endCentre) > 0.15 else { return nil }
+            let square = Double(rows.prefix(max(2, h / 12)).map { $0.1 - $0.0 + 1 }.max() ?? 0) >= 0.7 * w
+            return (midCentre < endCentre, square)
+        }
+
+        /// Top-to-bottom bands of ink separated by empty rows.
+        func bands(_ members: [Int]) -> [[Int]] {
+            let sorted = members.sorted { blobs[$0].box.minY < blobs[$1].box.minY }
+            var out: [[Int]] = []
+            var bottom = -CGFloat.infinity
+            for m in sorted {
+                if out.isEmpty || blobs[m].box.minY > bottom + 0.1 * unit { out.append([m]) } else { out[out.count - 1].append(m) }
+                bottom = max(bottom, blobs[m].box.maxY)
+            }
+            return out
+        }
+
+        /// `[1 2; 3 4]`: the ink between two tall brackets in rows (split by
+        /// empty stretches) and cells (split by gaps wider than a letter).
+        func matrix(open: Int, close: Int, inside: [Int], script: Bool) -> Node? {
+            let kind = bracket(open)!
+            let rows = bands(inside)
+            guard rows.count >= 2 else {
+                // One row: a big bracketed expression.
+                guard let body = parse(inside, script: script) else { return nil }
+                return .row([.text(kind.square ? "[" : "("), body, .text(kind.square ? "]" : ")")])
+            }
+            var lines: [String] = []
+            for row in rows {
+                let sorted = row.sorted { blobs[$0].box.minX < blobs[$1].box.minX }
+                var cells: [[Int]] = []
+                var right = -CGFloat.infinity
+                for m in sorted {
+                    if !cells.isEmpty, blobs[m].box.minX - right < 0.6 * unit { cells[cells.count - 1].append(m) } else { cells.append([m]) }
+                    right = max(right, blobs[m].box.maxX)
+                }
+                var texts: [String] = []
+                for cell in cells {
+                    guard let text = read(cell, script: script) else { return nil }
+                    texts.append(text)
+                }
+                lines.append(texts.joined(separator: " "))
+            }
+            return .text((kind.square ? "[" : "(") + lines.joined(separator: "; ") + (kind.square ? "]" : ")"))
+        }
+
         /// The equation rows: bands of ink split by empty stretches wider than
         /// the gaps around a fraction bar.
         func rows() -> [[Int]] {
@@ -311,10 +372,28 @@ enum DisplayMath {
             guard !members.isEmpty else { return nil }
             let y = axis(members)
             let band = 0.15 * unit
+            // Tall brackets pair up around a matrix (or a big bracketed
+            // expression); what's between them is read as its own.
+            var enclosed: [Int: (close: Int, inside: [Int])] = [:]
+            var hidden = Set<Int>()
+            var open: [Int] = []
+            for b in members.filter({ bracket($0) != nil }).sorted(by: { blobs[$0].box.minX < blobs[$1].box.minX }) {
+                if bracket(b)!.opening { open.append(b); continue }
+                guard let o = open.popLast() else { continue }
+                let l = blobs[o].box, r = blobs[b].box
+                let inside = members.filter { m in
+                    let x = blobs[m].box
+                    return m != o && m != b && x.minX >= l.maxX - 1 && x.maxX <= r.minX + 1
+                        && x.midY > min(l.minY, r.minY) && x.midY < max(l.maxY, r.maxY)
+                }
+                guard open.isEmpty, !inside.isEmpty else { continue }
+                enclosed[o] = (b, inside)
+                hidden.formUnion(inside + [b])
+            }
             // Atoms: main-row ink, overlapping pieces together.
             // (A fraction bar sits on the axis give or take a stroke.)
-            let main = members.filter { blobs[$0].box.minY <= y + band && blobs[$0].box.maxY >= y - band
-                                        || isBar($0) && abs(blobs[$0].box.midY - y) < 0.4 * unit }
+            let main = members.filter { !hidden.contains($0) && (blobs[$0].box.minY <= y + band && blobs[$0].box.maxY >= y - band
+                                        || isBar($0) && abs(blobs[$0].box.midY - y) < 0.4 * unit) }
                 .sorted { blobs[$0].box.minX < blobs[$1].box.minX }
             guard !main.isEmpty else { return nil }
             var atoms: [[Int]] = []
@@ -331,14 +410,14 @@ enum DisplayMath {
             for (k, atom) in atoms.enumerated() where atom.count == 1 && operatorSymbol(atom[0]) != nil {
                 let o = blobs[atom[0]].box
                 let next = k + 1 < atoms.count ? box(atoms[k + 1]).minX : .infinity
-                for m in members where !main.contains(m) && !claimed.contains(m) {
+                for m in members where !main.contains(m) && !claimed.contains(m) && !hidden.contains(m) {
                     let b = blobs[m].box
                     guard b.minX >= o.minX - 0.3 * unit, b.minX < min(o.maxX + 0.8 * unit, next), b.height < unit else { continue }
                     if b.maxY < o.minY + 0.45 * o.height { above[k].append(m); claimed.insert(m) }
                     else if b.minY > o.maxY - 0.45 * o.height { below[k].append(m); claimed.insert(m) }
                 }
             }
-            for m in members where !main.contains(m) && !claimed.contains(m) {
+            for m in members where !main.contains(m) && !claimed.contains(m) && !hidden.contains(m) {
                 let b = blobs[m].box
                 let scores = atoms.map { atom -> CGFloat in
                     let a = box(atom)
@@ -361,6 +440,15 @@ enum DisplayMath {
             var k = 0
             while k < atoms.count {
                 let atom = atoms[k]
+                // A matrix: rows of cells between tall brackets.
+                if atom.count == 1, let (close, inside) = enclosed[atom[0]] {
+                    guard flush(), let node = matrix(open: atom[0], close: close, inside: inside, script: script) else { return nil }
+                    nodes.append(.op(node.linear, lower: nil, upper: nil))
+                    needed = true
+                    run += above[k] + below[k]
+                    k += 1
+                    continue
+                }
                 // `=`: known from its shape; Vision reads a lone one as `-`.
                 // (Mid-run it stays in the run: `i=1` reads better whole.)
                 if run.isEmpty, atom.count == 2, atom.allSatisfy({ isEqualsBar($0, in: atom) }),
