@@ -24,8 +24,16 @@ The owner asked to keep working overnight and then run a fresh independent revie
   a subscript or `(`; ordinals (`3rd`, `19th`) stay plain; ready-made superscripts (`™`, `°`) kept; ink of
   other Vision boxes on the same row is excluded unless that box is a short raised exponent; an
   apostrophe is never a script's base; the old-style-digit refusal applies only inside numbers (`log₂8` ok).
-- Numbers: existing 37/66 (CER 0.055), held-out 5/35 (CER 0.142), no-harm 3/6 (CER 0.011);
-  12 better / 0 worse vs the end-of-day baseline. CaptureKit tests 161/161.
+- Later the same night (each committed, baselines `2026-09-29-*.json`): shape repairs (prime `′`, `|`,
+  `Δ`, raised `⁺`/`⁻` charges, colon/bullet shape classes); code repairs (monospace spacing rebuilt from
+  pixel cells in `ScriptRecovery.monospaceSpacing`, bracket balancing / file extensions / hex ids / triple
+  quotes in `TextReflow.cleanedCode`, lone `{` `}` `},` lines recovered from loose ink in
+  `TextRecognizer.bracketLines`); and **`DisplayMath.swift`** — display equations rebuilt from pixels
+  (axis from the `=`, main-row atoms, fractions, `∫`/`∑` told by shape with their limits, `lim`/`max`/`min`
+  with the limit under them; only used where `MathLayout` can't: an operator, a limit, or a numerator Vision
+  boxed with its row).
+- Numbers after DisplayMath: existing 44/66 (CER 0.033), held-out 9/35 (CER 0.113), no-harm 3/6.
+  CaptureKit tests 162/162.
 - Tracing: temporary `// TRACE` lines (see "Test harness" below) — none are committed.
 
 ## What this is
