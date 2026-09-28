@@ -28,11 +28,14 @@ enum DisplayMath {
 
         var linear: String {
             switch self {
-            case .text(let s): return s
+            case .text(let s): return tidied(s)
             case .fraction(let n, let d):
                 return TextReflow.fractionPart(n.linear) + "/" + TextReflow.fractionPart(d.linear)
             case .op(let symbol, let lower, let upper):
-                let sub = lower.map { ScriptRecovery.script(compact($0.linear), superscript: false) } ?? ""
+                // `x→o` is `x→0`, `n→oo` is `n→∞`.
+                let limit = lower.map { compact($0.linear).replacingOccurrences(of: "→oo", with: "→∞")
+                    .replacingOccurrences(of: "→o", with: "→0").replacingOccurrences(of: "→O", with: "→0") }
+                let sub = limit.map { ScriptRecovery.script($0, superscript: false) } ?? ""
                 let sup = upper.map { ScriptRecovery.script(compact($0.linear), superscript: true) } ?? ""
                 return symbol + sub + sup
             case .row(let nodes): return nodes.map(\.linear).joined(separator: " ")
@@ -172,7 +175,7 @@ enum DisplayMath {
             let typical = glyphs.isEmpty ? median : glyphs[glyphs.count / 2]
             unit = typical
             let capped = glyphs.filter { $0 <= 1.4 * typical }
-            cap = capped.isEmpty ? unit : capped[capped.count * 3 / 4]
+            cap = capped.max() ?? typical
         }
 
         func box(_ members: [Int]) -> CGRect {
@@ -303,14 +306,15 @@ enum DisplayMath {
             return mids[mids.count / 2]
         }
 
-        func parse(_ members: [Int]) -> Node? {
+        /// `script`: the ink is set small (an operator's limits).
+        func parse(_ members: [Int], script: Bool = false) -> Node? {
             guard !members.isEmpty else { return nil }
             let y = axis(members)
             let band = 0.15 * unit
             // Atoms: main-row ink, overlapping pieces together.
             // (A fraction bar sits on the axis give or take a stroke.)
             let main = members.filter { blobs[$0].box.minY <= y + band && blobs[$0].box.maxY >= y - band
-                                        || isBar($0) && abs(blobs[$0].box.midY - y) < 0.4 * unit && !isEqualsBar($0, in: members) }
+                                        || isBar($0) && abs(blobs[$0].box.midY - y) < 0.4 * unit }
                 .sorted { blobs[$0].box.minX < blobs[$1].box.minX }
             guard !main.isEmpty else { return nil }
             var atoms: [[Int]] = []
@@ -349,7 +353,7 @@ enum DisplayMath {
             var run: [Int] = []
             func flush() -> Bool {
                 guard !run.isEmpty else { return true }
-                guard let text = read(run) else { return false }
+                guard let text = read(run, script: script) else { return false }
                 nodes.append(.text(text))
                 run = []
                 return true
@@ -357,6 +361,14 @@ enum DisplayMath {
             var k = 0
             while k < atoms.count {
                 let atom = atoms[k]
+                // `=`: known from its shape; Vision reads a lone one as `-`.
+                // (Mid-run it stays in the run: `i=1` reads better whole.)
+                if run.isEmpty, atom.count == 2, atom.allSatisfy({ isEqualsBar($0, in: atom) }),
+                   above[k].isEmpty, below[k].isEmpty {
+                    nodes.append(.text("="))
+                    k += 1
+                    continue
+                }
                 // A fraction: a bar with a numerator over it and a denominator under it.
                 if atom.count == 1, isBar(atom[0]), !above[k].isEmpty, !below[k].isEmpty,
                    !(above[k].count == 1 && isBar(above[k][0])), !(below[k].count == 1 && isBar(below[k][0])),
@@ -375,7 +387,8 @@ enum DisplayMath {
                 // A big operator and its limits.
                 if atom.count == 1, let symbol = operatorSymbol(atom[0]) {
                     guard flush() else { return nil }
-                    let upper = above[k].isEmpty ? nil : parse(above[k]), lower = below[k].isEmpty ? nil : parse(below[k])
+                    let upper = above[k].isEmpty ? nil : parse(above[k], script: true)
+                    let lower = below[k].isEmpty ? nil : parse(below[k], script: true)
                     if !above[k].isEmpty && upper == nil || !below[k].isEmpty && lower == nil { return nil }
                     nodes.append(.op(symbol, lower: lower, upper: upper))
                     needed = true
@@ -393,8 +406,8 @@ enum DisplayMath {
                 if !limit.isEmpty, box(limit).width >= 1.2 * unit {
                     let ink = word.flatMap { atoms[$0] + above[$0] }
                     let limitInk = word.flatMap { i in below[i].filter { blobs[$0].box.minY > y + 0.6 * unit } }
-                    if let text = read(ink), ["lim", "max", "min", "sup", "inf"].contains(text.lowercased()),
-                       let lower = parse(limitInk) {
+                    if let text = read(ink, script: script), ["lim", "max", "min", "sup", "inf"].contains(text.lowercased()),
+                       let lower = parse(limitInk, script: true) {
                         guard flush() else { return nil }
                         nodes.append(.op(text.lowercased(), lower: lower, upper: nil))
                         needed = true
@@ -412,13 +425,26 @@ enum DisplayMath {
 
         /// Reads a run of ink with Vision, scripts recovered from its pixels.
         /// A typeset `a = ` goes in front: Vision won't read a lone glyph.
-        func read(_ members: [Int]) -> String? {
+        func read(_ members: [Int], script: Bool = false) -> String? {
+            // Vision won't read a lone glyph, so a typeset `a = ` goes first — but
+            // a run starting with its own `=` then reads `-`: read those alone.
+            guard let value = read(members, prefixed: true, script: script) else { return nil }
+            if members.count >= 3, value.first.map({ "-=−".contains($0) }) == true,
+               let alone = read(members, prefixed: false, script: script) {
+                return alone
+            }
+            return value
+        }
+
+        private func read(_ members: [Int], prefixed: Bool, script: Bool) -> String? {
             let b = box(members)
             let scale = max(1, min(4, 40 / max(unit, 1)))
             let margin = 24
-            let font = CTFontCreateWithName("Helvetica" as CFString, cap * scale / 0.72, nil)
+            // The prefix set at the piece's type size: Vision reads case and
+            // script size against it. Limits are set about 0.7 of the text.
+            let font = CTFontCreateWithName("Helvetica" as CFString, (script ? 0.7 : 1) * cap * scale / 0.72, nil)
             let prefix = CTLineCreateWithAttributedString(NSAttributedString(
-                string: "a = ", attributes: [NSAttributedString.Key(kCTFontAttributeName as String): font]))
+                string: prefixed ? "a = " : "", attributes: [NSAttributedString.Key(kCTFontAttributeName as String): font]))
             let prefixWidth = CTLineGetTypographicBounds(prefix, nil, nil, nil)
             let width = Int((b.width * scale + prefixWidth).rounded(.up)) + 2 * margin
             let height = Int((b.height * scale).rounded(.up)) + 2 * margin
@@ -441,15 +467,35 @@ enum DisplayMath {
                     ctx.fill(CGRect(x: x, y: CGFloat(height) - y - scale, width: scale, height: scale))
                 }
             }
-            guard let rendered = ctx.makeImage(), let raw = reread(rendered) else { return nil }
+            guard let rendered = ctx.makeImage(), let raw = reread(rendered) else {
+                return nil
+            }
             let lineRect = CGRect(x: CGFloat(margin), y: CGFloat(margin), width: CGFloat(width - 2 * margin),
                                   height: CGFloat(height - 2 * margin))
-            let text = ScriptRecovery.recover(raw, rect: lineRect, in: rendered, reread: reread) ?? raw
-            guard let equals = text.firstIndex(of: "=") else { return nil }
-            let value = text[text.index(after: equals)...].trimmingCharacters(in: .whitespaces)
+            let latin = Homoglyphs.latinized(raw, keepCyrillic: false, keepGreek: true)
+            let text = ScriptRecovery.recover(latin, rect: lineRect, in: rendered, reread: reread) ?? latin
+            var value = text
+            if prefixed {
+                guard let equals = text.firstIndex(of: "=") else { return nil }
+                value = text[text.index(after: equals)...].trimmingCharacters(in: .whitespaces)
+            }
+            // Out of context Vision guesses a capital for `x`, `o`, `s`…: the
+            // piece's own glyphs say they are x-height.
+            let tallest = members.map { blobs[$0].box.height }.max() ?? 0
+            if tallest < (script ? 0.56 : 0.8) * cap, value.allSatisfy({ !$0.isLetter || "CKOPSUVWXZcopsuvwxz".contains($0) }) {
+                value = value.lowercased()
+            }
             return value.isEmpty ? nil : value
         }
     }
+
+    /// `sinx` → `sin x`: a function name and its argument (Vision drops the space).
+    static func tidied(_ s: String) -> String {
+        functionArgument.stringByReplacingMatches(in: s, range: NSRange(s.startIndex..., in: s), withTemplate: "$1 ")
+    }
+
+    private static let functionArgument = try! NSRegularExpression(
+        pattern: #"(?<![A-Za-z])(sin|cos|tan|sec|csc|cot|log|ln|exp)(?=[a-zθ])"#)
 
     /// `i = 1` → `i=1` for a script run.
     private static func compact(_ s: String) -> String { s.replacingOccurrences(of: " ", with: "") }
