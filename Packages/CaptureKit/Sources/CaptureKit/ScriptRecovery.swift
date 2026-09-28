@@ -171,6 +171,51 @@ enum ScriptRecovery {
         return measure(glyphs, blobs: blobs, map: map)
     }
 
+    /// Dashes and dots Vision flattens, told apart by size: an em dash is
+    /// over a capital wide, an en dash about three quarters (`14:00–17:00`,
+    /// ` – ` between words), a hyphen half; a middle dot `·` is a speck, a
+    /// bullet `•` twice that. Math lines are left alone (a minus is en-dash wide).
+    static func dashesAndDots(_ text: String, rect: CGRect, in image: CGImage, excluding others: [CGRect] = []) -> String? {
+        guard text.contains("-") || text.dropFirst(2).contains("•"), !TextReflow.isMath(text) else { return nil }
+        let chars = Array(text)
+        let positions = chars.indices.filter { !chars[$0].isWhitespace }
+        let read = positions.map { chars[$0] }
+        guard let line = lineGlyphs(rect: rect, in: image, excluding: others),
+              let spans = alignment(Array(line.glyphs.indices), read, spaces: spacePositions(text), line) else { return nil }
+        var out = chars
+        for (k, span) in spans.enumerated() where span.count == 1 {
+            let j = span.lowerBound, i = positions[j], g = line.glyphs[k].box, cap = line.capHeight
+            let before: Character? = i > 0 ? chars[i - 1] : nil, after: Character? = i + 1 < chars.count ? chars[i + 1] : nil
+            if read[j] == "-", g.height < 0.3 * cap {
+                if g.width >= 1.15 * cap {
+                    out[i] = "—"
+                } else if g.width >= 0.65 * cap, !text.contains("="), !text.contains("+"),
+                          before?.isNumber == true && after?.isNumber == true
+                            || before == " " && after == " " && wordLength(chars, before: i - 1) >= 2
+                            && wordLength(chars, after: i + 1) >= 2 {
+                    // A range (`14:00–17:00`) or a break between words; a minus
+                    // (`x – 3`) sits among numbers and single letters.
+                    out[i] = "–"
+                }
+            } else if read[j] == "•", j > 0, g.height < 0.2 * cap, g.width < 0.25 * cap {
+                out[i] = "·"
+            }
+        }
+        let result = String(out)
+        return result == text ? nil : result
+    }
+
+    /// Letters in the word ending just before `index` (or starting just after).
+    private static func wordLength(_ chars: [Character], before index: Int) -> Int {
+        guard index >= 0 else { return 0 }
+        return chars[..<index].reversed().prefix { $0.isLetter }.count
+    }
+
+    private static func wordLength(_ chars: [Character], after index: Int) -> Int {
+        guard index < chars.count else { return 0 }
+        return chars[(index + 1)...].prefix { $0.isLetter }.count
+    }
+
     /// A monospaced line's spaces, rebuilt from where its glyphs sit: every
     /// character takes one cell, so the gap between two characters says how many
     /// spaces lie between them (`items ()` → `items()`, `$curl-fsSL` →

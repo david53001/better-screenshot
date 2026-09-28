@@ -35,6 +35,9 @@ public enum TextRecognizer {
             }.map { pixels(lines[$0].box) }
             // Vision's own read stays in `text` (layout and code go by it); the
             // rebuilt math goes in `recovered` for prose and tables.
+            if let fixed = ScriptRecovery.dashesAndDots(lines[i].text, rect: rect, in: source, excluding: others) {
+                lines[i].text = fixed
+            }
             var recovered: String?
             if confidences.indices.contains(i) && confidences[i] < 0.9 {
                 // A shaky first read (`21120` for `2H₂O`, confidence 0.5) may be
