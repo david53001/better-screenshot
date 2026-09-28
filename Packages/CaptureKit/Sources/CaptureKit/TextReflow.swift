@@ -697,7 +697,7 @@ public enum TextReflow {
         let right = lines.map(\.box.maxX).max()!
         return paragraphs.enumerated().map { index, para in
             var text = para.dropFirst().reduce(para[0].shown) { joinWrapped($0, $1.shown) }
-            if isMath(text) { text = spacedOperators(text) }
+            if isMath(text) { text = spacedOperators(repairedMathSymbols(text)) }
             return Piece(kind: .prose, text: String(repeating: "\t", count: levels[index]) + text,
                          order: para[0].order, box: para.dropFirst().reduce(para[0].box) { $0.union($1.box) },
                          first: para[0], last: para[para.count - 1], columnRight: right)

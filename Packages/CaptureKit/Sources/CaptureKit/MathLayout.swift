@@ -147,7 +147,7 @@ extension TextReflow {
             let next: Character? = after < chars.count ? chars[after] : nil
             let relation = "=≤≥≠≈→⇒⇔".contains(c) && prev != nil && next != nil
                 && !"=<>!".contains(prev!) && !"=<>".contains(next!)
-            var binary = false
+            var binary = "×÷".contains(c) && operand(prev) && opens(next)
             if c == "+" || c == "-", operand(prev), opens(next) {
                 // Letters touching both sides, one side a word: a hyphen.
                 let left = chars[..<i].reversed().prefix { $0.isLetter }.count
@@ -165,6 +165,26 @@ extension TextReflow {
         }
         return out
     }
+
+    /// Set symbols Vision reads as letters, by what surrounds them: `A n B` →
+    /// `A ∩ B`, `A U B` → `A ∪ B`, `x E R` → `x ∈ ℝ`; a stray `.` after `=`
+    /// (a fraction bar's end); a space after a comma between terms (`b,c`).
+    static func repairedMathSymbols(_ text: String) -> String {
+        var out = text
+        for (pattern, template) in mathRepairs {
+            out = pattern.stringByReplacingMatches(in: out, range: NSRange(out.startIndex..., in: out), withTemplate: template)
+        }
+        return out
+    }
+
+    private static let mathRepairs: [(NSRegularExpression, String)] = [
+        (#"(?<=[A-Z)] )n(?= [A-Z(])"#, "∩"),
+        (#"(?<=[A-Z)] )U(?= [A-Z(])"#, "∪"),
+        (#"(?<=\b[a-z] )[E€](?= [A-Z]\b)"#, "∈"),
+        (#"(?<=∈ )N\b"#, "ℕ"), (#"(?<=∈ )Z\b"#, "ℤ"), (#"(?<=∈ )Q\b"#, "ℚ"), (#"(?<=∈ )R\b"#, "ℝ"),
+        (#"= ?\.(?= |$)"#, "="),
+        (#",(?=[^\s\d])|(?<=[^\d]),(?=\d)"#, ", "),
+    ].map { (try! NSRegularExpression(pattern: $0.0), $0.1) }
 
     /// A line of mostly-math: separate display equations are separate lines.
     static func isMath(_ text: String) -> Bool {
