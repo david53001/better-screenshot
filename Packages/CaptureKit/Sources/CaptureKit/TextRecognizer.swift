@@ -12,6 +12,8 @@ public enum TextRecognizer {
     /// that rebuild super/subscripts, roots, fractions and display equations —
     /// the ones that re-run Vision per line — for a faster, Vision-only read.
     public static func recognize(in image: CGImage, pointWidth: CGFloat? = nil, math: Bool = true) throws -> RecognitionResult {
+        rereads.withLock { $0.removeAll() }
+        defer { rereads.withLock { $0.removeAll() } }
         let factor = pointWidth.map { upscaleFactor(pixelWidth: image.width, pointWidth: $0) } ?? 1
         let source = factor > 1 ? (upscaled(image, by: factor) ?? image) : image
 
@@ -268,6 +270,28 @@ public enum TextRecognizer {
     /// Reads a single synthetic line (ScriptRecovery's straightened copy)
     /// without language correction, left to right.
     private static func readLine(_ image: CGImage) -> (text: String, confidence: Float)? {
+        // The shaky and confident passes, and DisplayMath's prefixed and bare
+        // reads, often paint the very same image: Vision gives the same answer.
+        let key = rereadKey(image)
+        if let key, let hit = rereads.withLock({ $0[key] }) { return hit }
+        let read = uncachedReadLine(image)
+        if let key { rereads.withLock { $0[key] = read } }
+        return read
+    }
+
+    /// Re-reads made during the current capture, by image content.
+    private static let rereads = Locked<[RereadKey: (text: String, confidence: Float)?]>([:])
+
+    private struct RereadKey: Hashable {
+        let width: Int, height: Int, bytes: Data
+    }
+
+    private static func rereadKey(_ image: CGImage) -> RereadKey? {
+        guard let data = image.dataProvider?.data else { return nil }
+        return RereadKey(width: image.width, height: image.height, bytes: data as Data)
+    }
+
+    private static func uncachedReadLine(_ image: CGImage) -> (text: String, confidence: Float)? {
         let request = makeTextRequest()
         request.usesLanguageCorrection = false
         try? VNImageRequestHandler(cgImage: image).perform([request])
@@ -383,5 +407,17 @@ public enum TextRecognizer {
         ctx.interpolationQuality = .high
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
         return ctx.makeImage()
+    }
+}
+
+/// A value behind a lock (Capture Text runs off the main thread).
+final class Locked<Value>: @unchecked Sendable {
+    private var value: Value
+    private let lock = NSLock()
+    init(_ value: Value) { self.value = value }
+    func withLock<T>(_ body: (inout Value) -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return body(&value)
     }
 }
