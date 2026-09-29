@@ -29,6 +29,16 @@ let mathLayoutTests: [TestCase] = [
         t.equal(TextReflow.fractionPart("xln2"), "(x ln 2)")
         t.equal(TextReflow.fractionPart("login"), "login")
     },
+    TestCase("variablesRunIntoWordsAreSeparated") { t in
+        t.equal(TextReflow.separatedVariables("The roots are x = 1 and x = 3/2."), "The roots are x = 1 and x = 3/2.")
+        t.equal(TextReflow.separatedVariables("The roots arex = 1andx = 3/2."), "The roots are x = 1 and x = 3/2.")
+        t.equal(TextReflow.separatedVariables("c² = a² + b² - 2abcosC"), "c² = a² + b² - 2ab cos C")
+        t.equal(TextReflow.separatedVariables("detA = -2"), "det A = -2")
+        // Words stay whole, and only lines with a relation are touched.
+        t.equal(TextReflow.separatedVariables("Using logₐ(xy) = logₐx + logₐy"), "Using logₐ(xy) = logₐx + logₐy")
+        t.equal(TextReflow.separatedVariables("tacos = 3, rate = 5, cost = 2"), "tacos = 3, rate = 5, cost = 2")
+        t.equal(TextReflow.separatedVariables("arex and 1andx"), "arex and 1andx")
+    },
     TestCase("setSymbolsReadAsLettersAreRepaired") { t in
         t.equal(TextReflow.repairedMathSymbols("P(A n B) = P(A)P(B)"), "P(A ∩ B) = P(A)P(B)")
         t.equal(TextReflow.repairedMathSymbols("A U B"), "A ∪ B")

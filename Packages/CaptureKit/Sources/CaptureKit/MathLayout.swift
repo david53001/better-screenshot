@@ -216,7 +216,42 @@ extension TextReflow {
     }
 
     private static let functionArgument = try! NSRegularExpression(
-        pattern: #"(?<![A-Za-z])(sin|cos|tan|sec|csc|cot|log|ln|exp)(?=\d|[a-zθ](?![A-Za-z]))"#)
+        pattern: #"(?<![A-Za-z])(sin|cos|tan|sec|csc|cot|log|ln|exp|det)(?=\d|[a-zA-Zθ](?![A-Za-z]))"#)
+
+    /// Vision runs italic math into the words around it: `are x = 1 and x`
+    /// comes back `arex = 1andx`, `2ab cos C` as `2abcosC`, `det A` as `detA`.
+    /// Only on a line with a relation, and never splitting a dictionary word.
+    static func separatedVariables(_ text: String) -> String {
+        guard text.contains(where: { "=<>≤≥≠≈".contains($0) }) else { return text }
+        var out = text
+        // A function name glued to what's before it (`2abcosC`), unless the
+        // letters around it make a word (`tacos`) or it starts one (`Using`).
+        for match in gluedFunction.matches(in: out, range: NSRange(out.startIndex..., in: out)).reversed() {
+            guard let at = Range(match.range, in: out) else { continue }
+            let before = out[..<at.lowerBound].reversed().prefix { $0.isLetter }
+            let after = out[at.lowerBound...].prefix { $0.isLetter }
+            if WordList.contains((String(before.reversed()) + after).lowercased()) == true
+                || WordList.contains(after.lowercased()) == true { continue }
+            out.insert(" ", at: at.lowerBound)
+        }
+        // A joining word with a variable stuck to it before a relation
+        // (`arex =`, but not `ate =`), and a number stuck to one (`1and`).
+        for match in variableAfterWord.matches(in: out, range: NSRange(out.startIndex..., in: out)).reversed() {
+            guard let word = Range(match.range(at: 1), in: out), let all = Range(match.range, in: out),
+                  WordList.contains(String(out[all]).lowercased()) != true else { continue }
+            out.insert(" ", at: word.upperBound)
+        }
+        out = numberBeforeWord.stringByReplacingMatches(in: out, range: NSRange(out.startIndex..., in: out), withTemplate: " $1")
+        return spacedFunctionArguments(out)
+    }
+
+    private static let gluedFunction = try! NSRegularExpression(
+        pattern: #"(?<=[A-Za-z0-9])(?=(?:sin|cos|tan|log|ln|det)(?:[A-Zθ(\d]|[a-z](?![A-Za-z])))"#)
+
+    private static let joiningWords = "and|are|is|or|then|where|when|if|so|let|with|for|gives|at|of|to|but"
+    private static let variableAfterWord = try! NSRegularExpression(
+        pattern: #"(?<![A-Za-z])(\#(joiningWords))[a-zA-Zθ](?= ?[=<>≤≥≠≈])"#)
+    private static let numberBeforeWord = try! NSRegularExpression(pattern: #"(?<=\d)(\#(joiningWords))(?![A-Za-z])"#)
 
     /// A line of mostly-math: separate display equations are separate lines.
     static func isMath(_ text: String) -> Bool {

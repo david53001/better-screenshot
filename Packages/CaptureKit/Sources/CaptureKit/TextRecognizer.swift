@@ -85,7 +85,7 @@ public enum TextRecognizer {
             }
             let shown = lines[i].recovered ?? lines[i].text
             // `log`/`ln` look-alikes on lines no pixel rebuild touched.
-            let tidied = withTimesSigns(ScriptRecovery.repairingLog(shown))
+            let tidied = TextReflow.separatedVariables(withTimesSigns(ScriptRecovery.repairingLog(shown)))
             if tidied != shown { lines[i].recovered = tidied }
         }
         lines = lines.indices.filter { !absorbed.contains($0) }.map { lines[$0] }
