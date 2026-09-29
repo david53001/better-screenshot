@@ -137,9 +137,9 @@ let scriptRecoveryTests: [TestCase] = [
         glyphs[1].kind = .sup
         let line = measuredLine(glyphs, cap: 20, baseline: 30)
         t.equal(ScriptRecovery.alignment([0, 1, 2, 3], Array("2x3+1"), spaces: [], line) ?? [], [0..<2, 2..<3, 3..<4, 4..<5])
-        // Vision dropped the raised glyph: it gets nothing, to be read again.
-        // (Known limit: when a *touching* pair precedes the dropped script, as in
-        // `2x³` read `2x`, the cheaper assignment puts the x on the script glyph.)
+        // Vision dropped the raised glyph: it gets nothing, to be read again —
+        // also after a touching pair (`2x³` read `2x+1`: the x stays on the wide glyph).
+        t.equal(ScriptRecovery.alignment([0, 1, 2, 3], Array("2x+1"), spaces: [], line) ?? [], [0..<2, 2..<2, 2..<3, 3..<4])
         // `x²+1` read `x+1`:
         t.equal(ScriptRecovery.alignment([0, 1, 2, 3], Array("x+1"), spaces: [], measuredLine(
             [glyph(0, 14, 10, 16), glyph(11, 4, 7, 12), glyph(24, 14, 10, 12), glyph(40, 10, 10, 20)].enumerated().map { i, g in

@@ -245,7 +245,7 @@ enum ScriptRecovery {
                   let leftBottom = bottom[..<cut].max(), CGFloat(leftBottom) > line.baseline - 0.1 * cap,
                   // (the columns where they touch may hold both)
                   let runTop = top[cut...].min(), let leftTop = top[..<max(1, cut - 2)].min(),
-                  CGFloat(runTop) <= line.baseline - 0.9 * cap, CGFloat(leftTop) >= CGFloat(runTop) + 0.45 * cap
+                  CGFloat(runTop) <= line.baseline - 0.9 * cap, CGFloat(leftTop) >= CGFloat(runTop) + 0.35 * cap
             else { continue }
             let split = x0 + cut
             let left = blob.pixels.filter { $0 % w < split }, right = blob.pixels.filter { $0 % w >= split }
@@ -750,8 +750,10 @@ enum ScriptRecovery {
     /// reads as anything from nothing to a whole numerator, and Vision drops
     /// small scripts. Each character becomes a slot on its glyph; a script or
     /// fraction glyph always has exactly one slot.
+    /// `faithfulTo`: Vision's own read, when `read` is a re-read of it.
     private static func glyphTexts(_ group: [Int], read: [Character], spaces: Set<Int>, _ line: Line,
-                                   fixCase: Bool, confident: Bool, _ reread: (CGImage) -> String?) -> [String]? {
+                                   fixCase: Bool, confident: Bool, _ reread: (CGImage) -> String?,
+                                   faithfulTo vision: [Character]? = nil) -> [String]? {
         let original = read
         var read = read, spaces = spaces
         if !confident, group.contains(where: { line.glyphs[$0].kind != .normal }),
@@ -882,11 +884,21 @@ enum ScriptRecovery {
                         repaired.insert(i)
                     }
                 }
-            } else if fixed.count == chars.count {
+            } else if fixed.count == chars.count, !confident || kinds.indices.filter({
+                kinds[$0] == .normal && !same(fixed[$0], chars[$0])
+            }).count <= max(1, kinds.filter { $0 == .normal }.count / 10) {
+                // (Lined up: the counts can match by chance with the re-read a
+                // character off, which is the case below.)
                 // A sure first read keeps its full-size glyphs (`π` read `T`,
                 // re-read `n`); only the scripts come from the re-read.
                 chars = confident ? kinds.indices.map { kinds[$0] == .normal ? chars[$0] : fixed[$0] } : fixed
                 if !confident { spacesOut = fixedSpaces }
+            } else if vision == nil, let whole = glyphTexts(group, read: fixed, spaces: fixedSpaces, line, fixCase: fixCase,
+                                                            confident: confident, reread, faithfulTo: original) {
+                // Vision's read sat on the wrong glyphs (`ms 2` for `m s⁻²` at
+                // 1x): the re-read, laid out on the glyphs afresh, if it still
+                // spells Vision's full-size characters.
+                return whole
             } else if let again = alignment(group, fixed, spaces: fixedSpaces, line, kinds: glyphKinds) {
                 // The re-read split the glyphs differently: take each script
                 // glyph's character from it (and, on a shaky line, whole glyphs
@@ -984,7 +996,7 @@ enum ScriptRecovery {
             chars[i] = "-"
         }
         let structure = chars.indices.map { line.glyphs[slotGlyph[$0]].isStructure || repaired.contains($0) }
-        guard isFaithful(chars, kinds: kinds, structure: structure, to: firstRead, confident: confident) else { return nil }
+        guard isFaithful(chars, kinds: kinds, structure: structure, to: vision ?? firstRead, confident: confident) else { return nil }
         var slotOut = [String](repeating: "", count: chars.count)
         for i in chars.indices {
             guard let parts = line.glyphs[slotGlyph[i]].fraction else { continue }
@@ -1095,7 +1107,12 @@ enum ScriptRecovery {
                 switch count {
                 // The low `2` of a `½` passes for a subscript.
                 case 0: total = partOfVulgarFraction(j) ? 0.2 : 0.6
-                case 1: total = isScriptable(chars.first!) ? 0 : 0.3
+                case 1:
+                    total = isScriptable(chars.first!) ? 0 : 0.3
+                    // `2x²` with the 2 and x touching and the ² dropped: the x
+                    // belongs to the wide glyph before, not to the script.
+                    if chars.first!.isLetter, j > 0, read[j - 1].isNumber, k > 0, kinds[k - 1] == .normal,
+                       glyphs[k - 1].fraction == nil, glyphs[k - 1].box.width >= 1.6 * charWidth { total += 1.0 }
                 case 2: total = 1.2
                 default: return nil
                 }
