@@ -144,6 +144,15 @@ enum DisplayMath {
             let layout = Layout(blobs: blobs, map: map, reread: reread,
                                 lines: lines.map { $0.offsetBy(dx: -crop.minX, dy: -crop.minY) })
             return layout.rows().compactMap { row in
+                // Structure is decided by geometry, so parse once with reads
+                // stubbed out first: a row that can't come out as display math
+                // (a table row, a line of code) costs no Vision re-reads. The
+                // stub only ever lets more rows through (`lim` detection sees
+                // `lim`, and it never fails), never fewer.
+                layout.dry = true
+                layout.needed = false
+                guard let draft = layout.parse(row), draft.hasStructure, layout.needed else { return nil }
+                layout.dry = false
                 layout.needed = false
                 let parsedNode = layout.parse(row)
                 guard let node = parsedNode, node.hasStructure, layout.needed else { return nil }
@@ -165,6 +174,8 @@ enum DisplayMath {
         let cap: CGFloat
         /// Set when the row has something only this can rebuild.
         var needed = false
+        /// Reads return a placeholder instead of calling Vision (see `rebuild`).
+        var dry = false
 
         init(blobs: [InkMap.Blob], map: InkMap, reread: @escaping Reread, lines: [CGRect]) {
             self.blobs = blobs
@@ -519,6 +530,7 @@ enum DisplayMath {
         /// Reads a run of ink with Vision, scripts recovered from its pixels.
         /// A typeset `a = ` goes in front: Vision won't read a lone glyph.
         func read(_ members: [Int], script: Bool = false) -> String? {
+            if dry { return "lim" }
             // Vision won't read a lone glyph, so a typeset `a = ` goes first — but
             // a run starting with its own `=` then reads `-`: read those alone.
             guard let value = read(members, prefixed: true, script: script) else { return nil }
