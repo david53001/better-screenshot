@@ -38,10 +38,28 @@ of the one that produced it.
   over its explanation stays apart (`TextReflow.wrapped`, `reachesMargin`, W14). Baseline:
   `tools/ocr-bench/baselines/2026-09-29-w-fixes.json` (existing 55/66 · H 19/35 · N 5/7 · V 31/44 · G 5/6 ·
   W 19/30).
-- **Next, in order:** (1) nothing left from the speed review's list; (2) W01 loses
-  `=`, W08 `n/2` → `-`, W09 garbage `²ᵃ` (a recover rewrite that shouldn't be accepted — the relation guard
-  was the wrong fix; look at the per-word alignment instead); (3) V05, V01 from session 4;
-  (4) ask the owner about a bundled on-device math model; (5) merge + CHANGELOG.
+- **Math cases after that (owner: "keep going on the math cases") → 140/188, every step 0 worse:**
+  - W01 `v² = u² + 2as`: the alignment's "typical letter gap" is the lower third of the gaps, not the median
+    (a spaced equation has as many word gaps as letter gaps, so every space looked like one inside a word).
+  - W01 `½at²`: the low `2` of a `½` isn't a subscript (`vulgarPieces`); x-height evidence
+    (`Line.hasXHeight`) only counts glyphs on the baseline, and uppercasing (`s` → `S`) needs it.
+  - W08/M06 `Sₙ = n/2(…)`: `segment` picks, among gaps within 80 % of the cut, the cuts whose words have
+    Vision's lengths; a single Vision line whose DisplayMath rebuild has a stacked fraction takes it; row
+    joins drop spaces inside brackets. A recovered line never gains a `?`.
+  - W09 `m s⁻²` at 1x: when the first alignment was a misread, the word is rebuilt from the re-read's own
+    alignment (recursive `glyphTexts(…, faithfulTo:)`, still no-harm-checked against Vision's read); the
+    positional re-read path needs the full-size characters to line up (counts can match by chance).
+    Touching `0⁸` splits (raised tail 0.35 cap). A letter on a script glyph right after a wide glyph that
+    took one digit costs +1 (`2x²` read `2x`: the x stays on the touching pair).
+  - Spacing (hidden by `ignoreSpaces` cases): `TextReflow.separatedVariables` on relation lines —
+    `arex = 1andx` → `are x = 1 and x`, `2abcosC` → `2ab cos C`, `detA` → `det A`; never splits a word
+    (`Using`, `tacos`, `cost`).
+  - V08 `2π`: `π` read `n` is decided by `isPi` only for a lone `n` (not after a letter, at most one after)
+    on a line with a relation. `isPi` fires on many upright prose `n`s — never widen this.
+  - Newest baseline: `tools/ocr-bench/baselines/2026-09-29-pi-n.json`.
+- **Next, in order:** (1) V05 `[x² + x]₁³` (bracket read `|`, stacked limits), V01 (root over a
+  fraction), W23 (`2πr`, `rθ`, `l`), V09 (`t` read `+`, `≈` read `=`); (2) ask the owner about a bundled
+  on-device math model; (3) merge + CHANGELOG.
 - JVoice has an uncommitted companion doc, `../JVoice/docs/math-notation-format.md` (the shared Unicode
   math format and what its own math toggle should skip).
 
