@@ -933,6 +933,12 @@ enum ScriptRecovery {
                 chars[i] = "O"
             }
         }
+        // Vision reads both `π` and an italic `n` as Cyrillic `П`/`п`: the shape
+        // decides (a bar across the top on two legs is π).
+        for i in chars.indices where "Пп".contains(chars[i]) {
+            chars[i] = isPi(line.glyphs[slotGlyph[i]], line) ? "π" : "n"
+            repaired.insert(i)
+        }
         // A raised plus reads as `t` (`Fe³⁺` → `Fe3t`).
         for i in chars.indices where kinds[i] == .sup && "tT+f".contains(chars[i]) && isPlusShape(line.glyphs[slotGlyph[i]], line) {
             chars[i] = "+"

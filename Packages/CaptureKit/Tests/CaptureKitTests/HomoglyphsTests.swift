@@ -16,6 +16,7 @@ let homoglyphsTests: [TestCase] = [
     TestCase("cyrillicPeIsPiInMathAndNElsewhere") { t in
         t.equal(Homoglyphs.latinized("x = 5\u{43F}/6, 2\u{43F}r", keepCyrillic: false, keepGreek: false), "x = 5π/6, 2πr")
         t.equal(Homoglyphs.latinized("Ca\u{43F}ada", keepCyrillic: false, keepGreek: false), "Canada")
+        t.equal(Homoglyphs.latinized("a = \u{41F}", keepCyrillic: false, keepGreek: false), "a = π")
     },
     TestCase("romanianCedillasTakeTheirCommas") { t in
         t.equal(Homoglyphs.latinized("Ştefănescu, Timiş, Ţara", keepCyrillic: false, keepGreek: false, romanian: true),

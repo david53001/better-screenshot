@@ -23,9 +23,12 @@ public enum Homoglyphs {
         return String(chars.indices.map { i -> Character in
             let c = chars[i]
             if romanian, let comma = romanianCommas[c] { return comma }
-            // Cyrillic `п` is how Vision reads `π`: beside a digit, `/` or `=`
+            // Cyrillic `п`/`П` is how Vision reads `π`: beside a digit, `/` or `=`
             // it is π, anywhere else the `n` it looks like.
-            if c == "п", !keepCyrillic {
+            if "пП".contains(c), !keepCyrillic {
+                // One on its own (an integral's limit, read as `a = П`) is π too.
+                let alone = (i == 0 || chars[i - 1] == " ") && (i + 1 == chars.count || chars[i + 1] == " ")
+                if alone { return "π" }
                 let near = [i > 0 ? chars[i - 1] : " ", i + 1 < chars.count ? chars[i + 1] : " "]
                 return near.contains { $0.isNumber || "/=()".contains($0) } ? "π" : "n"
             }
