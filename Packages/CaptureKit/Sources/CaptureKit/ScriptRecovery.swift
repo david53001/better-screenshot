@@ -77,7 +77,7 @@ enum ScriptRecovery {
         var spaces: [Set<Int>] = words.map { _ in [] }
         // Touching letters can make one glyph of two, and Vision can drop a
         // small script; more glyphs than that means the words don't line up.
-        var groups = segment(line.glyphs, into: words.count) ?? []
+        var groups = segment(line.glyphs, into: words.count, lengths: words.map(\.count)) ?? []
         if groups.count != words.count || !zip(groups, words).allSatisfy({ group, word in
             group.count - word.count <= min(1, group.filter {
                 line.glyphs[$0].kind != .normal || line.glyphs[$0].fraction != nil
@@ -97,6 +97,8 @@ enum ScriptRecovery {
         }
         guard pieces.contains(where: { $0 != nil }) else { return nil }
         let out = repairingLog(assemble(groups, pieces: pieces, words: words, line))
+        // A `?` is a glyph nobody could read (or Vision's guess at a small `²`).
+        if out.contains("?") && !text.contains("?") { return nil }
         return out == text ? nil : out
     }
 
@@ -701,17 +703,40 @@ enum ScriptRecovery {
         g.box.height < 0.3 * cap && g.box.width > g.box.height
     }
 
-    /// Splits the glyphs into `count` words at the widest gaps.
-    static func segment(_ glyphs: [Glyph], into count: Int) -> [[Int]]? {
+    /// Splits the glyphs into `count` words at the widest gaps. Given Vision's
+    /// word lengths, gaps nearly as wide as the narrowest cut compete too, and
+    /// the cuts whose words have Vision's lengths win (`uₙ = u₁`: the gap before
+    /// `=` is a pixel wider than the one after it).
+    static func segment(_ glyphs: [Glyph], into count: Int, lengths: [Int]? = nil) -> [[Int]]? {
         guard count >= 1, count <= glyphs.count else { return nil }
         let gaps = glyphs.indices.dropFirst().map { i in (index: i, width: glyphs[i].box.minX - glyphs[i - 1].box.maxX) }
-        let cuts = Set(gaps.sorted { $0.width > $1.width }.prefix(count - 1).map { $0.index })
-        var groups: [[Int]] = [[]]
-        for i in glyphs.indices {
-            if cuts.contains(i) { groups.append([]) }
-            groups[groups.count - 1].append(i)
+        let widest = gaps.sorted { $0.width > $1.width }
+        func groups(_ cuts: Set<Int>) -> [[Int]] {
+            var groups: [[Int]] = [[]]
+            for i in glyphs.indices {
+                if cuts.contains(i) { groups.append([]) }
+                groups[groups.count - 1].append(i)
+            }
+            return groups
         }
-        return groups
+        var best = Set(widest.prefix(count - 1).map(\.index))
+        guard let lengths, lengths.count == count, count > 1 else { return groups(best) }
+        let narrowest = widest[count - 2].width
+        let candidates = widest.filter { $0.width >= 0.8 * narrowest }.map(\.index).sorted()
+        func mismatch(_ cuts: Set<Int>) -> Int { zip(groups(cuts), lengths).map { abs($0.count - $1) }.reduce(0, +) }
+        // Combinations of candidates, while there are few enough to try.
+        func combinations(_ k: Int, from start: Int) -> [[Int]] {
+            if k == 0 { return [[]] }
+            guard start < candidates.count else { return [] }
+            return combinations(k - 1, from: start + 1).map { [candidates[start]] + $0 } + combinations(k, from: start + 1)
+        }
+        guard candidates.count <= 12 else { return groups(best) }
+        var bestMismatch = mismatch(best)
+        for cuts in combinations(count - 1, from: 0) where mismatch(Set(cuts)) < bestMismatch {
+            best = Set(cuts)
+            bestMismatch = mismatch(best)
+        }
+        return groups(best)
     }
 
     // MARK: - Words

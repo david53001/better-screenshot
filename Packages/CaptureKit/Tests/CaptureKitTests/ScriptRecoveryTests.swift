@@ -78,6 +78,18 @@ let scriptRecoveryTests: [TestCase] = [
         t.equal(ScriptRecovery.segment(glyphs, into: 1) ?? [], [[0, 1, 2, 3]])
         t.isNil(ScriptRecovery.segment(glyphs, into: 5))
     },
+    TestCase("nearlyEqualGapsSplitWhereVisionsWordsDo") { t in
+        // `uₙ = u₁`: u ₙ [22] = [21] u ₁ — Vision's words are `un=` and `u1`,
+        // so the narrower gap after `=` is the cut.
+        let glyphs = [glyph(0, 10, 20, 20), glyph(21, 20, 10, 12), glyph(53, 18, 20, 6),
+                      glyph(94, 10, 20, 20), glyph(115, 20, 10, 12)]
+        t.equal(ScriptRecovery.segment(glyphs, into: 2) ?? [], [[0, 1], [2, 3, 4]])
+        t.equal(ScriptRecovery.segment(glyphs, into: 2, lengths: [3, 2]) ?? [], [[0, 1, 2], [3, 4]])
+        // A clearly wider gap still wins.
+        let wide = [glyph(0, 10, 20, 20), glyph(21, 20, 10, 12), glyph(71, 18, 20, 6),
+                    glyph(112, 10, 20, 20), glyph(133, 20, 10, 12)]
+        t.equal(ScriptRecovery.segment(wide, into: 2, lengths: [3, 2]) ?? [], [[0, 1], [2, 3, 4]])
+    },
     TestCase("alignTakesOnlyTheScriptsFromTheReread") { t in
         // First read `Tr?,` (π → T, ² → ?), re-read `nir2,` (π → ni): the
         // right-hand side agrees, so the ² comes from the re-read.

@@ -38,7 +38,10 @@ enum DisplayMath {
                 let sub = limit.map { ScriptRecovery.script($0, superscript: false) } ?? ""
                 let sup = upper.map { ScriptRecovery.script(compact($0.linear), superscript: true) } ?? ""
                 return symbol + sub + sup
-            case .row(let nodes): return nodes.map(\.linear).joined(separator: " ")
+            // Pieces read apart are joined by spaces, but none inside brackets: `(n − 1)d`.
+            case .row(let nodes):
+                return nodes.map(\.linear).joined(separator: " ")
+                    .replacingOccurrences(of: "( ", with: "(").replacingOccurrences(of: " )", with: ")")
             }
         }
 
@@ -85,7 +88,11 @@ enum DisplayMath {
                                           reread: reread) {
                 // The lines of this equation: their middles lie in its row.
                 let inRow = members.filter { rowBox.contains(CGPoint(x: boxes[$0].midX, y: boxes[$0].midY)) }
-                guard inRow.count >= 2, let first = inRow.min() else { continue }
+                guard let first = inRow.min() else { continue }
+                // One Vision line is already rebuilt glyph by glyph; replace it only
+                // when the row holds a stacked fraction (`n/2` read `F`), which
+                // glyph-by-glyph reading gets wrong around.
+                if inRow.count == 1, !text.contains("/") { continue }
                 out[first] = TextReflow.Line(text: text, box: inRow.dropFirst().reduce(lines[first].box) { $0.union(lines[$1].box) },
                                              recovered: text)
                 removed.formUnion(inRow.filter { $0 != first })
