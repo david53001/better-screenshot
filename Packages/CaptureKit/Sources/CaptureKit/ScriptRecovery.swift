@@ -49,6 +49,8 @@ enum ScriptRecovery {
         var trig = false
         /// `dx`, `dt`…: a tall stroke may be an integral sign.
         var hasDifferential = false
+        /// `=`, `<`, `≤`…: the line is an equation or inequality.
+        var hasRelation = false
         /// Both x-height letters and taller ones are on the line, so a letter's
         /// height says whether it has an ascender.
         var hasXHeight = false
@@ -65,6 +67,7 @@ enum ScriptRecovery {
         guard var line = lineGlyphs(rect: rect, in: image, excluding: others) else { return nil }
         let hasScripts = classify(&line)
         line.trig = mentionsTrig(text)
+        line.hasRelation = text.contains { "=<>≤≥≠≈".contains($0) }
         line.hasDifferential = text.range(of: #"(?<![A-Za-z])d[a-zθ](?![a-z])"#, options: .regularExpression) != nil
         // Symbols Vision reads as look-alikes: a square root as `V`, `±` as `+`,
         // `≠` and `±` as `‡`, `θ` as `0`.
@@ -962,7 +965,11 @@ enum ScriptRecovery {
                 chars[i] = "Δ"
                 repaired.insert(i)
             }
-            if chars[i] == "T", !insideWord(i), isPi(glyph, line) {
+            // …and as `n` (`2n` for `2π`, `nr` for `πr`) — only in an equation,
+            // never after a letter (`when`, `in`) or before two (`nr.` stays).
+            let loneN = chars[i] == "n" && line.hasRelation && (i == 0 || !chars[i - 1].isLetter)
+                && chars[(i + 1)...].prefix(while: \.isLetter).count <= 1
+            if chars[i] == "T" && !insideWord(i) || loneN, isPi(glyph, line) {
                 chars[i] = "π"
                 repaired.insert(i)
             }
