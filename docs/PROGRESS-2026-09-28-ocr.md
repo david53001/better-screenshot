@@ -34,18 +34,17 @@ regression set). Its top 5 fixes were then worked through, each diffed against t
 
 **Numbers before the table merge** (baseline `tools/ocr-bench/baselines/2026-09-29-symbols.json`): existing
 55/66 · held-out H 19/35 · no-harm 5/7 · review-3 V **25/44** (was 14/44). The table agent alone took V
-to 16/44 and G to 5/6. **A full corpus run after the merge (`6a4cf9b`) was started but not checked** —
-first thing next session: `cd tools/ocr-bench && ./run.sh && python3 summarize.py && python3 diff.py
-baselines/2026-09-29-symbols.json` (expect V29/V30 better, nothing worse), then save it as a baseline.
-Unit tests after the merge: 199/199.
+to 16/44 and G to 5/6. **After the merge (`6a4cf9b`), verified:** existing 55/66 · H 19/35 · N 5/7 ·
+V **27/44** (CER 0.040) · G 5/6; vs the pre-merge baseline 2 better (V29, V30), 0 worse. Newest baseline:
+`tools/ocr-bench/baselines/2026-09-29-merged.json` (158 cases). Unit tests after the merge: 199/199.
 
 **Caution for the next review:** the V set has now been looked at while fixing, so a fourth review must
 write new cases again. Always check a saved baseline has all cases (`len(json)` = 158 now) — a `--only`
 run overwrites `out/results.json`.
 
-Next steps, in order: (1) verify the merged run; (2) item 4 (math from pixels) and the rest of item 5;
-(3) update root `CLAUDE.md` with `GridLines.swift`; (4) fresh reviewer with new cases; (5) ask the owner
-about a bundled on-device math model; (6) merge `ocr-structure-math` into `main`.
+Next steps, in order: (1) item 4 (math from pixels) and the rest of item 5;
+(3) update root `CLAUDE.md` with `GridLines.swift`; (3) fresh reviewer with new cases; (4) ask the owner
+about a bundled on-device math model; (5) merge `ocr-structure-math` into `main`.
 
 ## Latest status (session 2, overnight 2026-09-28 → 29) — read this first
 
