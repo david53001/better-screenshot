@@ -3,6 +3,31 @@
 **Read this first if you are picking this work up.** It is written for a fresh session with no memory
 of the one that produced it.
 
+## Latest status (session 4, 2026-09-29, later) — read this first
+
+- **Rest of review fix 5 done:** `10g3 (` → `log₃(`, `In 2 /` → `ln 2 /`, a decimal point inside an exponent
+  joins it (`e^(0.2t)`) — `ScriptRecovery.repairingLog` now also runs on every line's final text.
+- **Fix 4 partly done:** a radical is recognised from its ink whatever Vision read (`ScriptRecovery.isRadical`,
+  in `assemble`; needs glyphs under its bar, so an `fi` ligature isn't one) → V07 passes; a fraction whose
+  numerator Vision didn't box at all is rebuilt by `DisplayMath` (V10 passes), and display-math reads now
+  use Vision's confidence (`DisplayMath.Reread` returns text + confidence; shaky reads may be corrected by
+  sure re-reads). Math-line tidying gained `|a|` from `lal`, `√14` from `√(14)`, `a · b`, and word-aware
+  `cos θ`/`sin 3x` spacing (`TextReflow.spacedFunctionArguments`, never `cost` → `cos t`). **Still open:**
+  V05 (`[x² + x]₁³` evaluated bracket), V01 (root over a fraction), V02 (`d/dx` alone).
+- **New setting: Settings → Capture → "Recognize math"** (`CaptureSettings.captureTextMath`, key
+  `captureTextMath`, default on; ⓘ text in `App/Settings/SettingsHelp.swift`; passed from
+  `CaptureCoordinator.runCaptureText` as `TextRecognizer.recognize(…, math:)`). Off skips `recover`,
+  `relationSymbols`, `DisplayMath` and fraction stacking; dashes, checkboxes, table cells, gridlines, code
+  repairs and cheap text tidying still run. Bench: `./run.sh --no-math`. Measured (debug): median 413 ms →
+  133 ms per case (tables 1162 → 228 ms); review-set accuracy 30/44 → 24/44 with it off.
+  (The owner's screenshot of a "Math Notation" toggle was JVoice's; BetterScreenshot had none — owner chose
+  to add one here.)
+- **Numbers (math on):** existing 55/66 · H 19/35 · N 5/7 · V 30/44 (CER 0.022) · G 5/6; unit tests 200/200.
+  Newest baseline: `tools/ocr-bench/baselines/2026-09-29-numerator.json`.
+- **Running at the end of this session:** an independent speed + accuracy review (report:
+  `docs/reviews/2026-09-29-ocr-speed-review.md`, new cases `W*` in `FourthReviewCases.swift` from its
+  worktree). Next: implement its top speed recommendations, then the open fix-4 items.
+
 ## Latest status (session 3, 2026-09-29) — read this first
 
 A third independent review (`docs/reviews/2026-09-29-ocr-review.md`) scored Capture Text **4/10**: it

@@ -153,7 +153,9 @@ column's longest line). `MathLayout.swift` rebuilds stacked fractions (needs a b
 `DisplayMath.swift` rebuilds display equations from pixels (∫/∑ with limits, `lim`, matrices) where
 MathLayout can't; `ScriptRecovery.alignment` (a small dynamic program) assigns Vision's characters to
 glyphs; `TextRecognizer.cellLines` reads table cells Vision didn't box; `WordList.swift` (system word
-list) decides whether a line-end hyphen stays.
+list) decides whether a line-end hyphen stays; `GridLines.swift` finds a table's faint vertical rules so
+cells land in the right column. **Settings → Capture → "Recognize math"** (`captureTextMath`, default on)
+gates the pixel math passes — off is ≈3× faster (`TextRecognizer.recognize(…, math:)`, bench `--no-math`).
 `ScriptRecovery.swift` (+ `InkMap.swift`: Otsu binarization, 8-connected blobs) finds glyphs per line,
 marks raised/lowered ones against the full-size glyph before them, and re-reads a straightened copy through
 Vision when Vision's own characters can't be trusted; it also turns a radical blob into `√(…)`, `+` with a
