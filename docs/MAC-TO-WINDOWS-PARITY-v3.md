@@ -3356,7 +3356,7 @@ To keep the three columns about equal in height, the Startup card moved to colum
 Overlay) and Pin to Screen to column 2 (under Recording). Columns are now: Capture · Quick Access Overlay ·
 Startup | Recording · Pin to Screen | In the video · History · Save location.
 
-## Part 9 — Native look (MacStats design language), macOS branch `feat/native-look`, 2026-09-29
+## Part 9 — Native look (MacStats design language), released as v3.1.0, 2026-09-29
 
 > Numbered 9 because the unmerged Capture Text branch (`ocr-structure-math`) already adds a Part 8.
 > Source spec: `/Users/davidghermansteinberg/Desktop/Home/Projects/Code/MacStats/docs/design-language/betterscreenshot-native-redesign.md`

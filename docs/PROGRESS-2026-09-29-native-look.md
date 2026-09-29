@@ -1,6 +1,6 @@
 # Native look (MacStats design language) — progress and handoff (2026-09-29)
 
-**Branch:** `feat/native-look` (from `main` at `2affdef`, v3.0.0). Not merged, not pushed, not tagged.
+**Released as v3.1.0 (2026-09-29)**, on `main` (built on branch `feat/native-look` from `2affdef`, v3.0.0).
 **Spec:** `/Users/davidghermansteinberg/Desktop/Home/Projects/Code/MacStats/docs/design-language/betterscreenshot-native-redesign.md`
 (language: `.../MacStats/docs/design-language/README.md`). Owner request 2026-09-29: make every part of
 the UI (Settings, the pills, everything) look like the native MacStats UI.

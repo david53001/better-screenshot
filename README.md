@@ -56,7 +56,7 @@ The app has no built-in updater (it never touches the network). To move to the n
 curl -fsSL https://raw.githubusercontent.com/david53001/better-screenshot/main/scripts/install.sh | bash
 ```
 
-It quits the running copy, replaces `/Applications/BetterScreenshot.app` with the [latest release](../../releases/latest), and relaunches it. Nothing else is touched, so everything carries over:
+It tells you which version you had and which you got (and does nothing if you're already up to date — add `BETTERSCREENSHOT_FORCE=1` before `bash` to reinstall anyway), quits the running copy, replaces `/Applications/BetterScreenshot.app` with the [latest release](../../releases/latest), and relaunches it. Nothing else is touched, so everything carries over:
 
 - **Settings and keyboard shortcuts** — stored in `~/Library/Preferences/com.betterscreenshot.mac.plist`
 - **Capture history** — stored in `~/Library/Application Support/BetterScreenshot/History/`

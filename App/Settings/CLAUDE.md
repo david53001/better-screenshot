@@ -17,7 +17,7 @@
   `RecordingConfig.showsCursor`.
 - `SettingsHelp.swift` — the ⓘ texts (title · explanation · example) for every setting. Shortcut
   examples use Apple's modifier order (⇧⌘4), like `HotkeyCombo.displayString`.
-- Look (branch `feat/native-look`, MacStats design language): the window follows the system appearance
+- Look (v3.1.0, MacStats design language): the window follows the system appearance
   and hosts the SwiftUI view on a `.sidebar` material (`DesignKit.WindowMaterial`) under a transparent
   title bar; cards are `Components/SettingsCard.swift` (DesignKit `CardBackground`, caption2 header, no dot);
   controls are native (`Components/Controls.swift`: `StopSlider`, `MenuPicker`, `PathField`;

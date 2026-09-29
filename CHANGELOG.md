@@ -2,6 +2,26 @@
 
 All notable changes to BetterScreenshot. Versions are git tags; releases are published on [GitHub](../../releases).
 
+## v3.1.0 — 2026-09-29 · Native look
+
+Every window and floating control now looks like a native macOS app (the "MacStats" design language —
+details and measurements in `docs/PROGRESS-2026-09-29-native-look.md`). Windows port notes:
+`docs/MAC-TO-WINDOWS-PARITY-v3.md` Part 9.
+
+- **Settings** follows your light/dark setting and sits on a slightly translucent background, with soft
+  tinted cards (no dots), standard Mac switches, segmented controls, sliders and pop-up menus in your accent
+  colour, and ⓘ tips in a native popover. Clear History asks with a standard alert. Every setting still
+  applies instantly.
+- **One dark look for everything that floats**: the record strip, the recording pill, the countdown, the
+  keystroke overlay, toasts, the selection size readout and the window picker's title. Smooth (continuous)
+  corners, hairline edges, and white text that stays readable over bright pages (≥ 6:1 measured).
+- **Editor and video editor** stay dark but their backgrounds are translucent; the tool bar, side panel and
+  trim controls are lighter panels instead of black slabs.
+- **Rounded corners are Apple's smooth squircle curve everywhere** (Quick Access card, History, tour tags,
+  timeline); History cells highlight on hover.
+- Internals: new `Packages/DesignKit` (shared look); `HUDStyle` / `RecordingHUDStyle` replaced by
+  `HUDSurfaceView`.
+
 ## v3.0.0 — 2026-09-26 · Editor & recording overhaul, video editor, guided tours
 
 Design: `docs/superpowers/specs/2026-09-24-betterscreenshot-editor-recording-v3-design.md`; Windows
