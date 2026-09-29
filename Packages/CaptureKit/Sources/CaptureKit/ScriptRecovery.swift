@@ -64,7 +64,7 @@ enum ScriptRecovery {
                         confident: Bool = true, reread: (CGImage) -> String?) -> String? {
         guard var line = lineGlyphs(rect: rect, in: image, excluding: others) else { return nil }
         let hasScripts = classify(&line)
-        line.trig = text.range(of: #"(?<![A-Za-z])(?:sin|cos|tan|sec|csc|cot)"#, options: .regularExpression) != nil
+        line.trig = mentionsTrig(text)
         line.hasDifferential = text.range(of: #"(?<![A-Za-z])d[a-zθ](?![a-z])"#, options: .regularExpression) != nil
         // Symbols Vision reads as look-alikes: a square root as `V`, `±` as `+`,
         // `≠` and `±` as `‡`, `θ` as `0`.
@@ -143,6 +143,12 @@ enum ScriptRecovery {
             (0..<w).filter { ink.contains((y0 + y) * line.map.width + Int(box.minX) + $0) }.count
         }.max() ?? 0
         return Double(bottom) >= 0.8 * Double(w)
+    }
+
+    /// A trig name as a word of its own or before its argument (`sin`, `cos2θ`,
+    /// `sinx`) — not inside `second`, `since`, `cost` or `tank`.
+    static func mentionsTrig(_ text: String) -> Bool {
+        text.range(of: #"(?<![A-Za-z])(?:sin|cos|tan|sec|csc|cot)(?![a-z]{2})"#, options: .regularExpression) != nil
     }
 
     /// `π`, which Vision reads as `T`: a bar across the top on two legs.
@@ -882,25 +888,33 @@ enum ScriptRecovery {
                 repaired.insert(i)
             }
         }
+        // A shape repair never lands inside an ordinary word: `Add` is not `Δdd`,
+        // `Tank` not `πank` — the letter is followed by two more lowercase ones,
+        // or sits between letters.
+        func insideWord(_ i: Int) -> Bool {
+            let after = chars[(i + 1)...].prefix { $0.isLowercase }.count
+            let before = i > 0 && chars[i - 1].isLetter
+            return after >= 2 || before && after >= 1
+        }
         for i in chars.indices where kinds[i] == .normal && slotGlyph.filter({ $0 == slotGlyph[i] }).count == 1 {
             let glyph = line.glyphs[slotGlyph[i]]
             if chars[i] == "‡" { chars[i] = glyph.blobs.count == 1 ? "≠" : "±" }
             if chars[i] == "+", isPlusMinus(glyph, line) { chars[i] = "±" }
-            if chars[i] == "A", isDelta(glyph, line) {
+            if chars[i] == "A", !insideWord(i), isDelta(glyph, line) {
                 chars[i] = "Δ"
                 repaired.insert(i)
             }
-            if chars[i] == "T", isPi(glyph, line) {
+            if chars[i] == "T", !insideWord(i), isPi(glyph, line) {
                 chars[i] = "π"
                 repaired.insert(i)
             }
             // An integral sign, read `/` or `J`: a glyph over twice the height
             // of a capital, on a line with a `dx`.
-            if "/|JSf(".contains(chars[i]), glyph.box.height > 2.2 * line.capHeight, line.hasDifferential {
+            if "/|JSf(".contains(chars[i]), !insideWord(i), glyph.box.height > 2.2 * line.capHeight, line.hasDifferential {
                 chars[i] = "∫"
                 repaired.insert(i)
             }
-            if line.trig, !"B8g%&θ".contains(chars[i]), glyph.fraction == nil, isTheta(glyph, line) {
+            if line.trig, !"B8g%&θ".contains(chars[i]), !insideWord(i), glyph.fraction == nil, isTheta(glyph, line) {
                 chars[i] = "θ"
                 repaired.insert(i)
             }

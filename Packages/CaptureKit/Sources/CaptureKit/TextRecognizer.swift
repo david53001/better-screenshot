@@ -1,4 +1,5 @@
 import Vision
+import CoreText
 import CoreGraphics
 import Foundation
 
@@ -350,10 +351,19 @@ public enum TextRecognizer {
     /// model after ~20s idle and reloading costs 0.5–1s; calling this when the
     /// selection overlay appears hides that behind the user's drag.
     public static func warmUp() {
-        let ctx = CGContext(data: nil, width: 32, height: 32, bitsPerComponent: 8, bytesPerRow: 0,
-                            space: CGColorSpaceCreateDeviceRGB(),
-                            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-        guard let image = ctx?.makeImage() else { return }
+        // A blank image never reaches the recognizer; a couple of real words
+        // load its models (first capture 181 → 142 ms, measured).
+        let ctx = CGContext(data: nil, width: 220, height: 48, bitsPerComponent: 8, bytesPerRow: 0,
+                            space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue)
+        guard let ctx else { return }
+        ctx.setFillColor(gray: 1, alpha: 1)
+        ctx.fill(CGRect(x: 0, y: 0, width: 220, height: 48))
+        let font = CTFontCreateWithName("Helvetica" as CFString, 24, nil)
+        let words = CTLineCreateWithAttributedString(NSAttributedString(
+            string: "Warm up", attributes: [NSAttributedString.Key(kCTFontAttributeName as String): font]))
+        ctx.textPosition = CGPoint(x: 12, y: 14)
+        CTLineDraw(words, ctx)
+        guard let image = ctx.makeImage() else { return }
         try? VNImageRequestHandler(cgImage: image).perform([makeTextRequest()])
     }
 

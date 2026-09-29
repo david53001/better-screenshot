@@ -67,6 +67,11 @@ let scriptRecoveryTests: [TestCase] = [
         _ = ScriptRecovery.classify(&line)
         t.equal(line.glyphs[2].kind, .normal)
     },
+    TestCase("trigIsATrigNameNotPartOfAWord") { t in
+        t.isTrue(ScriptRecovery.mentionsTrig("cos 2θ = 1 - 2 sin²θ"))
+        t.isTrue(ScriptRecovery.mentionsTrig("y = sinx"))
+        t.isFalse(ScriptRecovery.mentionsTrig("the second draft, since it cost a tank"))
+    },
     TestCase("wordsSplitAtTheWidestGaps") { t in
         let glyphs = [glyph(0, 0, 10, 10), glyph(12, 0, 10, 10), glyph(40, 0, 10, 10), glyph(52, 0, 10, 10)]
         t.equal(ScriptRecovery.segment(glyphs, into: 2) ?? [], [[0, 1], [2, 3]])
