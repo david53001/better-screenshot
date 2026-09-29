@@ -697,6 +697,17 @@ enum ScriptRecovery {
                 kinds.append(glyph.kind)
                 chars.append(span.count == 0 || !read.indices.contains(position) ? "?" : read[position])
             }
+            // Punctuation the alignment skipped (a comma run into the `y`
+            // before it) stays where Vision read it.
+            var next = span.isEmpty ? nil : span.upperBound
+            while let p = next, read.indices.contains(p), !spans.contains(where: { $0.contains(p) }),
+                  ".,'`’‘·".contains(read[p]) {
+                slotGlyph.append(index)
+                slotOf.append(k)
+                kinds.append(.normal)
+                chars.append(read[p])
+                next = p + 1
+            }
         }
         var repaired = shaped
         // A thin raised or lowered stroke is a minus, whatever Vision made of it.
