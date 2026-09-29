@@ -3435,6 +3435,8 @@ General:
   recognition language).
 
 **Math — readable Unicode, not LaTeX** (owner decision, 2026-09-28). Flattening `x²` to `x2` is wrong.
+The same format is the target for the owner's dictation app JVoice (spoken maths → symbols); its copy of
+this contract, with a symbol-by-symbol table and spoken examples, is `../JVoice/docs/math-notation-format.md`.
 
 | What | Paste | Rule |
 |---|---|---|
