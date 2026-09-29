@@ -77,7 +77,9 @@ extension TextReflow {
     }
 
     /// `a + b` → `(a + b)`; `2a`, `dy`, `n(n + 1)` stay bare.
-    static func fractionPart(_ text: String) -> String {
+    static func fractionPart(_ raw: String) -> String {
+        // `xln2` is `x ln 2`: a log glued between a one-letter factor and its argument.
+        let text = gluedLog.stringByReplacingMatches(in: raw, range: NSRange(raw.startIndex..., in: raw), withTemplate: " $1 ")
         var depth = 0
         for c in text {
             if "([{".contains(c) { depth += 1 } else if ")]}".contains(c) { depth -= 1 }
@@ -85,6 +87,8 @@ extension TextReflow {
         }
         return text
     }
+
+    private static let gluedLog = try! NSRegularExpression(pattern: #"(?<=\b[a-z])(ln|log)(?=\d|[a-z]\b)"#)
 
     /// A short box sitting raised (or lowered) right after another line is its
     /// exponent (or index) that Vision boxed on its own.
@@ -189,6 +193,9 @@ extension TextReflow {
         (#"(?<![A-Za-z])l([a-zA-Z])l(?![A-Za-z])"#, "|$1|"),
         (#"\| ([a-zA-Z])\|"#, "|$1|"),
         (#"√\((\d+(?:\.\d+)?)\)"#, "√$1"),
+        // Trig names with a digit look-alike (`3c0s3x`, `s1n x`).
+        (#"(?<![A-Za-z])c[0O]s(?=[\s\dA-Za-zθ(])"#, "cos"),
+        (#"(?<![A-Za-z])s[1l|]n(?=[\s\dA-Za-zθ(])"#, "sin"),
         (#"(?<=[\w)|]) ?[•·] ?(?=[\w(|])"#, " · "),
     ].map { (try! NSRegularExpression(pattern: $0.0), $0.1) }
 

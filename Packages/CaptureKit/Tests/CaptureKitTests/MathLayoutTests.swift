@@ -25,6 +25,10 @@ let mathLayoutTests: [TestCase] = [
         t.equal(TextReflow.spacedOperators("a <= b, c != d"), "a <= b, c != d")
         t.equal(TextReflow.spacedOperators("the x-axis ≥ 0"), "the x-axis ≥ 0")
     },
+    TestCase("aLogGluedIntoADenominatorIsSpacedAndBracketed") { t in
+        t.equal(TextReflow.fractionPart("xln2"), "(x ln 2)")
+        t.equal(TextReflow.fractionPart("login"), "login")
+    },
     TestCase("setSymbolsReadAsLettersAreRepaired") { t in
         t.equal(TextReflow.repairedMathSymbols("P(A n B) = P(A)P(B)"), "P(A ∩ B) = P(A)P(B)")
         t.equal(TextReflow.repairedMathSymbols("A U B"), "A ∪ B")
@@ -33,6 +37,7 @@ let mathLayoutTests: [TestCase] = [
         t.equal(TextReflow.repairedMathSymbols("a ≤ b,c ≥ d at (1,2)"), "a ≤ b, c ≥ d at (1,2)")
         t.equal(TextReflow.repairedMathSymbols("lal = √(14), a•b = | a|| b| cosθ"), "|a| = √14, a · b = |a||b| cos θ")
         t.equal(TextReflow.repairedMathSymbols("y = sin3x"), "y = sin 3x")
+        t.equal(TextReflow.repairedMathSymbols("= 3c0s3x, s1n x"), "= 3cos 3x, sin x")
         // Words stay words.
         t.equal(TextReflow.repairedMathSymbols("Use n = 5 in E = mc²"), "Use n = 5 in E = mc²")
         t.equal(TextReflow.repairedMathSymbols("single, since, cost = 3"), "single, since, cost = 3")

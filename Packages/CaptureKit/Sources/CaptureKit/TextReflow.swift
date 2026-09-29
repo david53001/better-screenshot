@@ -192,7 +192,10 @@ public enum TextReflow {
             }
             var seg = Seg(text: text, shown: line.recovered.map(normalize) ?? text, raw: line.rawText.map(normalize),
                           box: pixels(b), order: index, wordBoxes: line.wordBoxes?.map(pixels))
-            while let j = segs.firstIndex(where: { isSameRow($0.box, seg.box) && isAdjacent($0, seg) }) {
+            // Fragments of one line share its middle; a denominator's row only
+            // brushes the line beside the bar (`dx` under `d`, beside `(sin 3x)`).
+            while let j = segs.firstIndex(where: { isSameRow($0.box, seg.box) && isAdjacent($0, seg)
+                && abs($0.box.midY - seg.box.midY) <= 0.4 * max($0.box.height, seg.box.height) }) {
                 seg = joined(segs.remove(at: j), seg)
             }
             segs.append(seg)
