@@ -3355,3 +3355,224 @@ card's divider), 14 pt row spacing:
 To keep the three columns about equal in height, the Startup card moved to column 1 (under Quick Access
 Overlay) and Pin to Screen to column 2 (under Recording). Columns are now: Capture · Quick Access Overlay ·
 Startup | Recording · Pin to Screen | In the video · History · Save location.
+
+---
+
+## Part 8 — Capture Text (OCR): structure, math, and the "Recognize math" setting (2026-09-28 → 29)
+
+**Status on macOS.** Built on branch **`ocr-structure-math`** (not yet merged into `main`, not tagged). It
+rebuilds what **Capture Text** (⌘⇧7: drag a region → its text goes on the clipboard) pastes, so that
+paragraphs, lists, tables, code and **math** come out the way a careful human would retype them. The
+Windows port's Capture Text was **not** updated and still pastes the OCR engine's lines as they come.
+History and numbers: `docs/PROGRESS-2026-09-28-ocr.md` (read its top section first); the three
+independent reviews: `docs/reviews/2026-09-28-ocr-review.md` (3/10), `…-rereview.md` (4/10),
+`docs/reviews/2026-09-29-ocr-review.md` (4/10, which drove the last round of fixes); a speed + accuracy
+review is at `docs/reviews/2026-09-29-ocr-speed-review.md` once it lands.
+
+**Terms used below.** *OCR* = optical character recognition. *Vision* = Apple's on-device OCR framework
+(`VNRecognizeTextRequest`, "accurate" level, language correction on). A Vision *observation* = one line of
+text + its bounding box + a confidence 0…1. *Ink* = the dark pixels after binarising the image. *Blob* = a
+connected group of ink pixels (8-connected). *Glyph* = one character's ink (one or more blobs). *cap* =
+the height of a capital letter on the line, in pixels — every threshold below is a multiple of it. *Script*
+= a superscript or subscript. *CER* = character error rate (edit distance ÷ expected length; 0 = perfect).
+
+**Where the macOS code is** (all `Packages/CaptureKit/Sources/CaptureKit/`): `TextRecognizer.swift` (entry
+point + the per-line pixel passes), `ScriptRecovery.swift` + `InkMap.swift` (glyphs, scripts, symbol
+shapes), `DisplayMath.swift` (displayed equations from pixels), `MathLayout.swift` (stacked fractions from
+boxes, math-line tidying), `TextReflow.swift` (lines → paragraphs / lists / tables / code), `GridLines.swift`
+(a table's faint vertical rules), `Homoglyphs.swift`, `WordList.swift`, `RecognitionResult.swift`
+(clipboard + HUD). Tests: `Packages/CaptureKit/Tests/CaptureKitTests/` — `ScriptRecoveryTests`,
+`TextReflowTests`, `MathLayoutTests`, `DisplayMathTests`, `InkMapTests`, `GridLinesTests`,
+`HomoglyphsTests`, `CaptureSettingsTests`, `RecognitionResolverTests` (201 tests; port the pure ones 1:1).
+Corpus harness: `tools/ocr-bench/` (below, §8.8).
+
+### 8.1 Settings → Capture → "Recognize math" (new row — exact)
+
+- **Where:** the **CAPTURE** card (column 1), directly under **"Play a sound on capture"**, same switch-row
+  component as that row (label left, mono switch right), same 14 pt row spacing.
+- **Label:** `Recognize math` + ⓘ. **ⓘ tip** (verbatim): title **"Recognize math"**; text **"Capture Text
+  rebuilds math from the image: exponents and subscripts, square roots, fractions and displayed equations.
+  Turn it off for faster captures of ordinary text."**; example **"On: x² + y² = z², H₂O, √(x + 1). Off:
+  faster, but x² comes out as x2."**
+- **Data:** `CaptureSettings.captureTextMath`, persisted in the flat settings dictionary under key
+  **`captureTextMath`** as `"1"`/`"0"`; **absent = on**; default **on** (existing users get it on).
+  macOS test: `recognizeMathDefaultsOnAndRoundTrips` in `CaptureSettingsTests.swift`.
+- **Behaviour:** read when a Capture Text capture starts (`CaptureCoordinator.runCaptureText` passes it as
+  `TextRecognizer.recognize(in:pointWidth:math:)`), so a change applies to the next capture; no restart.
+- **What "off" skips** (the expensive, math-only passes — each re-runs the OCR engine on small synthetic
+  images): super/subscript recovery (§8.4 step 4d), the `≈`/`±` shape check (4b), displayed-equation
+  rebuilding (step 6) and stacked-fraction detection (the bar-measuring closure passed to TextReflow is
+  `nil`). **Still runs with it off:** dashes/dots/separators/checkboxes/icons (4c), the missing full stop
+  (4a), table cells (5), code re-read (7), gridlines, all layout, and the cheap text-only tidying (`log`/`ln`
+  look-alikes, `×` between numbers, math-line operator spacing).
+- **Measured speed difference (macOS, debug build of the harness, 158 cases, 2026-09-29):** median
+  **413 ms → 133 ms** per capture with it off (≈ 3×); per area on → off: tables 1162 → 228 ms, math
+  400 → 76 ms, prose 230 → 116 ms, code 624 → 386 ms, layout 705 → 327 ms. Accuracy on the third review's
+  44 cases: 30/44 on vs 24/44 off in the same run (31/44 on after later fixes; the cases lost with it off
+  are exponents, subscripts and fractions). **The port must
+  show the same kind of difference** — if "off" isn't clearly faster, something math-only is still running.
+
+### 8.2 The clipboard format (the contract — what a capture must paste)
+
+General:
+- **Paragraphs:** a wrapped paragraph becomes **one line**; separate paragraphs are separated by `\n`.
+  Hyphenated line ends are joined (`photo-` + `synthesis` → `photosynthesis`) **unless** the joined word is
+  not in the word list (`light-` + `dependent` stays `light-dependent`).
+- **Headings, labels, sidebars, to-do lines** stay on their own lines.
+- **Lists:** one item per line, marker kept: `•` (all bullet look-alikes `· ● ◦ ▪ ‣` become `•`), `–`
+  (en-dash markers), `-`, `*`, `1.`, `a)`, `(ii)`, **`☐` / `☑`** (checkboxes, from their shape). Nesting =
+  one leading **tab** per level. A UI checkbox or an icon in front of a label is **dropped** (not `•`/`A`).
+- **Tables:** one row per line, cells separated by **one tab**, empty cells kept (`Ionescu⇥28⇥⇥20`) so
+  columns line up when pasted into Excel/Sheets.
+- **Code:** line per line, indentation rebuilt with spaces, blank lines kept, a line-number gutter dropped.
+- **Reading order:** column by column (never interleaved); a figure caption stays under its figure.
+- **QR codes:** a QR filling ≥ 20 % of the selection → its payload replaces the text; a smaller one → its
+  payload is appended after the text. HUD texts (verbatim): `QR code copied`, `Text copied — N characters`,
+  `No text found`.
+- **Typography kept:** em dash `—` (≥ 0.95 cap wide), en dash `–` (0.65–0.95 cap, in `14:00–17:00` ranges
+  or between words), middle dot `·`, `3,760` vs `3.760` decided by the separator's shape (a comma has a
+  tail), Romanian **`ș ț`** with comma-below (Vision returns the cedilla `ş ţ`; mapped when Romanian is a
+  recognition language).
+
+**Math — readable Unicode, not LaTeX** (owner decision, 2026-09-28). Flattening `x²` to `x2` is wrong.
+
+| What | Paste | Rule |
+|---|---|---|
+| Powers | `x²`, `10⁻³`, `2ⁿ⁺¹`, `e^(iπ)`, `e^(0.2t)`, `e^(−x²)` | Unicode superscripts when **every** character of the exponent has one; otherwise `^(…)` for the whole exponent (`^x` for a single char). |
+| Indices | `x₁`, `aₙ`, `log₂8`, `H₂O`, `CO₂` | Same with subscripts; otherwise `_(…)`. |
+| Superscript set | `⁰¹²³⁴⁵⁶⁷⁸⁹ ⁺⁻⁼⁽⁾ ᵃᵇᶜᵈᵉᶠᵍʰⁱʲᵏˡᵐⁿᵒᵖʳˢᵗᵘᵛʷˣʸᶻ` | No superscript `q`, no capitals, no Greek → fallback. |
+| Subscript set | `₀₁₂₃₄₅₆₇₈₉ ₊₋₌₍₎ ₐₑₕᵢⱼₖₗₘₙₒₚᵣₛₜᵤᵥₓ` | No subscript `b c d f g q w y z`, no capitals → fallback (`a_b`). |
+| Ions, units | `Fe³⁺`, `OH⁻`, `m s⁻¹`, `kg m⁻³` | Charges and unit exponents are superscripts. |
+| Fractions | `(a + b)/2`, `π/6`, `dy/dx`, `1/(x ln 2)`, `(x² − 9)/(x − 3)` | `/`; a numerator or denominator gets parentheses when it holds a space or an operator. `½ ¼ ¾ ⅓ …` kept when printed that way. |
+| Roots | `√x`, `√14`, `√(x + 1)`, `√(b² − 4ac)` | Parentheses when the radicand is more than one number/letter. |
+| Relations | `=  ≠  ≈  <  >  ≤  ≥  →  ⇒  ⇔  ∈  ∉  ⊂` | Always one space either side on math lines. |
+| Operators | `+  -  ×  ÷  ±  ·` | Binary `+ - × ÷` get spaces (`F = ma`, `x² - 9`); unary signs stay tight (`-3`, `(-x)`, `= -1`); `×` between numbers (`3.00 × 10⁸`, `6 × 7 ÷ 2`); `·` = dot product (`a · b`); letters multiply by juxtaposition (`2ab`). Minus is pasted as ASCII `-`. |
+| Sets | `A ∩ B`, `A ∪ B`, `x ∈ ℝ` (`ℕ ℤ ℚ ℝ`), `P(A′)` | `A n B`/`A U B`/`x E R` read by the OCR are repaired on math lines. |
+| Functions | `sin θ`, `cos 2θ`, `sin 3x`, `sin²θ`, `tan θ = (sin θ)/(cos θ)`, `ln 2`, `log₃(x + 1)` | A space between a function name and a one-token argument, but never inside a word (`cost`, `sine`). `ln` that OCR reads as `In`, `log` read as `10g`/`l0g` are repaired. |
+| Calculus | `∫₀¹ x² dx`, `∫₁³ (2x + 1) dx`, `∑ᵢ₌₁ⁿ i`, `lim_(x→0) (sin x)/x`, `f′(x)`, `d/dx (sin 3x)` | Limits as sub/superscripts on `∫`/`∑`; `lim`/`max`/`min` take `_(…)` (no subscript arrow exists; `→o` → `→0`, `→oo` → `→∞`). Prime is `′` (U+2032). |
+| Greek | `α β γ δ θ λ μ π σ φ ω Δ Σ …` | Kept; `π` read as `T` (two legs) or Cyrillic `п` beside digits/`/`/`=` is repaired. |
+| Abs / norm | `|a|`, `|a||b| cos θ` | `lal` → `|a|`; no space inside the bars. |
+| Matrices | `[1 2; 3 4]` | Rows separated by `; `, cells by spaces. |
+| Degrees, percent | `90°`, `25 °C`, `50%` | A `%` ring is never a superscript `⁰`. |
+
+### 8.3 Why each rule exists (read before porting — they are all fixes for measured failures)
+
+- **Keep the engine's reading order; never re-sort lines by y.** Vision already returns columns in order;
+  sorting top-to-bottom interleaved two-column pages. **All geometry in pixels** (normalized x and y differ
+  by the aspect ratio).
+- **A rewrite may never damage text the engine read correctly ("no-harm guard", `ScriptRecovery.isFaithful`).**
+  A pixel rewrite may only *add* scripts and known symbol repairs: every full-size glyph must keep the
+  engine's character (case, `0`/`O`, `+`/`±`/`‡`/`≠` aside). Only on lines the engine itself scored < 0.9
+  may a re-read that is ≥ 0.9 confident correct letters. Before this guard, `−2.1%` became `-2.1⁰/o` and
+  "the 3rd of March." became `the 3ʳᵈ/1_OfMarch.`.
+- **A descender letter is never a subscript.** A lowered glyph after a word space, or whose top is at the
+  line's x-height, is a letter (`organizează pe`, `, p. 42` used to paste `_Pe`, `_P`).
+- **Decide from enough evidence.** A line only continues onto the next one before a capital letter when the
+  block is flowing text (≥ 4 lines at ≥ 75 % of the column width) or ≥ 2 lines reach the column's edge, or
+  the line ends mid-phrase (`with`, `the`, `,` …); monospace needs ≥ 3 lines agreeing (2 beside a numbered
+  gutter). Before: separate to-do lines and footers were glued, and two prose lines were treated as code.
+
+### 8.4 The pipeline, stage by stage (math-gated stages marked **[math]**)
+
+1. **Upscale** the capture to 2× pixel density when it is below (`upscaleFactor = max(1, pointWidth × 2 /
+   pixelWidth)`) — at 1× the OCR fragments lines and is slower.
+2. **OCR** (accurate, language correction on, user's languages) + **QR** detection in one pass. Map
+   Cyrillic/Greek look-alike letters to Latin unless the user reads that script (`Homoglyphs`; Cyrillic `п`
+   → `π` beside a digit, `/`, `=` or bracket, else `n`; Romanian cedillas → commas).
+3. For each line, **its ink**: crop the line's box padded by 0.3 × box height, binarise with **Otsu**,
+   blobs; drop blobs whose centre lies in *another* line's box; merge stacked pieces into glyphs (i-dots,
+   `=` bars, `÷`, colon dots, quote ticks); measure `cap` (median of glyphs ≥ 0.8 × the tallest) and the
+   **baseline** (median bottom of full-size glyphs). A superscript run into its letter at low resolution
+   (`x²` as one blob) is cut off by columns (`splitRaisedTails`).
+4. **Per-line pixel passes** (on the engine's text for that line):
+   a. **Missing full stop:** text ending in a quote/bracket/digit + a round baseline speck right of the last
+      glyph → append `.`.
+   b. **[math] `≈` / `±` read as `=`** (`relationSymbols`): align characters to glyphs; a `=` whose two
+      strokes are wavy (height > 1.6 × stroke thickness) → `≈`; a plus over a bar → `±`.
+   c. **Dashes, dots, separators, checkboxes, icons** (`dashesAndDots`): widths → `—`/`–`; specks → `·`;
+      comma vs full stop by shape between digits; a leading `•` that is a square → `☐` (hollow), `☑` (with
+      a tick), dropped (solid); a leading token taller than 1.25 cap (measured without it) → an icon,
+      dropped.
+   d. **[math] Super/subscripts and symbols** (`ScriptRecovery.recover`): classify each glyph against the
+      full-size glyph before it (raised: bottom above base − 0.4 × height and top near the base's top;
+      lowered: bottom below baseline + 0.12 × height, top lower, ≤ 0.85 × base height, gap to previous glyph
+      < 0.35 cap, top below x-height + 0.12 cap; a glyph overlapping the *next* glyph by > 30 % of its
+      width is never a script). **Align** the engine's characters to glyphs with a small dynamic program
+      (a wide glyph may take 2–3 characters — touching italics; a script 1; a speck/prime may be dropped;
+      the engine's spaces must fall on real gaps). **Re-read** the line with scripts lowered to the
+      baseline, drawn behind a typeset `a = ` prefix (the engine won't read a lone glyph), to learn what the
+      scripts say. Shape repairs: `√` (a blob with a roof over other glyphs and a tick at the left),
+      prime `′`, `|`, `Δ`, `θ` (two stacked holes, trig lines only), `∫` (tall stroke + `dx` on the line),
+      `π` (a `T` with two legs), inline stacked fractions `n/2`, `±`, charges `⁺`/`⁻`. Then the **no-harm
+      guard** (§8.3). Lines scored < 0.9 go first through the stricter path (all re-reads must be ≥ 0.9).
+   e. Text-only tidying (runs with math off too): `log`/`ln` look-alikes (`10g3 (` → `log₃(`,
+      `In 2 /` → `ln 2 /`), `3.00 x 10⁸` → `×`.
+5. **Table cells the engine didn't box** (`cellLines`, only when some row holds two lines): loose ink on a
+   text row, a cell's gap from its neighbours, lined up with a line in another row → read with the prefix
+   trick at its real size and baseline (`V`→`v` by height; an italic `y` without a tail → `v`).
+6. **[math] Displayed equations** (`DisplayMath`): clusters of short math lines → rebuilt from pixels:
+   the axis from the `=`, fraction bars with numerator/denominator, `∫`/`∑` by shape with their limits,
+   `lim`/`max`/`min` with the limit underneath, matrices between tall brackets. Used only where the
+   box-level fraction stacking can't cope (an operator, a limit, a numerator boxed with its row, or a
+   numerator the engine didn't box at all).
+7. **Code:** if any block classifies as code, **OCR again with language correction off** and use that text
+   for code lines (correction turns `items.reduce(` into `items. reduce (`); rebuild spaces from the
+   monospace character grid; recover lone `{` `}` `},` lines from loose ink; code repairs (`1s` → `ls`
+   after a prompt, `itt)` → `i++)`, `$fres}` → `${res}`, `'…${…}'` → backticks, `README•md`/`data.CSV` →
+   `README.md`/`data.csv`, hex ids, triple quotes, one look-alike swap that balances brackets). Shell
+   prompts recognised: `$ `, `% `, `>>> `, `user@host:~$ `, zsh `user@host dir % `, `bash-3.2$ `, `PS C:\> `.
+8. **Layout** (`TextReflow.paragraphs`, pure — boxes and text only, plus two ink closures):
+   put a caption back under its figure (`columnOrdered`); join same-row fragments (only when their middles
+   are within 0.4 × height); **[math]** stack fractions whose bar the ink closure confirms; attach detached
+   exponents; drop a line-number gutter; split fragments at table **gridlines** (`GridLines`: a thin
+   vertical stripe differing from the pixels 3 px either side, running unbroken over the row); find grids
+   (rows of separated cells with lined-up columns; a sidebar beside a table is kept out); the rest is
+   prose / lists / code by block. Prose joins by: gap ≤ 1.0 × line height, pitch ≤ 1.25 × the block's median,
+   no font change (character width and height both jump ≥ 1.4×), no list marker, no first-line indent, and
+   the previous line *wrapped* (its width plus the next line's first word would overflow the column's right
+   edge). On math lines: repair set symbols, `|a|`, `√14`, `a · b`, function spacing, then operator spacing.
+9. **Resolve** text + QR into the clipboard string and HUD message.
+
+### 8.5 Pure logic to port 1:1 (with the macOS tests)
+
+Everything in `TextReflow.swift`, `MathLayout.swift`, `Homoglyphs.swift`, `WordList.swift` (behaviour),
+`RecognitionResult.swift`, `InkMap.swift` (Otsu, blobs, holes) and the image-free parts of
+`ScriptRecovery.swift` (`classify`, `alignment`, `isFaithful`, `script`, `repairingLog`, `glyphs`) is
+pure and covered by the test files listed at the top of this Part — translate the tests with the code.
+The literal thresholds are in the code next to a comment that says why; keep them identical at first and
+re-tune only against the harness.
+
+### 8.6 Where it goes in the port
+
+The port's Capture Text lives under `windows/src/` on the `windows-port` branch (search for its OCR call,
+e.g. `OcrEngine` / `CaptureText`); this Mac never had that branch checked out, so no exact path is given.
+Suggested shape: a `BetterScreenshot.Capture/TextRecognition/` folder mirroring the Swift files one class
+each (`TextRecognizer`, `ScriptRecovery`, `InkMap`, `DisplayMath`, `MathLayout`, `TextReflow`,
+`GridLines`, `Homoglyphs`, `WordList`, `RecognitionResolver`), the setting in `CaptureSettings`
+(`captureTextMath`), and the switch row in the Settings window's Capture card.
+
+### 8.7 Platform notes (where Windows must differ)
+
+- **The OCR engine.** If the port uses `Windows.Media.Ocr` (`OcrEngine`): it returns lines and words with
+  boxes but **no confidence** and **no language-correction switch**. Consequences: the "< 0.9 confidence"
+  paths (§8.3, §8.4 d) can't be keyed on confidence — treat every line as confident (strict guard) unless
+  a better signal exists; the code re-read without correction (step 7) has no equivalent — rely on the code
+  repairs instead. The `a = ` prefix trick (re-reading one glyph or a straightened line on a synthetic
+  bitmap) works with any engine — verify it with that engine. Word boxes (`OcrWord.BoundingRect`) are
+  available and are what the grid splitting uses on macOS (`Line.wordBoxes`).
+- **Word list:** macOS reads `/usr/share/dict/words`. Windows has none — ship a word list (e.g. an English
+  list in the app resources) or use the offline Windows spell checker (`ISpellChecker`) for the hyphen rule.
+- **Fonts for the synthetic re-reads:** macOS draws the prefix in Helvetica; use Arial/Segoe UI.
+- **Speed:** every re-read is another OCR call. Keep the toggle's "off" path free of them (§8.1) and
+  measure both modes with the harness; the math-on path should be profiled (see the speed review).
+
+### 8.8 How to verify (the corpus harness)
+
+`tools/ocr-bench/` renders ~160 HTML cases offscreen with known ground truth, runs the real recognizer and
+scores the clipboard (`./run.sh`, `./run.sh --no-math`, `python3 summarize.py`, `python3 diff.py
+baselines/<file>.json` for regressions — README in that folder). The cases are data (HTML + CSS + expected
+strings) in `Cases.swift`, `HeldOutCases.swift` (`H*`, `N*`), `ThirdReviewCases.swift` (`V*`, frozen),
+`GridCases.swift` (`G*`). To verify the port, export them (id, html, css, width, density, expected) and
+render with WebView2 offscreen, then compare pass counts and CER per area with the macOS numbers in
+`docs/PROGRESS-2026-09-28-ocr.md`. Newest macOS baseline: `tools/ocr-bench/baselines/2026-09-29-ddx.json`
+(existing 55/66 · H 19/35 · N 5/7 · V 31/44 · G 5/6 with math on).
