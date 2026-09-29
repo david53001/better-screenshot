@@ -134,8 +134,9 @@ final class RecorderWell: NSView {
     override func draw(_ dirtyRect: NSRect) {
         let r = NSBezierPath(continuousRoundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), radius: 5)
         (active ? NSColor.controlAccentColor.withAlphaComponent(0.15)
-                : NSColor.controlBackgroundColor).setFill()
+                : NSColor.labelColor.withAlphaComponent(0.06)).setFill()
         r.fill()
+        r.lineWidth = active ? 1 : 0.5
         (active ? NSColor.controlAccentColor
                 : hovered ? NSColor.secondaryLabelColor : NSColor.separatorColor).setStroke()
         r.stroke()

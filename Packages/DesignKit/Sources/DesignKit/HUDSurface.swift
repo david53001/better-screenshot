@@ -5,19 +5,24 @@ import AppKit
 /// stay dark in light mode too — Apple's are, and the contrast measurements in
 /// `docs/reviews/2026-09-25-ui-review.md` (C1, E2) depend on it.
 ///
-/// macOS 26: Liquid Glass (`NSGlassEffectView`, dark). Earlier: a `.hudWindow` blur in
-/// `.vibrantDark`. Both sit under a **40 % black tint**: the blur alone measured rgb 129
-/// behind white text over a white page (3.9:1); the tint is what keeps white text ≥ 4.5:1.
-/// Continuous corners and a 0.5 pt white-10 % hairline. Add content with `addSubview`:
-/// it lands above the backdrop and tint.
+/// A `.hudWindow` blur in `.vibrantDark` under a **50 % black tint**, continuous corners
+/// and a 0.5 pt white-10 % hairline. Measured on macOS 26 over an opaque white page
+/// (2026-09-29): blur alone rgb 116 (white text 4.66:1), with the tint rgb 100 → **5.94:1**,
+/// the same at every size and at 0.5, 2 and 5 s. Not Liquid Glass: glass adapts to what is
+/// behind it, and a 715 × 40 pill with a window shadow went from rgb 75 to rgb 166 (2.44:1)
+/// within 2 s — no tint arrangement (overlay, `tintColor`, content in `contentView`, clear
+/// style) kept it readable (`docs/reviews/2026-09-29-native-look-review.md` H1).
+/// Add content with `addSubview`: it lands above the backdrop and tint.
 open class HUDSurfaceView: NSView {
-    public static let tintAlpha: CGFloat = 0.40
+    /// The tint for surfaces that float over arbitrary content.
+    public static let tintAlpha: CGFloat = 0.50
     public static let hairlineAlpha: CGFloat = 0.10
     public static let primaryText = NSColor.white
-    public static let secondaryText = NSColor.white.withAlphaComponent(0.6)
+    /// 80 % white: ≈ 4.5:1 on the tinted backdrop over white (60 % measured 4.3:1 at a 40 % tint).
+    public static let secondaryText = NSColor.white.withAlphaComponent(0.8)
 
-    /// The material behind everything: glass on macOS 26, a blur before.
-    public let backdrop: NSView
+    /// The blur behind everything.
+    public let backdrop: NSVisualEffectView
     /// The black tint and hairline, above the backdrop and beneath content.
     public let tint: NSView
 
@@ -26,22 +31,29 @@ open class HUDSurfaceView: NSView {
     }
 
     /// `.withinWindow` when the HUD floats over content drawn in its own window (a
-    /// pinned image); `.behindWindow` otherwise. (Glass samples both.)
+    /// pinned image, the editor's canvas); `.behindWindow` otherwise. `tint`: the black
+    /// overlay's opacity — `tintAlpha` over arbitrary content; less for panels that only
+    /// ever sit on the editor's dark window, where the tint would just make black slabs.
     public init(frame: NSRect = .zero, cornerRadius: CGFloat,
-                blending: NSVisualEffectView.BlendingMode = .behindWindow) {
+                blending: NSVisualEffectView.BlendingMode = .behindWindow, tint tintOpacity: CGFloat = tintAlpha) {
         self.cornerRadius = cornerRadius
-        backdrop = Self.makeBackdrop(blending: blending)
+        backdrop = NSVisualEffectView()
         tint = NSView()
         super.init(frame: frame)
         appearance = NSAppearance(named: .darkAqua)
         wantsLayer = true
+        backdrop.appearance = NSAppearance(named: .vibrantDark)
+        backdrop.material = .hudWindow
+        backdrop.blendingMode = blending
+        backdrop.state = .active
+        backdrop.wantsLayer = true
         for view in [backdrop, tint] {
             view.frame = bounds
             view.autoresizingMask = [.width, .height]
             addSubview(view)
         }
         tint.wantsLayer = true
-        tint.layer?.backgroundColor = NSColor.black.withAlphaComponent(Self.tintAlpha).cgColor
+        tint.layer?.backgroundColor = NSColor.black.withAlphaComponent(tintOpacity).cgColor
         tint.layer?.borderColor = NSColor.white.withAlphaComponent(Self.hairlineAlpha).cgColor
         tint.layer?.borderWidth = 0.5
         applyCorners()
@@ -49,42 +61,10 @@ open class HUDSurfaceView: NSView {
 
     public required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Whether the backdrop is Liquid Glass (macOS 26 and a 26 SDK).
-    public var usesGlass: Bool {
-        #if compiler(>=6.2)
-        if #available(macOS 26, *) { return backdrop is NSGlassEffectView }
-        #endif
-        return false
-    }
-
     private func applyCorners() {
         layer?.setContinuousCorners(cornerRadius)
         layer?.masksToBounds = true
-        tint.layer?.setContinuousCorners(cornerRadius)
-        #if compiler(>=6.2)
-        if #available(macOS 26, *), let glass = backdrop as? NSGlassEffectView {
-            glass.cornerRadius = cornerRadius
-            return
-        }
-        #endif
         backdrop.layer?.setContinuousCorners(cornerRadius)
-    }
-
-    private static func makeBackdrop(blending: NSVisualEffectView.BlendingMode) -> NSView {
-        #if compiler(>=6.2)
-        if #available(macOS 26, *) {
-            let glass = NSGlassEffectView()
-            glass.style = .regular
-            glass.appearance = NSAppearance(named: .darkAqua)
-            return glass
-        }
-        #endif
-        let blur = NSVisualEffectView()
-        blur.appearance = NSAppearance(named: .vibrantDark)
-        blur.material = .hudWindow
-        blur.blendingMode = blending
-        blur.state = .active
-        blur.wantsLayer = true
-        return blur
+        tint.layer?.setContinuousCorners(cornerRadius)
     }
 }

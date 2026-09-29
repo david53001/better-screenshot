@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// A native slider over an `Int` stop index within `range`, with its value on the right.
@@ -21,20 +22,43 @@ struct StopSlider: View {
     }
 }
 
-/// A native pop-up menu (`Picker(.menu)`) over labelled options, full width.
-struct MenuPicker<T: Hashable>: View {
+/// A native pop-up menu over labelled options that fills its card's width, so the popups in a
+/// column line up (SwiftUI's `.menu` picker keeps its own width and floats centred).
+struct MenuPicker<T: Hashable>: NSViewRepresentable {
     @Binding var selection: T
     let options: [(value: T, label: String)]
 
-    var body: some View {
-        Picker("", selection: $selection) {
-            ForEach(Array(options.enumerated()), id: \.offset) { _, option in
-                Text(option.label).tag(option.value)
-            }
+    func makeNSView(context: Context) -> NSPopUpButton {
+        let button = NSPopUpButton(frame: .zero, pullsDown: false)
+        button.target = context.coordinator
+        button.action = #selector(Coordinator.chosen(_:))
+        button.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        button.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        (button.cell as? NSPopUpButtonCell)?.lineBreakMode = .byTruncatingTail   // long device names
+        return button
+    }
+
+    func updateNSView(_ button: NSPopUpButton, context: Context) {
+        context.coordinator.parent = self
+        button.isEnabled = context.environment.isEnabled   // `.disabled(…)` (the audio menus for GIF)
+        let titles = options.map(\.label)
+        if button.itemTitles != titles {
+            button.removeAllItems()
+            button.addItems(withTitles: titles)
         }
-        .pickerStyle(.menu)
-        .labelsHidden()
-        .frame(maxWidth: .infinity, alignment: .leading)
+        if let index = options.firstIndex(where: { $0.value == selection }) { button.selectItem(at: index) }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject {
+        var parent: MenuPicker
+        init(_ parent: MenuPicker) { self.parent = parent }
+        @objc func chosen(_ sender: NSPopUpButton) {
+            let index = sender.indexOfSelectedItem
+            guard parent.options.indices.contains(index) else { return }
+            parent.selection = parent.options[index].value
+        }
     }
 }
 

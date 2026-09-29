@@ -170,7 +170,8 @@ public final class EditorWindowController: NSWindowController {
 
     private func buildToolbar() -> HUDSurfaceView {
         // Floats over the canvas: the shared HUD surface (glass on macOS 26).
-        let pill = HUDSurfaceView(cornerRadius: 15, blending: .withinWindow)
+        // No black tint: it only ever sits on the dark window (a tint made a black slab).
+        let pill = HUDSurfaceView(cornerRadius: 15, blending: .withinWindow, tint: 0)
         pill.translatesAutoresizingMaskIntoConstraints = false
         pill.tourAnchor = "editor.toolbar"
 
@@ -206,7 +207,7 @@ public final class EditorWindowController: NSWindowController {
         v.wantsLayer = true
         v.layer?.backgroundColor = NSColor(white: 1, alpha: alpha).cgColor
         NSLayoutConstraint.activate([
-            v.widthAnchor.constraint(equalToConstant: 1),
+            v.widthAnchor.constraint(equalToConstant: 0.5),   // a hairline
             v.heightAnchor.constraint(equalToConstant: height),
         ])
         return v

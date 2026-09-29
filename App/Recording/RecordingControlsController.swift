@@ -127,7 +127,7 @@ final class RecordingControlsController {
         Self.pin(label, width: Metric.timeWidth)
         // Paused: the word sits over the dimmed time, in the same fixed-width column.
         let paused = NSTextField(labelWithString: "Paused")
-        paused.font = .systemFont(ofSize: 10, weight: .semibold)
+        paused.font = .systemFont(ofSize: NSFont.preferredFont(forTextStyle: .subheadline).pointSize, weight: .semibold)
         paused.textColor = HUDSurfaceView.primaryText
         paused.isHidden = true
         let timeColumn = NSStackView(views: [paused, label])

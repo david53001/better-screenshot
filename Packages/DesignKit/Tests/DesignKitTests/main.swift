@@ -3,7 +3,7 @@ import AppKit
 @testable import DesignKit
 
 runTests("DesignKitTests", [
-    TestCase("hudIsDarkWithAContinuousCornerHairlineAndFortyPercentTint") { t in
+    TestCase("hudIsDarkWithAContinuousCornerHairlineAndFiftyPercentTint") { t in
         MainActor.assumeIsolated {
             let hud = HUDSurfaceView(frame: NSRect(x: 0, y: 0, width: 120, height: 40), cornerRadius: 12)
             let content = NSTextField(labelWithString: "1:23")
@@ -16,14 +16,14 @@ runTests("DesignKitTests", [
             t.equal(hud.tint.frame, hud.bounds)
             t.equal(hud.tint.layer?.borderWidth, 0.5)
             let color = hud.tint.layer?.backgroundColor.flatMap { NSColor(cgColor: $0) }
-            t.equal(color?.alphaComponent, 0.4)
+            t.equal(color?.alphaComponent, 0.5)
             t.equal(color?.usingColorSpace(.genericGray)?.whiteComponent, 0)
-            if !hud.usesGlass {
-                let blur = hud.backdrop as? NSVisualEffectView
-                t.equal(blur?.material, .hudWindow)
-                t.equal(blur?.state, .active)
-                t.equal(blur?.appearance?.name, .vibrantDark)
-            }
+            t.equal(hud.backdrop.material, .hudWindow)
+            t.equal(hud.backdrop.state, .active)
+            t.equal(hud.backdrop.appearance?.name, .vibrantDark)
+            let docked = HUDSurfaceView(cornerRadius: 12, blending: .withinWindow, tint: 0)
+            t.equal(docked.backdrop.blendingMode, .withinWindow)
+            t.equal(docked.tint.layer?.backgroundColor.flatMap { NSColor(cgColor: $0)?.alphaComponent }, 0)
             hud.cornerRadius = 20
             t.equal(hud.tint.layer?.cornerRadius, 20)
             t.equal(hud.tint.layer?.cornerCurve, .continuous)

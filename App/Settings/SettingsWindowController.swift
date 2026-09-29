@@ -40,13 +40,13 @@ final class SettingsWindowController {
         let view = SettingsView(store: store, shortcuts: shortcuts, clearHistory: clearHistory,
                                 tours: tours)
         // Follows the system appearance; the content sits on a translucent material
-        // (MacStats design language) that runs under the transparent title bar.
+        // (MacStats design language) and scrolls under the standard title bar, which
+        // blurs it (a transparent title bar let cards run under the traffic lights).
         let hosting = NSHostingView(rootView: view)
         let w = SettingsWindow(contentRect: NSRect(x: 0, y: 0, width: SettingsView.Layout.windowWidth, height: 600),
                                styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
                                backing: .buffered, defer: false)
         w.title = "Settings"
-        w.titlebarAppearsTransparent = true
         w.isReleasedWhenClosed = false
         WindowMaterial.install(hosting, in: w, material: .sidebar)
 

@@ -72,9 +72,8 @@ struct SettingsView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text("BetterScreenshot")
-                .font(.headline)
-            Text("Capture & recording preferences — hover the ⓘ next to any setting for a plain-language explanation and example.")
+            // The window's title says "Settings"; this line only explains the ⓘ.
+            Text("Hover the ⓘ next to any setting for a plain-language explanation and example.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -205,7 +204,7 @@ struct SettingsView: View {
                                           (value: 100, label: "100")],
                                disabled: !store.settings.historyEnabled)
                 VStack(alignment: .leading, spacing: 6) {
-                    Button("Clear History…") { confirmClearHistory() }
+                    Button("Clear History…", role: .destructive) { confirmClearHistory() }
                         .buttonStyle(.bordered)
                     Text("Stores full-resolution copies — several MB each.")
                         .font(.caption)

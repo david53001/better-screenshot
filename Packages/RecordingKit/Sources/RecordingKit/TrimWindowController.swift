@@ -185,7 +185,7 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
 
     /// The dark HUD card: transport row · timeline · selected-segment row · hint line.
     private func buildCard() -> NSView {
-        let card = HUDSurfaceView(cornerRadius: 12, blending: .withinWindow)
+        let card = HUDSurfaceView(cornerRadius: 12, blending: .withinWindow, tint: 0)   // on the dark window only
         card.translatesAutoresizingMaskIntoConstraints = false
 
         // Transport + edit row.

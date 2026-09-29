@@ -59,7 +59,8 @@ final class IconToolButton: NSButton {
         let bg: NSColor? = isSelectedTool ? .controlAccentColor
                          : (hovering ? NSColor(white: 1, alpha: 0.13) : nil)
         if let bg {
-            let path = NSBezierPath(continuousRoundedRect: bounds.insetBy(dx: 2, dy: 2), radius: 9)
+            // Concentric with the r15 pill: 6 pt row inset + 2 pt here = 8 pt gap → 15 − 8.
+            let path = NSBezierPath(continuousRoundedRect: bounds.insetBy(dx: 2, dy: 2), radius: 7)
             bg.setFill(); path.fill()
         }
         super.draw(dirtyRect)

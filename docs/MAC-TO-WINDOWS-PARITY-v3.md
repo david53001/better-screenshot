@@ -3369,7 +3369,7 @@ Startup | Recording · Pin to Screen | In the video · History · Save location.
 
 | Surface | Before | Now |
 |---|---|---|
-| Settings window | pure black `#000`, forced dark, custom mono controls, glowing-dot card headers, serif ⓘ | follows the **system light/dark**; window content on a translucent system material (`NSVisualEffectView .sidebar`, behind-window) running under a transparent title bar; native controls with the system accent |
+| Settings window | pure black `#000`, forced dark, custom mono controls, glowing-dot card headers, serif ⓘ | follows the **system light/dark**; window content on a translucent system material (`NSVisualEffectView .sidebar`, behind-window) that scrolls under the **standard** (blurring) title bar; native controls with the system accent; popup menus fill the card width so a column's popups line up; no in-content app headline (only the ⓘ hint line) |
 | Settings cards | `#0E0E0E` fill, 1 pt `#2A2A2A` border, dot + 10 pt bold header, divider rule | fill = text colour at **4 %** opacity, **0.5 pt** hairline at 8 %, **10 pt** continuous corners, 12 pt padding, header = uppercase **caption2 semibold, secondary colour**, no dot, no rule |
 | Settings controls | `MonoSwitchStyle`, custom segmented, `MonoSlider`, `MonoComboField`, pill buttons | native switch (small), native segmented (sized to its content, **left-aligned**), native slider with ticks (still over the stop-index tables `OverlayDismissScale`/`TempFileRetentionScale`, `∞` label kept), native pop-up menu, native bordered buttons |
 | ⓘ tips | serif italic "i" in a circle, custom black popover card | SF Symbol `info.circle` in the secondary colour (primary on hover); native popover; title = headline, text = callout, example = caption italic secondary |
@@ -3389,12 +3389,18 @@ handles), which stay circular on purpose.
 ### 9.2 The one HUD surface (`Packages/DesignKit/Sources/DesignKit/HUDSurface.swift`)
 
 - Always **dark**, in light mode too (Apple's HUDs are; the contrast work in review C1/E2 depends on it).
-- macOS 26: Liquid Glass (`NSGlassEffectView`, regular style, dark). macOS 14–15: `.hudWindow` blur, vibrant dark.
-- Over either: a **40 % black tint** and a **0.5 pt white 10 % hairline**, continuous corners.
-- Text: primary white, secondary white 60 %.
-- **Measured 2026-09-29 (macOS 26, surface over an opaque white page, review C1 method):** glass alone
-  backdrop ≈ rgb 127 → white text **4.52:1** (right at the WCAG 4.5 limit); glass + tint rgb 76 → **8.62:1**.
-  That is why the tint stays. (Fallback blur alone was measured rgb 129 = 3.9:1 in review C1.)
+- A `.hudWindow` blur (vibrant dark) under a **50 % black tint**, a **0.5 pt white 10 % hairline**, continuous
+  corners — on every macOS version. Surfaces that only ever sit on the editor's/trim window's dark backdrop
+  (editor tool pill, inspector, trim card) use **no tint** (`tint: 0`), or they read as black slabs.
+- Text: primary white, secondary **white 80 %**.
+- **Not Liquid Glass**, deliberately: glass adapts to what's behind it. Over a white page a 715 × 40 glass pill
+  with a window shadow went from rgb 75 to rgb 166 (white text 2.44:1) within 2 s; putting the tint into
+  `tintColor`, hosting content in `contentView`, or `.clear` style were all worse (review
+  `docs/reviews/2026-09-29-native-look-review.md` H1).
+- **Measured 2026-09-29 (macOS 26, the real pill / record strip / toast over an opaque white page, sampled at
+  0.5, 2 and 5 s):** backdrop rgb 90–99 → white text **6.0–6.8:1**, 80 %-white text **≥ 5.0:1**, stable. (Blur
+  alone rgb 116 = 4.66:1; the tint is what makes the margin.)
+- Windows: Acrylic behind the same 50 % black overlay; re-measure the same way (≥ 4.5:1, over time).
 
 ### 9.3 Tokens (`Packages/DesignKit/Sources/DesignKit/Design.swift`)
 
@@ -3407,7 +3413,7 @@ Settings: window 960 wide, three columns `(960 − 2·20 − 2·12) / 3 = 298` w
 
 - **Materials:** main windows (Settings) → **Mica** (`DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE = 38,
   DWMSBT_MAINWINDOW = 2)`, window background transparent, `WindowChrome` extending the frame). Floating HUDs →
-  **Acrylic** (`DWMSBT_TRANSIENTWINDOW = 3`), dark (`DWMWA_USE_IMMERSIVE_DARK_MODE = 20`), plus the same 40 %
+  **Acrylic** (`DWMSBT_TRANSIENTWINDOW = 3`), dark (`DWMWA_USE_IMMERSIVE_DARK_MODE = 20`), plus the same 50 %
   black overlay and a 1-physical-pixel white-10 % border. Windows 10 fallback: a solid `#1E1E1E` at 90 % for
   HUDs and the system window colour for Settings.
 - **Theme:** Settings follows the system theme (`HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize\AppsUseLightTheme`)

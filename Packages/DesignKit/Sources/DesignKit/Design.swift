@@ -12,14 +12,9 @@ public enum Design {
     public static let cardPadding: CGFloat = 12
     /// `Color.primary` opacities.
     public static let cardFill: Double = 0.04
-    public static let cardHoverFill: Double = 0.085
-    public static let cardPressedFill: Double = 0.12
     public static let cardHairline: Double = 0.08
     /// Borders are hairlines: one physical pixel on Retina.
     public static let hairlineWidth: CGFloat = 0.5
-    /// Small secondary buttons.
-    public static let smallButtonRadius: CGFloat = 6
-    public static let smallButtonHeight: CGFloat = 24
 }
 
 public extension CALayer {

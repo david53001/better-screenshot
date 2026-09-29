@@ -42,8 +42,9 @@ Local Swift packages + a menu-bar app target:
 - `RecordingKit` — screen/GIF recording (ScreenCaptureKit + AVAssetWriter), camera bubble, click/keystroke
   overlays, and the video editor (cut list, per-segment speed/mute, exporter).
 - `DesignKit` — the shared native look (MacStats design language, branch `feat/native-look`): tokens, the
-  one dark floating surface `HUDSurfaceView` (Liquid Glass on macOS 26, `.hudWindow` blur before; 40 % black
-  tint kept for white-text contrast — measured 8.6:1 with it, 4.52:1 glass alone), `continuousRoundedRect` /
+  one dark floating surface `HUDSurfaceView` (`.hudWindow` blur + 50 % black tint, white text ≥ 6:1 over a white
+  page; **not** Liquid Glass — glass adapts to what's behind it and dropped a pill to 2.4:1; `tint: 0` for
+  panels that only sit on the editor's dark window), `continuousRoundedRect` /
   `CALayer.setContinuousCorners`, SwiftUI `CardBackground`, `WindowMaterial`. Use it for every new floating
   surface; never `layer.cornerRadius` without a continuous curve (true circles excepted). Status and
   follow-ups: `docs/PROGRESS-2026-09-29-native-look.md`.

@@ -23,13 +23,3 @@ public enum WindowMaterial {
         window.contentView = backdrop
     }
 }
-
-/// `WindowMaterial` for SwiftUI backgrounds.
-public struct WindowMaterialView: NSViewRepresentable {
-    let material: NSVisualEffectView.Material
-
-    public init(_ material: NSVisualEffectView.Material = .sidebar) { self.material = material }
-
-    public func makeNSView(context: Context) -> NSVisualEffectView { WindowMaterial.make(material) }
-    public func updateNSView(_ view: NSVisualEffectView, context: Context) { view.material = material }
-}

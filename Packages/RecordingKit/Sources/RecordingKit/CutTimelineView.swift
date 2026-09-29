@@ -269,7 +269,7 @@ final class CutTimelineView: NSView {
     }
 
     private static let rulerAttributes: [NSAttributedString.Key: Any] = [
-        .font: NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .medium),
+        .font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.preferredFont(forTextStyle: .caption2).pointSize, weight: .medium),
         .foregroundColor: NSColor(white: 1, alpha: 0.55),
     ]
 

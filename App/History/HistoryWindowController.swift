@@ -276,6 +276,7 @@ private struct HistoryCell: View {
     let isSelected: Bool
     /// "1600 × 1000" or "0:42", read once the cell appears.
     @State private var detail: String?
+    @State private var hovering = false
 
     private static let relative: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
@@ -295,7 +296,7 @@ private struct HistoryCell: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 110)
-            .background(Color.gray.opacity(0.12))
+            .background(Color.primary.opacity(0.06))
             .overlay {
                 // Recordings are told apart at a glance, not only by the tiny film icon.
                 if entry.kind == .recording {
@@ -331,10 +332,13 @@ private struct HistoryCell: View {
         }
         .task(id: entry.id) { detail = await history.detail(for: entry) }
         .padding(6)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.clear))
-        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+        // Concentric: the cell's radius is the thumbnail's 6 plus the 6 pt padding.
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(isSelected ? Color.accentColor.opacity(0.15) : hovering ? Color.primary.opacity(0.07) : Color.clear))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
             .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2))
         .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: hovering)
     }
 }
