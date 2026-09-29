@@ -132,6 +132,8 @@ struct SettingsView: View {
                                           (value: .jpg, label: "JPG")])
                 switchRow("Play a sound on capture", SettingsHelp.playSound,
                           isOn: bind(\.playSound))
+                switchRow("Recognize math", SettingsHelp.captureTextMath,
+                          isOn: bind(\.captureTextMath))
                 VStack(alignment: .leading, spacing: 6) {
                     fieldLabel("Keep cached files for", SettingsHelp.tempRetention)
                     MonoSlider(

@@ -8,7 +8,10 @@ public enum TextRecognizer {
     /// `pointWidth` is the selection's width in screen points; when the capture
     /// is below 2× pixel density the image is upscaled first — measured on the
     /// owner's M3, Vision fragments lines and runs ~60% slower at 1× density.
-    public static func recognize(in image: CGImage, pointWidth: CGFloat? = nil) throws -> RecognitionResult {
+    /// `math` off (Settings → Capture → Recognize math) skips the pixel passes
+    /// that rebuild super/subscripts, roots, fractions and display equations —
+    /// the ones that re-run Vision per line — for a faster, Vision-only read.
+    public static func recognize(in image: CGImage, pointWidth: CGFloat? = nil, math: Bool = true) throws -> RecognitionResult {
         let factor = pointWidth.map { upscaleFactor(pixelWidth: image.width, pointWidth: $0) } ?? 1
         let source = factor > 1 ? (upscaled(image, by: factor) ?? image) : image
 
@@ -38,14 +41,14 @@ public enum TextRecognizer {
             if ScriptRecovery.missingFullStop(lines[i].text, rect: rect, in: source, excluding: others) {
                 lines[i].text += "."
             }
-            if let fixed = ScriptRecovery.relationSymbols(lines[i].text, rect: rect, in: source, excluding: others) {
+            if math, let fixed = ScriptRecovery.relationSymbols(lines[i].text, rect: rect, in: source, excluding: others) {
                 lines[i].text = fixed
             }
             if let fixed = ScriptRecovery.dashesAndDots(lines[i].text, rect: rect, in: source, excluding: others) {
                 lines[i].text = fixed
             }
             var recovered: String?
-            if confidences.indices.contains(i) && confidences[i] < 0.9 {
+            if math && confidences.indices.contains(i) && confidences[i] < 0.9 {
                 // A shaky first read (`21120` for `2H₂O`, confidence 0.5) may be
                 // replaced by re-reads Vision is sure of.
                 var sure = true
@@ -57,8 +60,10 @@ public enum TextRecognizer {
                 }
                 if !sure { recovered = nil }
             }
-            recovered = recovered ?? ScriptRecovery.recover(lines[i].text, rect: rect, in: source,
-                                                                  excluding: others) { readLine($0)?.text }
+            if math {
+                recovered = recovered ?? ScriptRecovery.recover(lines[i].text, rect: rect, in: source,
+                                                                excluding: others) { readLine($0)?.text }
+            }
             if let text = recovered {
                 lines[i].recovered = text
                 // An exponent Vision also boxed on its own (`nt` raised beside
@@ -86,7 +91,7 @@ public enum TextRecognizer {
             lines.insert(cell, at: before.map { $0 + 1 } ?? 0)
         }
         // Displayed formulas Vision boxed in pieces (limits, stacked fractions).
-        lines = DisplayMath.rebuilding(lines, in: source) { readLine($0) }
+        if math { lines = DisplayMath.rebuilding(lines, in: source) { readLine($0) } }
         // Language correction "fixes" code into prose (`items.reduce(` →
         // `items. reduce (`, `--parallel` → `-parallel`); when a block reads as
         // code, read the image again without it for those lines.
@@ -116,7 +121,9 @@ public enum TextRecognizer {
         let qrs = codes.compactMap { $0.payloadStringValue }
         let dominant = codes.contains { $0.boundingBox.width * $0.boundingBox.height >= dominantQRArea }
         var gridLines: GridLines??
-        let text = TextReflow.paragraphs(lines, imageSize: size, ruleLength: { InkMap(source, rect: $0)?.longestRun() ?? 0 },
+        // Without math, stacked fractions aren't looked for (no bar measuring).
+        let ruleLength: ((CGRect) -> CGFloat)? = math ? { InkMap(source, rect: $0)?.longestRun() ?? 0 } : nil
+        let text = TextReflow.paragraphs(lines, imageSize: size, ruleLength: ruleLength,
                                          verticalRules: { rect in
             if gridLines == nil { gridLines = .some(GridLines(source)) }
             return gridLines??.vertical(in: rect) ?? []

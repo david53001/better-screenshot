@@ -35,6 +35,13 @@ enum SettingsHelp {
         example: "Turn this off to capture silently in a quiet room or during a call."
     )
 
+    static let captureTextMath = HelpText(
+        "Recognize math",
+        "Capture Text rebuilds math from the image: exponents and subscripts, square roots, fractions and "
+            + "displayed equations. Turn it off for faster captures of ordinary text.",
+        example: "On: x² + y² = z², H₂O, √(x + 1). Off: faster, but x² comes out as x2."
+    )
+
     static let screenCorner = HelpText(
         "Screen corner",
         "Which corner of the screen the Quick Access thumbnail appears in after a capture.",

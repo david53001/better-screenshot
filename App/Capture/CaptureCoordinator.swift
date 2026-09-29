@@ -113,8 +113,9 @@ final class CaptureCoordinator {
             TourEvents.post(.captureTaken)
             // Vision's perform() blocks — keep it off the main actor.
             let pointWidth = result.globalRect.width
+            let math = settings.settings.captureTextMath
             let recognition = try await Task.detached {
-                try TextRecognizer.recognize(in: image, pointWidth: pointWidth)
+                try TextRecognizer.recognize(in: image, pointWidth: pointWidth, math: math)
             }.value
             if let payload = recognition.clipboardString {
                 NSPasteboard.general.clearContents()

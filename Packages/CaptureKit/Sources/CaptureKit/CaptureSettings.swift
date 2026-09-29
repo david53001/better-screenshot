@@ -25,6 +25,9 @@ public struct CaptureSettings: Equatable {
     /// `$TMPDIR/BetterScreenshot-<UUID>/`. 0 == keep forever (the ∞ stop).
     public var tempRetentionSeconds: Int
     public var playSound: Bool
+    /// Capture Text rebuilds math from the pixels (x², H₂O, √, fractions,
+    /// display equations). Off is faster: Vision's text, laid out, nothing more.
+    public var captureTextMath: Bool
 
     public static let `default` = CaptureSettings(
         afterCapture: .showOverlay, format: .png,
@@ -40,7 +43,8 @@ public struct CaptureSettings: Equatable {
          "historyEnabled": historyEnabled ? "true" : "false",
          "historyCap": String(historyCap),
          "tempRetentionSeconds": String(tempRetentionSeconds),
-         "playSound": playSound ? "1" : "0"]
+         "playSound": playSound ? "1" : "0",
+         "captureTextMath": captureTextMath ? "1" : "0"]
     }
 
     public init(afterCapture: AfterCaptureBehavior, format: SettingsImageFormat,
@@ -48,7 +52,7 @@ public struct CaptureSettings: Equatable {
                 pinCornerRadius: Int = 8, pinShadow: Bool = true,
                 historyEnabled: Bool = true, historyCap: Int = 50,
                 tempRetentionSeconds: Int = 300,
-                playSound: Bool = true) {
+                playSound: Bool = true, captureTextMath: Bool = true) {
         self.afterCapture = afterCapture
         self.format = format
         self.overlayCorner = overlayCorner
@@ -59,6 +63,7 @@ public struct CaptureSettings: Equatable {
         self.historyCap = historyCap
         self.tempRetentionSeconds = tempRetentionSeconds
         self.playSound = playSound
+        self.captureTextMath = captureTextMath
     }
 
     public init(dictionary: [String: String]) {
@@ -82,5 +87,6 @@ public struct CaptureSettings: Equatable {
         // Snap to the slider's stop table, same as overlayAutoDismissSeconds above.
         self.tempRetentionSeconds = TempFileRetentionScale.snap(rawRetention)
         self.playSound = (dictionary["playSound"] ?? "1") != "0"
+        self.captureTextMath = (dictionary["captureTextMath"] ?? "1") != "0"
     }
 }

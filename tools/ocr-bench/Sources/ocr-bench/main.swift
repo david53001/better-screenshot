@@ -21,6 +21,8 @@ let areaFilter = option("--area").flatMap(Area.init(rawValue:))
 let forcedDensity = option("--density").flatMap(Int.init)
 let withLiveText = flag("--livetext")
 let withRaw = flag("--rawvision")
+/// `--no-math`: run Capture Text with Settings → Recognize math off.
+let recognizeMath = !flag("--no-math")
 let rerender = flag("--render")
 let command = args.first ?? "all"
 
@@ -81,7 +83,7 @@ if command == "dump" {
         guard let img = images[c.id] else { continue }
         print("=== \(c.id) \(c.desc)")
         dumpVision(img, density: c.density)
-        let r = try? TextRecognizer.recognize(in: img, pointWidth: CGFloat(img.width) / CGFloat(c.density))
+        let r = try? TextRecognizer.recognize(in: img, pointWidth: CGFloat(img.width) / CGFloat(c.density), math: recognizeMath)
         print("  clipboard: \(r?.clipboardString?.debugDescription ?? "nil")")
     }
     exit(0)
@@ -110,7 +112,7 @@ var report = ""
 for c in selected {
     guard let img = images[c.id] else { continue }
     let t0 = Date()
-    let result = try? TextRecognizer.recognize(in: img, pointWidth: CGFloat(img.width) / CGFloat(c.density))
+    let result = try? TextRecognizer.recognize(in: img, pointWidth: CGFloat(img.width) / CGFloat(c.density), math: recognizeMath)
     let ms = Int(Date().timeIntervalSince(t0) * 1000)
     let actual = result?.clipboardString
     let s = score(c, actual: actual)
