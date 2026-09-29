@@ -53,8 +53,11 @@ enum DisplayMath {
 
     /// Replaces the lines of each displayed equation Vision boxed in pieces
     /// with one line holding its linear form.
+    /// Vision on a synthetic image: its text and its lowest confidence.
+    typealias Reread = (CGImage) -> (text: String, confidence: Float)?
+
     static func rebuilding(_ lines: [TextReflow.Line], in image: CGImage,
-                           reread: (CGImage) -> String?) -> [TextReflow.Line] {
+                           reread: Reread) -> [TextReflow.Line] {
         let size = CGSize(width: image.width, height: image.height)
         func pixels(_ b: CGRect) -> CGRect {
             CGRect(x: b.minX * size.width, y: b.minY * size.height, width: b.width * size.width, height: b.height * size.height)
@@ -107,7 +110,7 @@ enum DisplayMath {
     /// fraction Vision boxed part by part is `MathLayout`'s; this steps in for
     /// operators, limits, and a numerator Vision boxed with what's beside it.
     static func rebuild(_ rect: CGRect, in image: CGImage, lines: [CGRect] = [], excluding others: [CGRect] = [],
-                        reread: (CGImage) -> String?) -> [(CGRect, String)] {
+                        reread: Reread) -> [(CGRect, String)] {
         // Vision often leaves a big operator out of every box: look a line
         // height to either side.
         let height = lines.map(\.height).sorted().dropFirst(lines.count / 2).first ?? rect.height
@@ -154,7 +157,7 @@ enum DisplayMath {
     private final class Layout {
         let blobs: [InkMap.Blob]
         let map: InkMap
-        let reread: (CGImage) -> String?
+        let reread: Reread
         let lines: [CGRect]
         /// A typical glyph's height: the unit of every threshold.
         let unit: CGFloat
@@ -163,7 +166,7 @@ enum DisplayMath {
         /// Set when the row has something only this can rebuild.
         var needed = false
 
-        init(blobs: [InkMap.Blob], map: InkMap, reread: @escaping (CGImage) -> String?, lines: [CGRect]) {
+        init(blobs: [InkMap.Blob], map: InkMap, reread: @escaping Reread, lines: [CGRect]) {
             self.blobs = blobs
             self.map = map
             self.reread = reread
@@ -468,6 +471,8 @@ enum DisplayMath {
                                                && ($0.minX < box(atom).minX - 0.5 * unit || $0.maxX > box(atom).maxX + 0.5 * unit) }) {
                         needed = true
                     }
+                    // …or didn't box it at all (a numerator dense with exponents).
+                    if !lines.contains(where: { $0.contains(CGPoint(x: num.midX, y: num.midY)) }) { needed = true }
                     nodes.append(.fraction(n, d))
                     k += 1
                     continue
@@ -555,13 +560,25 @@ enum DisplayMath {
                     ctx.fill(CGRect(x: x, y: CGFloat(height) - y - scale, width: scale, height: scale))
                 }
             }
-            guard let rendered = ctx.makeImage(), let raw = reread(rendered) else {
+            guard let rendered = ctx.makeImage(), let first = reread(rendered) else {
                 return nil
             }
             let lineRect = CGRect(x: CGFloat(margin), y: CGFloat(margin), width: CGFloat(width - 2 * margin),
                                   height: CGFloat(height - 2 * margin))
-            let latin = Homoglyphs.latinized(raw, keepCyrillic: false, keepGreek: true)
-            let text = ScriptRecovery.recover(latin, rect: lineRect, in: rendered, reread: reread) ?? latin
+            let latin = Homoglyphs.latinized(first.text, keepCyrillic: false, keepGreek: true)
+            var recovered: String?
+            if first.confidence < 0.9 {
+                // A shaky read (`a7+b-c` for `a² + b² − c²`) may be corrected by
+                // straightened re-reads Vision is sure of — as for any line.
+                var sure = true
+                recovered = ScriptRecovery.recover(latin, rect: lineRect, in: rendered, confident: false) {
+                    let r = self.reread($0)
+                    if (r?.confidence ?? 0) < 0.9 { sure = false }
+                    return r?.text
+                }
+                if !sure { recovered = nil }
+            }
+            let text = recovered ?? ScriptRecovery.recover(latin, rect: lineRect, in: rendered) { self.reread($0)?.text } ?? latin
             var value = text
             if prefixed {
                 guard let equals = text.firstIndex(of: "=") else { return nil }

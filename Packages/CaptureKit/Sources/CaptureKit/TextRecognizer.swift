@@ -86,7 +86,7 @@ public enum TextRecognizer {
             lines.insert(cell, at: before.map { $0 + 1 } ?? 0)
         }
         // Displayed formulas Vision boxed in pieces (limits, stacked fractions).
-        lines = DisplayMath.rebuilding(lines, in: source) { readLine($0)?.text }
+        lines = DisplayMath.rebuilding(lines, in: source) { readLine($0) }
         // Language correction "fixes" code into prose (`items.reduce(` →
         // `items. reduce (`, `--parallel` → `-parallel`); when a block reads as
         // code, read the image again without it for those lines.
