@@ -64,4 +64,11 @@ let captureSettingsTests: [TestCase] = [
         let back = CaptureSettings(dictionary: s.dictionary)
         t.isFalse(back.playSound)
     },
+    TestCase("recognizeMathDefaultsOnAndRoundTrips") { t in
+        t.isTrue(CaptureSettings.default.captureTextMath)
+        t.isTrue(CaptureSettings(dictionary: [:]).captureTextMath)
+        var s = CaptureSettings.default
+        s.captureTextMath = false
+        t.isFalse(CaptureSettings(dictionary: s.dictionary).captureTextMath)
+    },
 ]
