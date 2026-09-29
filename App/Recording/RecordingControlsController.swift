@@ -1,4 +1,5 @@
 import AppKit
+import DesignKit
 import RecordingKit
 import TourKit
 
@@ -17,7 +18,7 @@ import TourKit
 /// both buttons so the pill keeps its size) — the panel never activates, so nothing
 /// steals focus from the app being recorded. Whether it shows up in the video is
 /// decided by RecordingCoordinator's content filter — `windowID` is what the
-/// coordinator excludes. Drawn in the shared dark HUD look (`RecordingHUDStyle`).
+/// coordinator excludes. Drawn in the shared dark HUD look (`HUDSurfaceView`).
 @MainActor
 final class RecordingControlsController {
     /// A recorded source's pill state. Mic/System audio: on = audible, off = muted.
@@ -72,8 +73,8 @@ final class RecordingControlsController {
     private static let confirmSeconds: TimeInterval = 3
 
     private var panel: NSPanel?
-    private var capsule: NSVisualEffectView?
-    private var hintBubble: NSVisualEffectView?
+    private var capsule: HUDSurfaceView?
+    private var hintBubble: HUDSurfaceView?
     private var hintLabel: NSTextField?
     private var stack: NSStackView?
     private var dot: NSView?
@@ -115,19 +116,19 @@ final class RecordingControlsController {
 
         let dot = NSView()
         dot.wantsLayer = true
-        dot.layer?.cornerRadius = 5
+        dot.layer?.cornerRadius = 5; dot.layer?.cornerCurve = .circular   // a status dot is a circle
         dot.layer?.backgroundColor = NSColor.systemRed.cgColor
         Self.pin(dot, width: 10, height: 10)
 
         let label = NSTextField(labelWithString: "0:00")
         label.font = .monospacedDigitSystemFont(ofSize: 14, weight: .semibold)
-        label.textColor = RecordingHUDStyle.primaryText
+        label.textColor = HUDSurfaceView.primaryText
         label.alignment = .left
         Self.pin(label, width: Metric.timeWidth)
         // Paused: the word sits over the dimmed time, in the same fixed-width column.
         let paused = NSTextField(labelWithString: "Paused")
         paused.font = .systemFont(ofSize: 10, weight: .semibold)
-        paused.textColor = RecordingHUDStyle.primaryText
+        paused.textColor = HUDSurfaceView.primaryText
         paused.isHidden = true
         let timeColumn = NSStackView(views: [paused, label])
         timeColumn.orientation = .vertical
@@ -187,7 +188,7 @@ final class RecordingControlsController {
         stack.setCustomSpacing(6, after: stop)
         stack.translatesAutoresizingMaskIntoConstraints = false
 
-        let capsule = RecordingHUDStyle.makeBackground(cornerRadius: Metric.height / 2)
+        let capsule = HUDSurfaceView(cornerRadius: Metric.height / 2)
         capsule.addSubview(stack)
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: capsule.leadingAnchor, constant: Metric.inset),
@@ -199,10 +200,10 @@ final class RecordingControlsController {
         trailing.priority = .defaultHigh
         trailing.isActive = true
 
-        let bubble = RecordingHUDStyle.makeBackground(cornerRadius: 7)
+        let bubble = HUDSurfaceView(cornerRadius: 7)
         let hint = NSTextField(labelWithString: "")
         hint.font = .systemFont(ofSize: 12, weight: .medium)
-        hint.textColor = RecordingHUDStyle.primaryText
+        hint.textColor = HUDSurfaceView.primaryText
         hint.lineBreakMode = .byTruncatingTail
         hint.translatesAutoresizingMaskIntoConstraints = false
         bubble.addSubview(hint)
@@ -301,7 +302,7 @@ final class RecordingControlsController {
         // nil during the countdown (and a Restart's) — show a fresh 0:00.
         timeLabel?.stringValue = s.elapsed?.replacingOccurrences(of: "Paused · ", with: "") ?? "0:00"
         let live = s.running && !s.paused
-        timeLabel?.textColor = live ? RecordingHUDStyle.primaryText : RecordingHUDStyle.secondaryText
+        timeLabel?.textColor = live ? HUDSurfaceView.primaryText : HUDSurfaceView.secondaryText
         pausedLabel?.isHidden = !(s.running && s.paused)
         dot?.layer?.backgroundColor = (live ? NSColor.systemRed : NSColor.systemGray).cgColor
 
@@ -366,7 +367,7 @@ final class RecordingControlsController {
             b.setTip(tipOff)
         case .off:
             // A hidden camera is simply "not on": outline icon, dimmed — no slash, no chip.
-            b.symbol = off; b.isEnabled = true; b.tint = RecordingHUDStyle.secondaryText; b.fill = nil
+            b.symbol = off; b.isEnabled = true; b.tint = HUDSurfaceView.secondaryText; b.fill = nil
             b.setTip(tipOff)
         case .unavailable(let why):
             b.symbol = unavailable; b.isEnabled = false; b.tint = .white; b.fill = nil; b.setTip(why)
@@ -590,7 +591,7 @@ private final class PillButton: NSButton {
         imageScaling = .scaleNone
         imageHugsTitle = true
         wantsLayer = true
-        layer?.cornerRadius = 7
+        layer?.setContinuousCorners(7)
         translatesAutoresizingMaskIntoConstraints = false
         heightAnchor.constraint(equalToConstant: 28).isActive = true   // spec: controls 24–28 pt
         refresh()

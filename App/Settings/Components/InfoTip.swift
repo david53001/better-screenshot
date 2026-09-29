@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Small circular "info tip" (ⓘ) affordance placed next to a Settings row label. Hovering it
+/// The "info tip" (SF `info.circle`) placed next to a Settings row label. Hovering it
 /// (after a short delay, so a quick pass-through doesn't pop it) reveals a card with a title,
 /// a plain-language explanation, and an optional "e.g. …" example. Uses the normal arrow cursor —
 /// deliberately not a help/`?` cursor.
@@ -25,18 +25,9 @@ struct InfoTip: View {
     }
 
     var body: some View {
-        Circle()
-            .fill(isHovering ? SettingsTheme.infoHover : SettingsTheme.infoIdle)
-            .frame(width: SettingsTheme.Metrics.infoDiameter, height: SettingsTheme.Metrics.infoDiameter)
-            .overlay(
-                Circle().stroke(SettingsTheme.infoRing, lineWidth: 1)
-            )
-            .overlay(
-                Text("i")
-                    .font(.system(size: 10, weight: .semibold, design: .serif))
-                    .italic()
-                    .foregroundColor(SettingsTheme.infoGlyph)
-            )
+        Image(systemName: "info.circle")
+            .font(.callout)
+            .foregroundStyle(isHovering ? .primary : .secondary)
             .contentShape(Circle())
             .onHover { hovering in
                 isHovering = hovering
@@ -61,30 +52,21 @@ struct InfoTip: View {
     private var tooltipCard: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(SettingsTheme.Font.tooltipTitle)
-                .foregroundColor(SettingsTheme.textPrimary)
+                .font(.headline)
                 .fixedSize(horizontal: false, vertical: true)
             Text(explanation)
-                .font(SettingsTheme.Font.tooltipBody)
-                .foregroundColor(SettingsTheme.label)
+                .font(.callout)
                 .fixedSize(horizontal: false, vertical: true)
             if let example {
                 Text("e.g. " + example)
-                    .font(SettingsTheme.Font.tooltipExample)
+                    .font(.caption)
                     .italic()
-                    .foregroundColor(SettingsTheme.subLabel)
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .multilineTextAlignment(.leading)
         .frame(width: 280, alignment: .leading)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(SettingsTheme.card)
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(SettingsTheme.border, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .padding(12)
     }
 }

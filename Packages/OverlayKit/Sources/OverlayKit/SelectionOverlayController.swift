@@ -1,4 +1,5 @@
 import AppKit
+import DesignKit
 import CaptureKit
 
 public final class SelectionOverlayController {
@@ -138,17 +139,16 @@ final class SelectionView: NSView {
 /// The selection's size readout: white monospaced digits on the shared dark HUD chip.
 final class SelectionSizeChip: NSView {
     private let label = NSTextField(labelWithString: "")
-    private let background: NSVisualEffectView
+    private let background: HUDSurfaceView
     private static let height: CGFloat = 22
     private static let padX: CGFloat = 8
 
     init() {
-        background = HUDStyle.makeBackground(frame: NSRect(x: 0, y: 0, width: 60, height: Self.height),
-                                             cornerRadius: 6)
+        background = HUDSurfaceView(frame: NSRect(x: 0, y: 0, width: 60, height: Self.height), cornerRadius: 6)
         super.init(frame: background.frame)
         background.autoresizingMask = [.width, .height]
         label.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
-        label.textColor = HUDStyle.primaryText
+        label.textColor = HUDSurfaceView.primaryText
         addSubview(background)
         background.addSubview(label)
     }

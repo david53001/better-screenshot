@@ -306,7 +306,7 @@ private struct HistoryCell: View {
                         .shadow(radius: 2)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             HStack(spacing: 4) {
                 Image(systemName: entry.kind == .recording ? "film" : "camera")
                     .font(.caption)
@@ -331,9 +331,9 @@ private struct HistoryCell: View {
         }
         .task(id: entry.id) { detail = await history.detail(for: entry) }
         .padding(6)
-        .background(RoundedRectangle(cornerRadius: 8)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
             .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.clear))
-        .overlay(RoundedRectangle(cornerRadius: 8)
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
             .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2))
         .contentShape(Rectangle())
     }

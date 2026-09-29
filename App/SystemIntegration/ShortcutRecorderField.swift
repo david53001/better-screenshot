@@ -1,4 +1,5 @@
 import AppKit
+import DesignKit
 import SwiftUI
 import CaptureKit
 
@@ -131,8 +132,7 @@ final class RecorderWell: NSView {
     override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
 
     override func draw(_ dirtyRect: NSRect) {
-        let r = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5),
-                             xRadius: 5, yRadius: 5)
+        let r = NSBezierPath(continuousRoundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), radius: 5)
         (active ? NSColor.controlAccentColor.withAlphaComponent(0.15)
                 : NSColor.controlBackgroundColor).setFill()
         r.fill()

@@ -1,4 +1,5 @@
 import AppKit
+import DesignKit
 
 /// The pinned screenshot's content view: drag anywhere to move, drag the
 /// bottom-right hotspot or scroll to resize (aspect-locked, 0.25×–3×),
@@ -12,8 +13,8 @@ final class PinView: NSView {
 
     private let closeButton = NSButton()
     /// Dark HUD circle behind the ✕ so it reads on light pins too; shown on hover.
-    private let closeBacking = HUDStyle.makeBackground(frame: NSRect(x: 0, y: 0, width: 22, height: 22),
-                                                       cornerRadius: 11, blending: .withinWindow)
+    private let closeBacking = HUDSurfaceView(frame: NSRect(x: 0, y: 0, width: 22, height: 22),
+                                              cornerRadius: 11, blending: .withinWindow)
     private enum DragMode { case none, move, resize }
     private var dragMode: DragMode = .none
     private var dragStartMouse = CGPoint.zero    // screen coords
@@ -36,7 +37,7 @@ final class PinView: NSView {
         closeButton.imagePosition = .imageOnly
         closeButton.setAccessibilityLabel("Close pin")
         closeButton.toolTip = "Close pin"
-        closeButton.contentTintColor = HUDStyle.primaryText
+        closeButton.contentTintColor = HUDSurfaceView.primaryText
         closeButton.target = self
         closeButton.action = #selector(closeTapped)
         closeButton.frame = closeBacking.bounds

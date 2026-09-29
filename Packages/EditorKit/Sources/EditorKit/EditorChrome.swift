@@ -1,4 +1,5 @@
 import AppKit
+import DesignKit
 
 // Custom AppKit views backing the annotation editor chrome: the floating glass
 // tool-pill buttons, the side panel's colour swatches and labelled rows, and a
@@ -58,7 +59,7 @@ final class IconToolButton: NSButton {
         let bg: NSColor? = isSelectedTool ? .controlAccentColor
                          : (hovering ? NSColor(white: 1, alpha: 0.13) : nil)
         if let bg {
-            let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 9, yRadius: 9)
+            let path = NSBezierPath(continuousRoundedRect: bounds.insetBy(dx: 2, dy: 2), radius: 9)
             bg.setFill(); path.fill()
         }
         super.draw(dirtyRect)
@@ -116,21 +117,27 @@ enum InspectorStyle {
     /// In-row captions of the colour rows ("RECENT", "CUSTOM") span two swatch columns, so what
     /// follows them starts on the third column.
     static let swatchCaptionWidth: CGFloat = 2 * swatchSize + swatchGap
-    static let primaryText = NSColor(white: 1, alpha: 0.88)
-    static let secondaryText = NSColor(white: 1, alpha: 0.55)
+    // Semantic colours: the inspector is a dark HUD surface, so these resolve light.
+    static let primaryText = NSColor.labelColor
+    static let secondaryText = NSColor.secondaryLabelColor
+
+    /// Text-style fonts (MacStats design language: no fixed point sizes).
+    static func font(_ style: NSFont.TextStyle, weight: NSFont.Weight = .regular) -> NSFont {
+        .systemFont(ofSize: NSFont.preferredFont(forTextStyle: style).pointSize, weight: weight)
+    }
 
     /// Small uppercase caption — section titles ("COLOUR") and in-row labels ("RECENT").
     static func caption(_ text: String) -> NSTextField {
         let l = NSTextField(labelWithString: text.uppercased())
-        l.font = .systemFont(ofSize: 10, weight: .semibold)
-        l.textColor = NSColor(white: 1, alpha: 0.45)
+        l.font = font(.caption2, weight: .semibold)
+        l.textColor = secondaryText
         return l
     }
 
-    /// Regular 12pt label for a row ("Width").
+    /// A row's label ("Width").
     static func rowLabel(_ text: String) -> NSTextField {
         let l = NSTextField(labelWithString: text)
-        l.font = .systemFont(ofSize: 12)
+        l.font = font(.callout)
         l.textColor = primaryText
         return l
     }
@@ -138,8 +145,8 @@ enum InspectorStyle {
     /// Wrapping explanatory text.
     static func note(_ text: String) -> NSTextField {
         let l = NSTextField(wrappingLabelWithString: text)
-        l.font = .systemFont(ofSize: 12)
-        l.textColor = NSColor(white: 1, alpha: 0.62)
+        l.font = font(.callout)
+        l.textColor = secondaryText
         l.preferredMaxLayoutWidth = contentWidth
         return l
     }
@@ -163,7 +170,7 @@ enum InspectorStyle {
         v.translatesAutoresizingMaskIntoConstraints = false
         v.wantsLayer = true
         v.layer?.backgroundColor = NSColor(white: 1, alpha: 0.10).cgColor
-        v.heightAnchor.constraint(equalToConstant: 1).isActive = true
+        v.heightAnchor.constraint(equalToConstant: 0.5).isActive = true   // a hairline
         return v
     }
 }
@@ -252,7 +259,7 @@ final class InspectorCheckbox: NSButton {
     override func draw(_ dirtyRect: NSRect) {
         let b = Self.box
         let r = NSRect(x: 1, y: (bounds.height - b) / 2, width: b, height: b)
-        let path = NSBezierPath(roundedRect: r.insetBy(dx: 0.5, dy: 0.5), xRadius: 3.5, yRadius: 3.5)
+        let path = NSBezierPath(continuousRoundedRect: r.insetBy(dx: 0.5, dy: 0.5), radius: 3.5)
         if state == .on {
             NSColor.controlAccentColor.setFill(); path.fill()
             // Checkmark, in unit coordinates of the box (y up), mapped for either flip.
@@ -310,7 +317,7 @@ final class TextPresetChip: NSButton {
 
     override func draw(_ dirtyRect: NSRect) {
         let look = preset.look
-        let chip = NSBezierPath(roundedRect: bounds.insetBy(dx: 1.5, dy: 1.5), xRadius: 6, yRadius: 6)
+        let chip = NSBezierPath(continuousRoundedRect: bounds.insetBy(dx: 1.5, dy: 1.5), radius: 6)
         (look.box?.color.nsColor ?? NSColor(white: 1, alpha: 0.06)).setFill()
         chip.fill()
         if hovering { NSColor(white: 1, alpha: 0.10).setFill(); chip.fill() }

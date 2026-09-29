@@ -1,4 +1,5 @@
 import AppKit
+import DesignKit
 
 /// The video editor's timeline: a time ruler (output time, laid out by `TimeRuler`)
 /// over a filmstrip of the recording split into kept segments (sped ones narrower,
@@ -104,7 +105,7 @@ final class CutTimelineView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         let track = trackRect
         NSColor(white: 0, alpha: 0.35).setFill()
-        NSBezierPath(roundedRect: track.insetBy(dx: 2, dy: -3), xRadius: 8, yRadius: 8).fill()
+        NSBezierPath(continuousRoundedRect: track.insetBy(dx: 2, dy: -3), radius: 8).fill()
         guard scale > 0 else { return }   // nothing loaded yet
 
         let items = cuts.timeline
@@ -161,7 +162,7 @@ final class CutTimelineView: NSView {
 
     private func drawKept(_ item: CutList.TimelineItem, index: Int, in full: NSRect) {
         let r = full.insetBy(dx: 1, dy: 0)
-        let shape = NSBezierPath(roundedRect: r, xRadius: 6, yRadius: 6)
+        let shape = NSBezierPath(continuousRoundedRect: r, radius: 6)
         NSGraphicsContext.saveGraphicsState()
         shape.addClip()
         drawFilmstrip(item, in: r)
@@ -196,7 +197,7 @@ final class CutTimelineView: NSView {
         let pill = NSRect(x: bx, y: r.minY + 4, width: content.width + 10, height: h)
         guard pill.maxX <= r.maxX - 4 else { return bx }
         NSColor(white: 0, alpha: 0.7).setFill()
-        NSBezierPath(roundedRect: pill, xRadius: h / 2, yRadius: h / 2).fill()
+        NSBezierPath(continuousRoundedRect: pill, radius: h / 2).fill()
         if let text {
             (text as NSString).draw(at: NSPoint(x: pill.minX + 5, y: pill.midY - content.height / 2),
                                     withAttributes: attrs)
@@ -216,7 +217,7 @@ final class CutTimelineView: NSView {
 
     private func drawRemoved(_ item: CutList.TimelineItem, in full: NSRect) {
         let r = full.insetBy(dx: 1, dy: 4)
-        let shape = NSBezierPath(roundedRect: r, xRadius: 4, yRadius: 4)
+        let shape = NSBezierPath(continuousRoundedRect: r, radius: 4)
         NSGraphicsContext.saveGraphicsState()
         shape.addClip()
         drawFilmstrip(item, in: r)
@@ -254,17 +255,16 @@ final class CutTimelineView: NSView {
         guard r.width >= 4 else { return }
         let yellow = NSColor.systemYellow
         yellow.setStroke()
-        let frame = NSBezierPath(roundedRect: r.insetBy(dx: 1, dy: 1), xRadius: 6, yRadius: 6)
+        let frame = NSBezierPath(continuousRoundedRect: r.insetBy(dx: 1, dy: 1), radius: 6)
         frame.lineWidth = 2.5
         frame.stroke()
         let handleW: CGFloat = min(10, r.width / 3)
         for hx in [r.minX, r.maxX - handleW] {
             let handle = NSRect(x: hx, y: r.minY, width: handleW, height: r.height)
             yellow.setFill()
-            NSBezierPath(roundedRect: handle, xRadius: 4, yRadius: 4).fill()
+            NSBezierPath(continuousRoundedRect: handle, radius: 4).fill()
             NSColor(white: 0, alpha: 0.55).setFill()
-            NSBezierPath(roundedRect: NSRect(x: handle.midX - 1, y: handle.midY - 7, width: 2, height: 14),
-                         xRadius: 1, yRadius: 1).fill()
+            NSBezierPath(continuousRoundedRect: NSRect(x: handle.midX - 1, y: handle.midY - 7, width: 2, height: 14), radius: 1).fill()
         }
     }
 

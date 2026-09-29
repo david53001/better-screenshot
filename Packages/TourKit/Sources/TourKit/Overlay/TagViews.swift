@@ -1,4 +1,5 @@
 import AppKit
+import DesignKit
 
 /// The overlay's windows: borderless, transparent, never key or main, never activate the app.
 /// The decor panel also ignores the mouse, so clicks land on the real control underneath.
@@ -40,11 +41,11 @@ final class TagDecorView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         if let dim {
             NSGraphicsContext.saveGraphicsState()
-            let windowShape = NSBezierPath(roundedRect: dim.rect, xRadius: dim.radius, yRadius: dim.radius)
+            let windowShape = NSBezierPath(continuousRoundedRect: dim.rect, radius: dim.radius)
             windowShape.addClip()   // the part of the hole outside the window must stay clear, not flip to dim
-            let path = NSBezierPath(roundedRect: dim.rect, xRadius: dim.radius, yRadius: dim.radius)
+            let path = NSBezierPath(continuousRoundedRect: dim.rect, radius: dim.radius)
             let outerRadius = TagStyle.boxRadius + TagStyle.boxStroke
-            path.append(NSBezierPath(roundedRect: outer, xRadius: outerRadius, yRadius: outerRadius))
+            path.append(NSBezierPath(continuousRoundedRect: outer, radius: outerRadius))
             path.windingRule = .evenOdd
             NSColor.black.withAlphaComponent(dimAlpha).setFill()
             path.fill()
@@ -54,7 +55,7 @@ final class TagDecorView: NSView {
         TagStyle.tourRed.setStroke()
         let half = TagStyle.boxStroke / 2
         let radius = TagStyle.boxRadius + half
-        let outline = NSBezierPath(roundedRect: box.insetBy(dx: -half, dy: -half), xRadius: radius, yRadius: radius)
+        let outline = NSBezierPath(continuousRoundedRect: box.insetBy(dx: -half, dy: -half), radius: radius)
         outline.lineWidth = TagStyle.boxStroke
         outline.stroke()
 
@@ -116,7 +117,7 @@ final class TagButton: NSButton {
     }
 
     private func restyle() {
-        layer?.cornerRadius = TagStyle.buttonHeight / 2
+        layer?.setContinuousCorners(TagStyle.buttonHeight / 2)
         layer?.backgroundColor = style == .filled ? TagStyle.filledButtonFill.cgColor : NSColor.clear.cgColor
         layer?.borderWidth = style == .outline ? 1 : 0
         layer?.borderColor = TagStyle.textColour.cgColor
@@ -146,7 +147,7 @@ final class TagBubbleView: NSView {
         super.init(frame: frame)
         wantsLayer = true
         layer?.backgroundColor = TagStyle.tourRed.cgColor
-        layer?.cornerRadius = TagStyle.tagRadius
+        layer?.setContinuousCorners(TagStyle.tagRadius)
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
 

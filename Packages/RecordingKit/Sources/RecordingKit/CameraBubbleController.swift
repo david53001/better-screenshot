@@ -1,4 +1,5 @@
 import AppKit
+import DesignKit
 import AVFoundation
 
 /// Circular live-camera preview in a floating panel. It is captured by simply
@@ -47,7 +48,7 @@ public final class CameraBubbleController {
 
         let content = NSView(frame: CGRect(origin: .zero, size: frame.size))
         content.wantsLayer = true
-        content.layer?.cornerRadius = diameter / 2
+        content.layer?.cornerRadius = diameter / 2; content.layer?.cornerCurve = .circular   // a round bubble
         content.layer?.masksToBounds = true
         content.layer?.backgroundColor = NSColor.black.cgColor
         let preview = AVCaptureVideoPreviewLayer(session: session)

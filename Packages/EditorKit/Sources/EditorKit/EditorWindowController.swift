@@ -1,4 +1,5 @@
 import AppKit
+import DesignKit
 import TourKit
 
 /// The annotation editor window: a floating frosted-glass tool pill over a centred canvas,
@@ -49,8 +50,6 @@ public final class EditorWindowController: NSWindowController {
         [.crop],
     ]
 
-    /// The neutral backdrop around the canvas. The window is always dark (see `init`).
-    private let backdrop = NSColor(white: 0.12, alpha: 1)
 
     /// `recentColors`: the persisted Recent colours (newest first); changes come back
     /// through `onRecentColorsChanged`.
@@ -87,7 +86,9 @@ public final class EditorWindowController: NSWindowController {
 
         style = defaultStyle
         canvas.style = defaultStyle
-        window.backgroundColor = backdrop
+        // A dark translucent backdrop (the window is always dark, see above); the
+        // image canvas itself stays opaque.
+        window.contentView = WindowMaterial.make(.underWindowBackground)
         buildUI()
         // Delete / [ / ] are handled in the canvas's keyDown — make it the
         // first responder up front instead of requiring a click first.
@@ -121,14 +122,12 @@ public final class EditorWindowController: NSWindowController {
     private func buildUI() {
         guard let content = window?.contentView else { return }
 
-        // Scroll view + centred canvas over the neutral backdrop.
+        // Scroll view + centred canvas over the window's material.
         let clip = CenteringClipView()
-        clip.drawsBackground = true
-        clip.backgroundColor = backdrop
+        clip.drawsBackground = false
         scrollView.contentView = clip
         scrollView.documentView = canvas
-        scrollView.drawsBackground = true
-        scrollView.backgroundColor = backdrop
+        scrollView.drawsBackground = false
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = true
         scrollView.scrollerStyle = .overlay
@@ -169,18 +168,10 @@ public final class EditorWindowController: NSWindowController {
         ])
     }
 
-    private func buildToolbar() -> NSVisualEffectView {
-        let pill = NSVisualEffectView()
+    private func buildToolbar() -> HUDSurfaceView {
+        // Floats over the canvas: the shared HUD surface (glass on macOS 26).
+        let pill = HUDSurfaceView(cornerRadius: 15, blending: .withinWindow)
         pill.translatesAutoresizingMaskIntoConstraints = false
-        pill.appearance = NSAppearance(named: .vibrantDark)
-        pill.material = .hudWindow
-        pill.blendingMode = .withinWindow
-        pill.state = .active
-        pill.wantsLayer = true
-        pill.layer?.cornerRadius = 15
-        pill.layer?.masksToBounds = true
-        pill.layer?.borderWidth = 1
-        pill.layer?.borderColor = NSColor(white: 1, alpha: 0.10).cgColor
         pill.tourAnchor = "editor.toolbar"
 
         let row = NSStackView()

@@ -1,4 +1,5 @@
 import AppKit
+import DesignKit
 
 /// Visual styling for a pin, decided at creation time (from app Settings).
 public struct PinStyle {
@@ -57,7 +58,7 @@ public final class PinPanelController {
         })
         view.frame = NSRect(origin: .zero, size: frame.size)
         panel.contentView = view
-        view.layer?.cornerRadius = style.cornerRadius
+        view.layer?.setContinuousCorners(style.cornerRadius)
         panel.orderFrontRegardless()
         panels.append(panel)
     }

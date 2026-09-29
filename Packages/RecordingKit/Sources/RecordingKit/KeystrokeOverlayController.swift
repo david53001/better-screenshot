@@ -1,4 +1,5 @@
 import AppKit
+import DesignKit
 import ApplicationServices
 
 /// Dark pill showing each keypress ("⌘⇧4") near the bottom of the recorded
@@ -37,13 +38,10 @@ public final class KeystrokeOverlayController {
         p.ignoresMouseEvents = true
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
-        let content = NSView(frame: CGRect(origin: .zero, size: size))
-        content.wantsLayer = true
-        content.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.75).cgColor
-        content.layer?.cornerRadius = 10
+        let content = HUDSurfaceView(frame: CGRect(origin: .zero, size: size), cornerRadius: 10)
         let label = NSTextField(labelWithString: "")
         label.font = .monospacedSystemFont(ofSize: 20, weight: .semibold)
-        label.textColor = .white
+        label.textColor = HUDSurfaceView.primaryText
         label.alignment = .center
         label.frame = content.bounds.insetBy(dx: 8, dy: 8)
         label.autoresizingMask = [.width, .height]

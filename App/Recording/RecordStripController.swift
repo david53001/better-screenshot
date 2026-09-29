@@ -1,4 +1,5 @@
 import AppKit
+import DesignKit
 import AVFoundation
 import CaptureKit
 import RecordingKit
@@ -10,7 +11,7 @@ import TourKit
 /// caption, and a hint line at the bottom explaining whatever the pointer is over
 /// (the hovered group's caption brightens to match). Every choice persists straight
 /// into `SettingsStore.recording` (the same values the Settings window edits).
-/// Drawn in the shared dark HUD look (`RecordingHUDStyle`).
+/// Drawn in the shared dark HUD look (`HUDSurfaceView`).
 /// Lives in App because it bridges RecordingConfig ↔ SettingsStore.
 /// Guided tour: the "First recording" tour runs on it (anchors `strip.*`, `menuOpened`/`choiceMade`
 /// events below; steps in TourKit's `RecordingTours.swift`); the ⓘ beside ✕ replays it.
@@ -88,7 +89,7 @@ final class RecordStripController: NSObject, NSMenuDelegate {
             row.widthAnchor.constraint(equalToConstant: width).isActive = true
         }
 
-        let bg = RecordingHUDStyle.makeBackground(cornerRadius: 12)
+        let bg = HUDSurfaceView(cornerRadius: 12)
         content.translatesAutoresizingMaskIntoConstraints = false
         bg.addSubview(content)
         NSLayoutConstraint.activate([
@@ -177,13 +178,13 @@ final class RecordStripController: NSObject, NSMenuDelegate {
                               target: self, action: #selector(cancelTapped))
         cancel.isBordered = false
         cancel.symbolConfiguration = .init(pointSize: 16, weight: .regular)
-        cancel.contentTintColor = RecordingHUDStyle.secondaryText
+        cancel.contentTintColor = HUDSurfaceView.secondaryText
         cancel.toolTip = "Close without recording"
         track(cancel, .cancel, captions: [cancel])
 
         // ⓘ: replay the First recording tour · the strip's keyboard shortcuts.
         let info = InfoButton(tour: .firstRecording, shortcuts: shortcuts())
-        info.contentTintColor = RecordingHUDStyle.secondaryText
+        info.contentTintColor = HUDSurfaceView.secondaryText
         track(info, .info, captions: [info])
 
         let spacer = NSView()
@@ -208,7 +209,7 @@ final class RecordStripController: NSObject, NSMenuDelegate {
     private func labelled(_ caption: String, _ control: NSView, _ hint: Hint) -> NSView {
         let label = NSTextField(labelWithString: caption)
         label.font = .systemFont(ofSize: 12)
-        label.textColor = RecordingHUDStyle.secondaryText
+        label.textColor = HUDSurfaceView.secondaryText
         let group = NSStackView(views: [label, control])
         group.spacing = 6
         track(group, hint, captions: [label])
@@ -273,10 +274,10 @@ final class RecordStripController: NSObject, NSMenuDelegate {
         popup.widthAnchor.constraint(equalToConstant: width).isActive = true
         let icon = NSImageView(image: NSImage(systemSymbolName: symbol, accessibilityDescription: nil)!)
         icon.symbolConfiguration = .init(pointSize: 12, weight: .medium)
-        icon.contentTintColor = RecordingHUDStyle.secondaryText
+        icon.contentTintColor = HUDSurfaceView.secondaryText
         let label = NSTextField(labelWithString: caption)
         label.font = .systemFont(ofSize: 12, weight: .medium)
-        label.textColor = RecordingHUDStyle.secondaryText
+        label.textColor = HUDSurfaceView.secondaryText
         let spacer = NSView()
         spacer.setContentHuggingPriority(.init(1), for: .horizontal)
         spacer.setContentCompressionResistancePriority(.init(1), for: .horizontal)
@@ -296,9 +297,9 @@ final class RecordStripController: NSObject, NSMenuDelegate {
         let icon = NSImageView(image: NSImage(systemSymbolName: "info.circle",
                                               accessibilityDescription: nil)!)
         icon.symbolConfiguration = .init(pointSize: 12, weight: .regular)
-        icon.contentTintColor = RecordingHUDStyle.secondaryText
+        icon.contentTintColor = HUDSurfaceView.secondaryText
         hintLabel.font = .systemFont(ofSize: 12)
-        hintLabel.textColor = RecordingHUDStyle.secondaryText
+        hintLabel.textColor = HUDSurfaceView.secondaryText
         hintLabel.lineBreakMode = .byTruncatingTail
         hintLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         hintLabel.setContentHuggingPriority(.init(1), for: .horizontal)
@@ -486,9 +487,9 @@ final class RecordStripController: NSObject, NSMenuDelegate {
     private func updateHint() {
         let active = hovered.last ?? focused
         hintLabel.stringValue = active.map(text(for:)) ?? idleHint
-        hintLabel.textColor = active == nil ? RecordingHUDStyle.secondaryText : RecordingHUDStyle.primaryText
+        hintLabel.textColor = active == nil ? HUDSurfaceView.secondaryText : HUDSurfaceView.primaryText
         for (hint, views) in captions {
-            let color = hint == active ? RecordingHUDStyle.primaryText : RecordingHUDStyle.secondaryText
+            let color = hint == active ? HUDSurfaceView.primaryText : HUDSurfaceView.secondaryText
             for view in views {
                 switch view {
                 case let label as NSTextField: label.textColor = color
@@ -640,7 +641,7 @@ private final class ChoiceControl: NSStackView {
         spacing = 2
         edgeInsets = NSEdgeInsets(top: 2, left: 2, bottom: 2, right: 2)
         wantsLayer = true
-        layer?.cornerRadius = 7
+        layer?.setContinuousCorners(7)
         layer?.backgroundColor = NSColor.white.withAlphaComponent(0.1).cgColor
         setAccessibilityElement(true)
         setAccessibilityRole(.radioGroup)
@@ -650,7 +651,7 @@ private final class ChoiceControl: NSStackView {
             b.tag = i
             b.isBordered = false
             b.wantsLayer = true
-            b.layer?.cornerRadius = 5
+            b.layer?.setContinuousCorners(5)
             b.setAccessibilityRole(.radioButton)
             b.translatesAutoresizingMaskIntoConstraints = false
             b.heightAnchor.constraint(equalToConstant: 22).isActive = true
@@ -676,7 +677,7 @@ private final class ChoiceControl: NSStackView {
             b.layer?.backgroundColor = (on ? NSColor.controlAccentColor : .clear).cgColor
             b.attributedTitle = NSAttributedString(string: b.title, attributes: [
                 .font: NSFont.systemFont(ofSize: 13, weight: on ? .semibold : .regular),
-                .foregroundColor: on ? NSColor.white : RecordingHUDStyle.secondaryText])
+                .foregroundColor: on ? NSColor.white : HUDSurfaceView.secondaryText])
             b.setAccessibilityValue(on)
         }
     }
@@ -752,7 +753,7 @@ private final class LevelMeterView: NSView {
             let color: NSColor = i >= lit ? .white.withAlphaComponent(0.14)
                 : position > 0.9 ? .systemRed : position > 0.7 ? .systemYellow : .systemGreen
             color.setFill()
-            NSBezierPath(roundedRect: rect, xRadius: 1.5, yRadius: 1.5).fill()
+            NSBezierPath(continuousRoundedRect: rect, radius: 1.5).fill()
         }
     }
 }

@@ -2,6 +2,7 @@ import SwiftUI
 import CaptureKit
 import RecordingKit
 import TourKit
+import DesignKit
 
 /// Closures the Shortcuts card needs from the app layer (AppDelegate owns the
 /// rebind transaction because it touches HotKeyManager + menu + persistence).
@@ -22,9 +23,10 @@ struct TourSettingsActions {
     var resetAll: () -> Void
 }
 
-/// The whole Settings screen: a pure-black, 960pt-wide, single-scroll three-column
-/// masonry of titled cards built from the JVoice monochrome controls. Every control
-/// writes straight through to `store` (instant-apply) via the `bind`/`bindRec` helpers.
+/// The whole Settings screen: a 960pt-wide, single-scroll three-column masonry of titled
+/// cards over the window's translucent material, with native controls (MacStats design
+/// language; follows the system appearance). Every control writes straight through to
+/// `store` (instant-apply) via the `bind`/`bindRec` helpers.
 struct SettingsView: View {
     @ObservedObject var store: SettingsStore
     let shortcuts: ShortcutActions
@@ -37,7 +39,6 @@ struct SettingsView: View {
     // Tours: same idea — TourCoordinator's UserDefaults key is the source of truth.
     @State private var toursEnabled = false
     @State private var toursWereReset = false
-    @State private var confirmingClear = false
     // Shortcuts: at most one row records at a time; switching rows re-renders the
     // previous well with isRecording=false, stopping its monitor.
     @State private var recordingAction: HotkeyAction?
@@ -45,9 +46,9 @@ struct SettingsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: Design.cardSpacing) {
                 header
-                HStack(alignment: .top, spacing: SettingsTheme.Metrics.gutter) {
+                HStack(alignment: .top, spacing: Design.cardSpacing) {
                     columnA
                     columnB
                     columnC
@@ -57,11 +58,14 @@ struct SettingsView: View {
                     .tourAnchor("settings.shortcuts")
                 footer
             }
-            .padding(SettingsTheme.Metrics.outerMargin)
-            .frame(width: SettingsTheme.Metrics.windowWidth, alignment: .leading)
-            .background(SettingsTheme.windowBG)
+            .padding(Design.outerPadding)
+            .frame(width: Layout.windowWidth, alignment: .leading)
         }
-        .background(SettingsTheme.windowBG)
+    }
+
+    enum Layout {
+        static let windowWidth: CGFloat = 960
+        static let columnWidth = ((windowWidth - 2 * Design.outerPadding - 2 * Design.cardSpacing) / 3).rounded(.down)
     }
 
     // MARK: - Header / footer
@@ -69,29 +73,28 @@ struct SettingsView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text("BetterScreenshot")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundColor(.white)
+                .font(.headline)
             Text("Capture & recording preferences — hover the ⓘ next to any setting for a plain-language explanation and example.")
-                .font(.system(size: 11.5))
-                .foregroundColor(SettingsTheme.subLabel)
+                .font(.callout)
+                .foregroundStyle(.secondary)
         }
     }
 
     private var footer: some View {
         Text("Changes apply immediately.")
-            .font(.system(size: 11))
-            .foregroundColor(SettingsTheme.subLabel)
+            .font(.caption)
+            .foregroundStyle(.tertiary)
     }
 
     // MARK: - Columns
 
     private var columnA: some View {
-        VStack(spacing: SettingsTheme.Metrics.cardGap) {
+        VStack(spacing: Design.cardSpacing) {
             captureCard
             overlayCard
             startupCard
         }
-        .frame(width: SettingsTheme.Metrics.columnWidth)
+        .frame(width: Layout.columnWidth)
     }
 
     // Recording is split into two cards (what to record | what shows in the video) and
@@ -99,26 +102,26 @@ struct SettingsView: View {
     // height instead of leaving a tall black gap beside one long Recording card.
     // (Startup and Pin to Screen swapped columns when Startup gained "Tours & tips".)
     private var columnB: some View {
-        VStack(spacing: SettingsTheme.Metrics.cardGap) {
+        VStack(spacing: Design.cardSpacing) {
             recordingCard
             pinCard
         }
-        .frame(width: SettingsTheme.Metrics.columnWidth)
+        .frame(width: Layout.columnWidth)
     }
 
     private var columnC: some View {
-        VStack(spacing: SettingsTheme.Metrics.cardGap) {
+        VStack(spacing: Design.cardSpacing) {
             inTheVideoCard
             historyCard
             saveLocationCard
         }
-        .frame(width: SettingsTheme.Metrics.columnWidth)
+        .frame(width: Layout.columnWidth)
     }
 
     // MARK: - Column A cards
 
     private var captureCard: some View {
-        DarkSection("CAPTURE") {
+        SettingsCard("CAPTURE") {
             VStack(alignment: .leading, spacing: 14) {
                 segmentedField("After a capture", SettingsHelp.afterCapture, tipAnchor: "settings.tip",
                                selection: bind(\.afterCapture),
@@ -134,7 +137,7 @@ struct SettingsView: View {
                           isOn: bind(\.playSound))
                 VStack(alignment: .leading, spacing: 6) {
                     fieldLabel("Keep cached files for", SettingsHelp.tempRetention)
-                    MonoSlider(
+                    StopSlider(
                         position: Binding(
                             get: { TempFileRetentionScale.secondsToPosition(store.settings.tempRetentionSeconds) },
                             set: { store.settings.tempRetentionSeconds = TempFileRetentionScale.positionToSeconds($0)
@@ -147,7 +150,7 @@ struct SettingsView: View {
     }
 
     private var overlayCard: some View {
-        DarkSection("QUICK ACCESS OVERLAY") {
+        SettingsCard("QUICK ACCESS OVERLAY") {
             VStack(alignment: .leading, spacing: 14) {
                 segmentedField("Screen corner", SettingsHelp.screenCorner,
                                selection: bind(\.overlayCorner),
@@ -157,7 +160,7 @@ struct SettingsView: View {
                                           (value: .bottomRight, label: "↘")])
                 VStack(alignment: .leading, spacing: 6) {
                     fieldLabel("Auto-dismiss after", SettingsHelp.autoDismiss)
-                    MonoSlider(
+                    StopSlider(
                         position: Binding(
                             get: { OverlayDismissScale.secondsToPosition(store.settings.overlayAutoDismissSeconds) },
                             set: { store.settings.overlayAutoDismissSeconds = OverlayDismissScale.positionToSeconds($0)
@@ -170,11 +173,11 @@ struct SettingsView: View {
     }
 
     private var pinCard: some View {
-        DarkSection("PIN TO SCREEN") {
+        SettingsCard("PIN TO SCREEN") {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 6) {
                     fieldLabel("Corner radius", SettingsHelp.pinCornerRadius)
-                    MonoComboField(selection: bind(\.pinCornerRadius),
+                    MenuPicker(selection: bind(\.pinCornerRadius),
                                    options: [(value: 0, label: "0 pt"),
                                              (value: 4, label: "4 pt"),
                                              (value: 8, label: "8 pt"),
@@ -190,7 +193,7 @@ struct SettingsView: View {
     // MARK: - History / startup / save location
 
     private var historyCard: some View {
-        DarkSection("HISTORY") {
+        SettingsCard("HISTORY") {
             VStack(alignment: .leading, spacing: 14) {
                 switchRow("Remember capture history", SettingsHelp.rememberHistory,
                           sub: "Keep a local index of recent captures",
@@ -202,25 +205,19 @@ struct SettingsView: View {
                                           (value: 100, label: "100")],
                                disabled: !store.settings.historyEnabled)
                 VStack(alignment: .leading, spacing: 6) {
-                    Button("Clear History…") { confirmingClear = true }
-                        .buttonStyle(.pill)
+                    Button("Clear History…") { confirmClearHistory() }
+                        .buttonStyle(.bordered)
                     Text("Stores full-resolution copies — several MB each.")
-                        .font(SettingsTheme.Font.rowSubLabel)
-                        .foregroundColor(SettingsTheme.subLabel)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                }
-                .confirmationDialog("Clear all capture history?",
-                                    isPresented: $confirmingClear, titleVisibility: .visible) {
-                    Button("Clear History", role: .destructive) { clearHistory() }
-                } message: {
-                    Text("Removes every remembered capture and its stored copies. Saved recording files on disk are not deleted.")
                 }
             }
         }
     }
 
     private var startupCard: some View {
-        DarkSection("STARTUP") {
+        SettingsCard("STARTUP") {
             VStack(alignment: .leading, spacing: 14) {
                 switchRow("Launch at login", SettingsHelp.launchAtLogin,
                           sub: "Start BetterScreenshot when you sign in",
@@ -231,7 +228,7 @@ struct SettingsView: View {
                         launchAtLogin = LaunchAtLogin.isEnabled   // revert if it failed
                     }
                     .onAppear { launchAtLogin = LaunchAtLogin.isEnabled }
-                Rectangle().fill(SettingsTheme.border).frame(height: 1)
+                Divider()
                 toursRow
             }
         }
@@ -244,13 +241,14 @@ struct SettingsView: View {
             fieldLabel("Tours & tips", SettingsHelp.toursAndTips)
             HStack(alignment: .center, spacing: 8) {
                 Text("Show me around the first time I use each part")
-                    .font(SettingsTheme.Font.rowTitle)
-                    .foregroundColor(SettingsTheme.textPrimary)
+                    .font(.body)
+                    .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
                 Toggle("", isOn: Binding(get: { toursEnabled },
                                          set: { toursEnabled = $0; tours.setEnabled($0) }))
-                    .toggleStyle(.mono)
+                    .toggleStyle(.switch)
+                .controlSize(.small)
                     .labelsHidden()
             }
             HStack(spacing: 10) {
@@ -258,12 +256,12 @@ struct SettingsView: View {
                     tours.resetAll()
                     toursWereReset = true
                 }
-                .buttonStyle(.pill)
+                .buttonStyle(.bordered)
                 if toursWereReset {
                     // Says how to see them when the switch above is off (nothing starts by itself then).
                     Text(TourRules.resetConfirmation(firstUseToursEnabled: toursEnabled))
-                        .font(SettingsTheme.Font.rowSubLabel)
-                        .foregroundColor(SettingsTheme.label)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -275,14 +273,14 @@ struct SettingsView: View {
     }
 
     private var saveLocationCard: some View {
-        DarkSection("SAVE LOCATION") {
+        SettingsCard("SAVE LOCATION") {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Where saved captures & recordings are written")
-                    .font(SettingsTheme.Font.rowSubLabel)
-                    .foregroundColor(SettingsTheme.subLabel)
-                MonoPathField(path: store.saveDirectory.path)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                PathField(path: store.saveDirectory.path)
                 Button("Browse…") { chooseFolder() }
-                    .buttonStyle(.pill)
+                    .buttonStyle(.bordered)
             }
         }
     }
@@ -291,7 +289,7 @@ struct SettingsView: View {
 
     /// What gets recorded: file format, timing and the sources (the record strip's menus).
     private var recordingCard: some View {
-        DarkSection("RECORDING") {
+        SettingsCard("RECORDING") {
             VStack(alignment: .leading, spacing: 14) {
                 segmentedField("Format", SettingsHelp.recordingFormat,
                                selection: bindRec(\.format),
@@ -307,7 +305,7 @@ struct SettingsView: View {
                                           (value: 3, label: "3s"),
                                           (value: 5, label: "5s"),
                                           (value: 10, label: "10s")])
-                Rectangle().fill(SettingsTheme.border).frame(height: 1)
+                Divider()
                 sourceMenus
                 segmentedField("Camera size", SettingsHelp.cameraSize,
                                selection: bindRec(\.cameraSize),
@@ -320,12 +318,12 @@ struct SettingsView: View {
 
     /// What is drawn into the video on top of the screen.
     private var inTheVideoCard: some View {
-        DarkSection("IN THE VIDEO") {
+        SettingsCard("IN THE VIDEO") {
             VStack(alignment: .leading, spacing: 14) {
                 // Same name and choices as the record strip's Mouse cursor menu.
                 VStack(alignment: .leading, spacing: 6) {
                     fieldLabel("Mouse cursor", SettingsHelp.showCursor)
-                    MonoComboField(selection: bindRec(\.showsCursor),
+                    MenuPicker(selection: bindRec(\.showsCursor),
                                    options: [(value: true, label: "Shown"),
                                              (value: false, label: "Hidden")])
                 }
@@ -347,29 +345,29 @@ struct SettingsView: View {
         return VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
                 fieldLabel("Microphone", SettingsHelp.microphone)
-                MonoComboField(
+                MenuPicker(
                     selection: Binding(
                         get: { mics.choice(enabled: store.recording.microphone,
                                            saved: store.recording.microphoneDeviceID) },
                         set: { store.recording.setMicrophone($0); store.persist() }),
                     options: mics.options.map { (value: $0.choice, label: $0.title) })
-                    .disabled(isGIF).opacity(isGIF ? 0.4 : 1)
+                    .disabled(isGIF)
             }
             VStack(alignment: .leading, spacing: 6) {
                 fieldLabel("System audio", SettingsHelp.systemAudio)
-                MonoComboField(selection: bindRec(\.systemAudioMode),
+                MenuPicker(selection: bindRec(\.systemAudioMode),
                                options: SystemAudioMode.allCases.map { (value: $0, label: $0.title) })
-                    .disabled(isGIF).opacity(isGIF ? 0.4 : 1)
+                    .disabled(isGIF)
                 if isGIF {
                     Text("GIFs have no sound. Switch Format to MP4 to record audio.")
-                        .font(SettingsTheme.Font.rowSubLabel)
-                        .foregroundColor(SettingsTheme.subLabel)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             VStack(alignment: .leading, spacing: 6) {
                 fieldLabel("Camera", SettingsHelp.camera)
-                MonoComboField(
+                MenuPicker(
                     selection: Binding(
                         get: { cameras.choice(enabled: store.recording.camera,
                                               saved: store.recording.cameraDeviceID) },
@@ -395,34 +393,34 @@ struct SettingsView: View {
                     store.persist()
                 }))
             Text("Showing keystrokes needs the Accessibility permission.")
-                .font(SettingsTheme.Font.rowSubLabel)
-                .foregroundColor(SettingsTheme.subLabel)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
     // MARK: - Keyboard shortcuts (full-width)
 
     private var shortcutsCard: some View {
-        DarkSection("KEYBOARD SHORTCUTS") {
+        SettingsCard("KEYBOARD SHORTCUTS") {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Click a shortcut, then press the new key combination (Esc cancels). Hover the ⓘ on any row to see what that shortcut does.")
-                    .font(SettingsTheme.Font.rowSubLabel)
-                    .foregroundColor(SettingsTheme.subLabel)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 ForEach(HotkeyAction.allCases, id: \.self) { action in
                     shortcutRow(action)
                 }
-                Rectangle().fill(SettingsTheme.border).frame(height: 1).padding(.vertical, 2)
+                Divider().padding(.vertical, 2)
                 HStack {
                     Button("Restore Defaults") {
                         shortcuts.restoreDefaults()
                         shortcutStatus = ""
                     }
-                    .buttonStyle(.pill)
+                    .buttonStyle(.bordered)
                     Spacer()
                     if !shortcutStatus.isEmpty {
                         Text(shortcutStatus)
-                            .font(SettingsTheme.Font.rowSubLabel)
-                            .foregroundColor(SettingsTheme.label)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -434,13 +432,12 @@ struct SettingsView: View {
     private func shortcutRow(_ action: HotkeyAction) -> some View {
         HStack(spacing: 10) {
             Text(action.title)
-                .font(.system(size: 12.5))
-                .foregroundColor(SettingsTheme.textPrimary)
+                .font(.body)
             InfoTip(help: help(for: action))
             if store.failedActions.contains(action) {
                 Text("couldn't register")
-                    .font(SettingsTheme.Font.rowSubLabel)
-                    .foregroundColor(SettingsTheme.subLabel)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Spacer(minLength: 8)
             // The recorder well is both the combo chip and the control (click to
@@ -457,7 +454,7 @@ struct SettingsView: View {
             Button("Clear") {
                 shortcutStatus = shortcuts.update(nil, action) ?? ""
             }
-            .buttonStyle(.pill)
+            .buttonStyle(.bordered)
             .disabled(store.bindings.combo(for: action) == nil)
         }
     }
@@ -486,15 +483,14 @@ struct SettingsView: View {
 
     // MARK: - Row idioms
 
-    /// Field label ("11.5 semibold") + its ⓘ tip, for the "label above a control" idiom.
+    /// Field label (`.callout` medium) + its ⓘ tip, for the "label above a control" idiom.
     /// `tipAnchor`: a tour anchor on this label + ⓘ (the Settings tour points at one of them — the whole
     /// label, so its tag can't hide which setting the tiny ⓘ belongs to).
     @ViewBuilder
     private func fieldLabel(_ text: String, _ help: HelpText, tipAnchor: String? = nil) -> some View {
         let label = HStack(spacing: 6) {
             Text(text)
-                .font(SettingsTheme.Font.fieldLabel)
-                .foregroundColor(SettingsTheme.label)
+                .font(.callout.weight(.medium))
             InfoTip(help: help)
         }
         if let tipAnchor {
@@ -515,7 +511,6 @@ struct SettingsView: View {
             fieldLabel(text, help, tipAnchor: tipAnchor)
             SegmentedControl(selection: selection, segments: segments)
                 .disabled(disabled)
-                .opacity(disabled ? 0.4 : 1)
         }
     }
 
@@ -526,19 +521,20 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(title)
-                        .font(SettingsTheme.Font.rowTitle)
-                        .foregroundColor(SettingsTheme.textPrimary)
+                        .font(.body)
+                        .foregroundStyle(.primary)
                     InfoTip(help: help)
                 }
                 if let sub {
                     Text(sub)
-                        .font(SettingsTheme.Font.rowSubLabel)
-                        .foregroundColor(SettingsTheme.subLabel)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
             Spacer(minLength: 8)
             Toggle("", isOn: isOn)
-                .toggleStyle(.mono)
+                .toggleStyle(.switch)
+                .controlSize(.small)
                 .labelsHidden()
         }
     }
@@ -553,6 +549,17 @@ struct SettingsView: View {
     private func bindRec<V>(_ keyPath: WritableKeyPath<RecordingConfig, V>) -> Binding<V> {
         Binding(get: { store.recording[keyPath: keyPath] },
                 set: { store.recording[keyPath: keyPath] = $0; store.persist() })
+    }
+
+    /// A native alert (a SwiftUI `.confirmationDialog` is unreliable in an accessory app).
+    private func confirmClearHistory() {
+        let alert = NSAlert()
+        alert.messageText = "Clear all capture history?"
+        alert.informativeText = "Removes every remembered capture and its stored copies. Saved recording files on disk are not deleted."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Clear History").hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn { clearHistory() }
     }
 
     private func chooseFolder() {

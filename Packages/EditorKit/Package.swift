@@ -5,9 +5,9 @@ let package = Package(
     name: "EditorKit",
     platforms: [.macOS(.v14)],
     products: [.library(name: "EditorKit", targets: ["EditorKit"])],
-    dependencies: [.package(path: "../TestKit"), .package(path: "../TourKit")],
+    dependencies: [.package(path: "../TestKit"), .package(path: "../TourKit"), .package(path: "../DesignKit")],
     targets: [
-        .target(name: "EditorKit", dependencies: [.product(name: "TourKit", package: "TourKit")]),
+        .target(name: "EditorKit", dependencies: [.product(name: "TourKit", package: "TourKit"), .product(name: "DesignKit", package: "DesignKit")]),
         // Test suite as an executable runner (XCTest is unavailable under CLT).
         // Run with: swift run --package-path Packages/EditorKit EditorKitTests
         .executableTarget(

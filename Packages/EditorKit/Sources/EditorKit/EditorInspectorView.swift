@@ -1,4 +1,5 @@
 import AppKit
+import DesignKit
 import TourKit
 
 /// One inspector change to a style field (e.g. "line width = 7"). The window applies it to
@@ -17,7 +18,7 @@ enum ArrangeAction { case front, back, delete }
 ///
 /// Guided tours: each section's box is anchored `editor.inspector.<section raw value>` (the Arrange
 /// footer `editor.inspector.arrange`), and every edit posts `TourEvent.styleChanged(<field>)`.
-final class EditorInspectorView: NSVisualEffectView {
+final class EditorInspectorView: HUDSurfaceView {
     static let width: CGFloat = 264
 
     /// A style edit; edits sharing a non-nil group (one slider drag, one colour-panel
@@ -82,20 +83,11 @@ final class EditorInspectorView: NSVisualEffectView {
 
     init(recentColors: [RGBAColor]) {
         recents = RecentColors(recentColors)
-        super.init(frame: .zero)
+        super.init(frame: .zero, cornerRadius: 12, blending: .withinWindow)
         translatesAutoresizingMaskIntoConstraints = false
-        appearance = NSAppearance(named: .vibrantDark)
-        material = .hudWindow
-        blendingMode = .withinWindow
-        state = .active
-        wantsLayer = true
-        layer?.cornerRadius = 12
-        layer?.masksToBounds = true
-        layer?.borderWidth = 1
-        layer?.borderColor = NSColor(white: 1, alpha: 0.10).cgColor
 
-        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
-        titleLabel.textColor = NSColor(white: 1, alpha: 0.92)
+        titleLabel.font = InspectorStyle.font(.headline, weight: .semibold)
+        titleLabel.textColor = InspectorStyle.primaryText
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(titleLabel)

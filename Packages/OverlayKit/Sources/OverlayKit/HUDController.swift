@@ -1,4 +1,5 @@
 import AppKit
+import DesignKit
 
 /// A small transient confirmation toast ("Text copied — 132 characters").
 /// Bottom-center of the given screen; disappears after ~1.5 s. Showing a new
@@ -20,14 +21,14 @@ public final class HUDController {
 
         let label = NSTextField(labelWithString: message)
         label.font = .systemFont(ofSize: 13, weight: .medium)
-        label.textColor = HUDStyle.primaryText
+        label.textColor = HUDSurfaceView.primaryText
         label.sizeToFit()
 
         let icon = symbol.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: nil) }
             .map { img -> NSImageView in
                 let v = NSImageView(image: img)
                 v.symbolConfiguration = .init(pointSize: 13, weight: .semibold)
-                v.contentTintColor = HUDStyle.primaryText
+                v.contentTintColor = HUDSurfaceView.primaryText
                 v.sizeToFit()
                 return v
             }
@@ -51,8 +52,7 @@ public final class HUDController {
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
-        let container = HUDStyle.makeBackground(frame: NSRect(origin: .zero, size: size),
-                                                cornerRadius: size.height / 2)
+        let container = HUDSurfaceView(frame: NSRect(origin: .zero, size: size), cornerRadius: size.height / 2)
         if let icon {
             icon.frame.origin = NSPoint(x: pad.width, y: ((size.height - icon.frame.height) / 2).rounded())
             container.addSubview(icon)

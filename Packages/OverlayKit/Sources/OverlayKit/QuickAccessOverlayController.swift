@@ -1,4 +1,5 @@
 import AppKit
+import DesignKit
 import QuartzCore
 import TourKit
 
@@ -102,7 +103,7 @@ public final class QuickAccessOverlayController: NSObject {
         // Rounded card that clips the full-bleed image + overlaid controls.
         let container = NSView(frame: NSRect(origin: .zero, size: size))
         container.wantsLayer = true
-        container.layer?.cornerRadius = 14
+        container.layer?.setContinuousCorners(14)
         container.layer?.masksToBounds = true
         container.tourAnchor = "quickAccess.card"
 
@@ -371,14 +372,13 @@ public final class QuickAccessOverlayController: NSObject {
     private static func badgeView(_ text: String, cardSize: CGSize) -> NSView {
         let label = NSTextField(labelWithString: text)
         label.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
-        label.textColor = HUDStyle.primaryText
+        label.textColor = HUDSurfaceView.primaryText
         label.sizeToFit()
         let chipSize = NSSize(width: ceil(label.frame.width) + 14, height: 20)
         let holder = ClickThroughView(frame: NSRect(x: 8, y: cardSize.height - 8 - chipSize.height,
                                                     width: chipSize.width, height: chipSize.height))
         // Blends with the card's own image layer, which is drawn in this window.
-        let chip = HUDStyle.makeBackground(frame: holder.bounds, cornerRadius: 6,
-                                           blending: .withinWindow)
+        let chip = HUDSurfaceView(frame: holder.bounds, cornerRadius: 6, blending: .withinWindow)
         label.frame.origin = NSPoint(x: 7, y: ((chipSize.height - label.frame.height) / 2).rounded())
         chip.addSubview(label)
         holder.addSubview(chip)
@@ -452,7 +452,7 @@ private final class QuickAccessIconButton: NSView {
         self.onClick = onClick
         super.init(frame: NSRect(x: 0, y: 0, width: 32, height: 30))
         wantsLayer = true
-        layer?.cornerRadius = 7
+        layer?.setContinuousCorners(7)
         layer?.masksToBounds = true
         toolTip = tip
         setAccessibilityRole(.button)

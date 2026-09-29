@@ -1,4 +1,5 @@
 import AppKit
+import DesignKit
 
 /// A full-screen overlay (per display) that highlights the window under the
 /// cursor and confirms a pick on click. Generic: it knows nothing about
@@ -70,11 +71,48 @@ private final class WindowPickerView: NSView {
     var onCancel: (() -> Void)?
 
     private let screenOrigin: CGPoint
-    private var current: (id: UInt32, frame: CGRect, title: String?)?
+    private var current: (id: UInt32, frame: CGRect, title: String?)? {
+        didSet { layoutTitleChip() }
+    }
+    /// The hovered window's title on the shared HUD surface.
+    private let titleChip = HUDSurfaceView(cornerRadius: 6)
+    private let titleLabel = NSTextField(labelWithString: "")
 
     init(frame: NSRect, screenOrigin: CGPoint) {
         self.screenOrigin = screenOrigin
         super.init(frame: frame)
+        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        titleLabel.textColor = HUDSurfaceView.primaryText
+        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.cell?.truncatesLastVisibleLine = true
+        titleChip.addSubview(titleLabel)
+        titleChip.isHidden = true
+        addSubview(titleChip)
+    }
+
+    // Clicks go to the picker, not the chip.
+    override func hitTest(_ point: NSPoint) -> NSView? { frame.contains(point) ? self : nil }
+
+    private var localFrame: CGRect? {
+        current.map { CGRect(x: $0.frame.minX - screenOrigin.x, y: $0.frame.minY - screenOrigin.y,
+                             width: $0.frame.width, height: $0.frame.height) }
+    }
+
+    /// Long titles are cut with "…" so the chip never runs past the window's edges.
+    private func layoutTitleChip() {
+        guard let current, let local = localFrame, let title = current.title, !title.isEmpty else {
+            titleChip.isHidden = true
+            return
+        }
+        titleLabel.stringValue = title
+        let size = titleLabel.intrinsicContentSize
+        guard let chip = OverlayLabelLayout.titleChip(window: local, textSize: size, padding: 6, margin: 12) else {
+            titleChip.isHidden = true
+            return
+        }
+        titleChip.frame = chip.chip
+        titleLabel.frame = chip.text.offsetBy(dx: -chip.chip.minX, dy: -chip.chip.minY)
+        titleChip.isHidden = false
     }
     required init?(coder: NSCoder) { fatalError("not used") }
 
@@ -106,34 +144,10 @@ private final class WindowPickerView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         NSColor.black.withAlphaComponent(0.15).setFill()
         bounds.fill()
-        guard let current else { return }
-        // Global Cocoa frame → this screen's view-local coordinates.
-        let local = CGRect(x: current.frame.minX - screenOrigin.x,
-                           y: current.frame.minY - screenOrigin.y,
-                           width: current.frame.width, height: current.frame.height)
+        guard let local = localFrame else { return }
         NSColor.controlAccentColor.withAlphaComponent(0.18).setFill()
         local.fill()
         NSColor.controlAccentColor.setStroke()
         let stroke = NSBezierPath(rect: local); stroke.lineWidth = 3; stroke.stroke()
-
-        guard let title = current.title, !title.isEmpty else { return }
-        // Long titles are cut with "…" so the chip never runs past the window's edges.
-        let para = NSMutableParagraphStyle()
-        para.lineBreakMode = .byTruncatingTail
-        let attrs: [NSAttributedString.Key: Any] = [
-            .foregroundColor: NSColor.white,
-            .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
-            .paragraphStyle: para]
-        let size = (title as NSString).size(withAttributes: attrs)
-        guard let chip = OverlayLabelLayout.titleChip(window: local, textSize: size,
-                                                      padding: 6, margin: 12) else { return }
-        let cap = NSBezierPath(roundedRect: chip.chip, xRadius: 6, yRadius: 6)
-        NSColor.black.withAlphaComponent(0.6).setFill()
-        cap.fill()
-        NSColor.white.withAlphaComponent(HUDStyle.borderAlpha).setStroke()
-        cap.lineWidth = 1
-        cap.stroke()
-        (title as NSString).draw(with: chip.text, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine],
-                                 attributes: attrs)
     }
 }

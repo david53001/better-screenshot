@@ -3,6 +3,7 @@ import Combine
 import SwiftUI
 import CaptureKit
 import TourKit
+import DesignKit
 
 /// Owns the single Settings window. Replaces the SwiftUI `Settings` scene, whose
 /// private `showSettingsWindow:` opener silently broke on macOS 14 for
@@ -38,20 +39,21 @@ final class SettingsWindowController {
     func makeWindow() -> NSWindow {
         let view = SettingsView(store: store, shortcuts: shortcuts, clearHistory: clearHistory,
                                 tours: tours)
-        let hosting = NSHostingController(rootView: view)
-        hosting.view.appearance = NSAppearance(named: .darkAqua)
-        let w = SettingsWindow(contentViewController: hosting)
-        w.styleMask = [.titled, .closable, .miniaturizable]
+        // Follows the system appearance; the content sits on a translucent material
+        // (MacStats design language) that runs under the transparent title bar.
+        let hosting = NSHostingView(rootView: view)
+        let w = SettingsWindow(contentRect: NSRect(x: 0, y: 0, width: SettingsView.Layout.windowWidth, height: 600),
+                               styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
+                               backing: .buffered, defer: false)
         w.title = "Settings"
-        w.appearance = NSAppearance(named: .darkAqua)
         w.titlebarAppearsTransparent = true
-        w.backgroundColor = .black
         w.isReleasedWhenClosed = false
+        WindowMaterial.install(hosting, in: w, material: .sidebar)
 
         let maxH = (NSScreen.main?.visibleFrame.height ?? 900) * 0.98
-        let fittingHeight = hosting.view.fittingSize.height
+        let fittingHeight = hosting.fittingSize.height
         let height = fittingHeight > 0 ? min(fittingHeight, maxH) : maxH
-        w.setContentSize(NSSize(width: 960, height: height))
+        w.setContentSize(NSSize(width: SettingsView.Layout.windowWidth, height: height))
 
         // ⓘ: Replay Tour + the capture shortcuts this window edits, as currently bound.
         let info = InfoButton.install(in: w, tour: .settings, shortcuts: Self.infoShortcuts(store.bindings))

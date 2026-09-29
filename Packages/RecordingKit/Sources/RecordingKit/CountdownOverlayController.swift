@@ -1,8 +1,9 @@
 import AppKit
+import DesignKit
 
 /// A centered countdown HUD shown before recording starts. Counts down once per
 /// second; click to skip (start now — said on the box); `cancel()` aborts. Uses the
-/// shared dark HUD look (`RecordingHUDStyle`).
+/// shared dark HUD surface (`HUDSurfaceView`).
 @MainActor
 public final class CountdownOverlayController {
     private var panel: NSPanel?
@@ -38,18 +39,17 @@ public final class CountdownOverlayController {
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
-        let container = ClickView(frame: NSRect(x: 0, y: 0, width: side, height: side))
+        let container = ClickView(frame: NSRect(x: 0, y: 0, width: side, height: side), cornerRadius: 24)
         container.onClick = { [weak self] in self?.finish() }   // click to skip
-        RecordingHUDStyle.apply(to: container, cornerRadius: 24)
 
         let font = NSFont.monospacedDigitSystemFont(ofSize: 120, weight: .semibold)
         let label = NSTextField(labelWithString: "\(seconds)")
         label.font = font
-        label.textColor = RecordingHUDStyle.primaryText
+        label.textColor = HUDSurfaceView.primaryText
         label.alignment = .center
         let skip = NSTextField(labelWithString: "Click to start now")
         skip.font = .systemFont(ofSize: 12, weight: .medium)
-        skip.textColor = RecordingHUDStyle.secondaryText
+        skip.textColor = HUDSurfaceView.secondaryText
         for v in [label, skip] {
             v.translatesAutoresizingMaskIntoConstraints = false
             container.addSubview(v)
@@ -92,7 +92,7 @@ public final class CountdownOverlayController {
 }
 
 /// A vibrancy view that reports clicks (skip the countdown).
-private final class ClickView: NSVisualEffectView {
+private final class ClickView: HUDSurfaceView {
     var onClick: (() -> Void)?
     override func mouseDown(with event: NSEvent) { onClick?() }
 }

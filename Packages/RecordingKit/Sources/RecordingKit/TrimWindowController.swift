@@ -1,4 +1,5 @@
 import AppKit
+import DesignKit
 import AVKit
 import TourKit
 
@@ -124,7 +125,8 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
         window.minSize = NSSize(width: 780, height: 560)
         window.isReleasedWhenClosed = false
         window.appearance = NSAppearance(named: .darkAqua)
-        window.backgroundColor = NSColor(white: 0.09, alpha: 1)
+        // A dark translucent backdrop; the video itself stays opaque.
+        window.contentView = WindowMaterial.make(.underWindowBackground)
         super.init(window: window)
         window.delegate = self
         buildUI()
@@ -183,17 +185,8 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
 
     /// The dark HUD card: transport row · timeline · selected-segment row · hint line.
     private func buildCard() -> NSView {
-        let card = NSVisualEffectView()
+        let card = HUDSurfaceView(cornerRadius: 12, blending: .withinWindow)
         card.translatesAutoresizingMaskIntoConstraints = false
-        card.appearance = NSAppearance(named: .vibrantDark)
-        card.material = .hudWindow
-        card.blendingMode = .withinWindow
-        card.state = .active
-        card.wantsLayer = true
-        card.layer?.cornerRadius = 12
-        card.layer?.masksToBounds = true
-        card.layer?.borderWidth = 1
-        card.layer?.borderColor = NSColor(white: 1, alpha: 0.10).cgColor
 
         // Transport + edit row.
         playButton.target = self; playButton.action = #selector(togglePlay)
