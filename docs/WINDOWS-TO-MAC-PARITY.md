@@ -62,6 +62,12 @@ other, so either order works. Part 1 and Part 2 both add an **auto-dismiss slide
 
 # Part 1 — Settings UI: the JVoice monochrome revamp
 
+> **Superseded on macOS (2026-09-29, branch `feat/native-look`):** the owner replaced this pure-black
+> "JVoice" Settings look with the native MacStats design language — translucent material, system
+> light/dark, system accent, tinted hairline cards without dots, native controls. What Part 1 describes
+> below is the *previous* look. Current look and the Windows instructions: `docs/MAC-TO-WINDOWS-PARITY-v3.md`
+> Part 9.
+
 ## 1.1 The target, in one paragraph
 
 The Windows settings window is a single WPF `Window` skinned entirely from a central theme file. It is a

@@ -3355,3 +3355,81 @@ card's divider), 14 pt row spacing:
 To keep the three columns about equal in height, the Startup card moved to column 1 (under Quick Access
 Overlay) and Pin to Screen to column 2 (under Recording). Columns are now: Capture · Quick Access Overlay ·
 Startup | Recording · Pin to Screen | In the video · History · Save location.
+
+## Part 9 — Native look (MacStats design language), macOS branch `feat/native-look`, 2026-09-29
+
+> Numbered 9 because the unmerged Capture Text branch (`ocr-structure-math`) already adds a Part 8.
+> Source spec: `/Users/davidghermansteinberg/Desktop/Home/Projects/Code/MacStats/docs/design-language/betterscreenshot-native-redesign.md`
+> (and the language itself: `.../MacStats/docs/design-language/README.md`). The owner wants the app to look
+> like a native OS app: slightly translucent surfaces, simple lines and text, soft (squircle) corners, no
+> all-black backgrounds and no decorative dots. **It replaces the pure-black "JVoice" Settings look** of
+> `docs/WINDOWS-TO-MAC-PARITY.md` Part 1 on macOS; the Windows port should follow.
+
+### 9.1 What changed, by surface (macOS)
+
+| Surface | Before | Now |
+|---|---|---|
+| Settings window | pure black `#000`, forced dark, custom mono controls, glowing-dot card headers, serif ⓘ | follows the **system light/dark**; window content on a translucent system material (`NSVisualEffectView .sidebar`, behind-window) running under a transparent title bar; native controls with the system accent |
+| Settings cards | `#0E0E0E` fill, 1 pt `#2A2A2A` border, dot + 10 pt bold header, divider rule | fill = text colour at **4 %** opacity, **0.5 pt** hairline at 8 %, **10 pt** continuous corners, 12 pt padding, header = uppercase **caption2 semibold, secondary colour**, no dot, no rule |
+| Settings controls | `MonoSwitchStyle`, custom segmented, `MonoSlider`, `MonoComboField`, pill buttons | native switch (small), native segmented (sized to its content, **left-aligned**), native slider with ticks (still over the stop-index tables `OverlayDismissScale`/`TempFileRetentionScale`, `∞` label kept), native pop-up menu, native bordered buttons |
+| ⓘ tips | serif italic "i" in a circle, custom black popover card | SF Symbol `info.circle` in the secondary colour (primary on hover); native popover; title = headline, text = callout, example = caption italic secondary |
+| Clear History confirm | SwiftUI confirmation dialog | native alert, warning style, **"Clear History" marked destructive**, "Cancel" |
+| Floating HUDs (toast, selection size chip, window-picker title chip, Quick Access recording badge, pin close button, record strip, recording pill + its hover hint, countdown, keystroke overlay) | two copies of a blur recipe, circular corners, 1 pt border; window-picker chip drawn black 60 %; keystroke overlay flat black 75 % | **one** recipe (§9.2) everywhere |
+| Editor window | flat `white 0.12` backdrop | still always dark, backdrop = dark translucent material (`.underWindowBackground`); the image canvas stays opaque |
+| Editor tool pill + inspector | inline blur recipe without the tint, 1 pt border | the §9.2 HUD surface (radius 15 / 12) |
+| Editor inspector text | 10 pt 45 %-white captions, 12 pt labels | captions = caption2 semibold **secondary label colour**; row labels and notes = callout (label / secondary label colour); title = headline; hairline separators 0.5 pt |
+| Trim / video editor window | flat `white 0.09` | dark translucent material; control card = §9.2 surface r12; timeline shapes continuous |
+| Quick Access card | circular 14 pt corners | continuous 14 pt corners — **scrim, sampled band and button colours untouched** (contrast guarantee) |
+| Tour tags | circular | continuous corners; red `#C62D22` kept |
+| History cells | circular r8 / r6 thumbnails | continuous |
+
+Everything rounded uses **continuous corners** except true circles (status dot, camera bubble, canvas
+handles), which stay circular on purpose.
+
+### 9.2 The one HUD surface (`Packages/DesignKit/Sources/DesignKit/HUDSurface.swift`)
+
+- Always **dark**, in light mode too (Apple's HUDs are; the contrast work in review C1/E2 depends on it).
+- macOS 26: Liquid Glass (`NSGlassEffectView`, regular style, dark). macOS 14–15: `.hudWindow` blur, vibrant dark.
+- Over either: a **40 % black tint** and a **0.5 pt white 10 % hairline**, continuous corners.
+- Text: primary white, secondary white 60 %.
+- **Measured 2026-09-29 (macOS 26, surface over an opaque white page, review C1 method):** glass alone
+  backdrop ≈ rgb 127 → white text **4.52:1** (right at the WCAG 4.5 limit); glass + tint rgb 76 → **8.62:1**.
+  That is why the tint stays. (Fallback blur alone was measured rgb 129 = 3.9:1 in review C1.)
+
+### 9.3 Tokens (`Packages/DesignKit/Sources/DesignKit/Design.swift`)
+
+Card radius 10 · outer padding 20 · card spacing 12 · card padding 12 · card fill 0.04 / hover 0.085 /
+pressed 0.12 · hairline 0.08 at 0.5 pt · small button radius 6, height 24. Fill and hairline are opacities of
+the **text colour** (black in light, white in dark), so they adapt to the theme and let the material show.
+Settings: window 960 wide, three columns `(960 − 2·20 − 2·12) / 3 = 298` wide, same card order as before.
+
+### 9.4 Doing it on Windows (C#/WPF, .NET 9)
+
+- **Materials:** main windows (Settings) → **Mica** (`DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE = 38,
+  DWMSBT_MAINWINDOW = 2)`, window background transparent, `WindowChrome` extending the frame). Floating HUDs →
+  **Acrylic** (`DWMSBT_TRANSIENTWINDOW = 3`), dark (`DWMWA_USE_IMMERSIVE_DARK_MODE = 20`), plus the same 40 %
+  black overlay and a 1-physical-pixel white-10 % border. Windows 10 fallback: a solid `#1E1E1E` at 90 % for
+  HUDs and the system window colour for Settings.
+- **Theme:** Settings follows the system theme (`HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize\AppsUseLightTheme`)
+  — .NET 9 WPF `Application.ThemeMode = ThemeMode.System` gives the Fluent controls and the accent for free.
+  HUDs, the editor and the trim window stay dark.
+- **Controls:** use the Fluent (`ThemeMode`) `ToggleSwitch`-style `CheckBox`, `ComboBox`, `Slider` (with
+  `TickFrequency=1`, `IsSnapToTickEnabled`), a `RadioButton` segmented group or `ListBox` styled as segments,
+  standard `Button`. No custom black/white inverted controls.
+- **Corners:** WPF has no squircle; Windows 11 itself uses circular corners, so **keep the same radii with
+  circular corners** (matching the platform matters more than the curve). Radii: cards 10, toast = pill
+  (height/2), size chip 6, strip 12, recording pill = height/2, hint 7, countdown 24, keystroke 10, editor tool
+  pill 15, inspector 12, trim card 12, Quick Access 14.
+- **Card:** `Border` with `Background` = text colour at 4 % (`#0A000000` light / `#0AFFFFFF` dark),
+  `BorderBrush` 8 %, `BorderThickness` = one device pixel (`1 / dpiScale`), `CornerRadius 10`, padding 12;
+  header `TextBlock` uppercase, `FontSize 11`, SemiBold, secondary brush. Delete the glowing dot.
+- **ⓘ:** Segoe Fluent Icons `Info` glyph (U+E946) in the secondary brush; tooltip = native `ToolTip`/`Popup`
+  with the system flyout style.
+- **Clear History:** a `MessageBox` / `ContentDialog`-style confirm with "Clear History" (destructive) and "Cancel".
+- **Don't** touch the Quick Access scrim/contrast logic or the tour red.
+
+### 9.5 Verify
+
+macOS: `swift build`, `scripts/test.sh` (DesignKitTests: HUD tint/hairline/continuous corners, continuous
+paths). By eye: Settings in light and dark, HUDs over a bright and a dark wallpaper. Windows: the same by eye,
+plus re-measure white text on each HUD over a white page (≥ 4.5:1).

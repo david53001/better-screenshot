@@ -17,10 +17,13 @@
   `RecordingConfig.showsCursor`.
 - `SettingsHelp.swift` — the ⓘ texts (title · explanation · example) for every setting. Shortcut
   examples use Apple's modifier order (⇧⌘4), like `HotkeyCombo.displayString`.
-- `Components/InfoTip.swift` — the ⓘ popover. Its card needs a fixed text width plus
+- Look (branch `feat/native-look`, MacStats design language): the window follows the system appearance
+  and hosts the SwiftUI view on a `.sidebar` material (`DesignKit.WindowMaterial`) under a transparent
+  title bar; cards are `Components/SettingsCard.swift` (DesignKit `CardBackground`, caption2 header, no dot);
+  controls are native (`Components/Controls.swift`: `StopSlider`, `MenuPicker`, `PathField`;
+  `SegmentedControl` wraps a native segmented `Picker`, left-aligned). Clear History confirms with `NSAlert`.
+- `Components/InfoTip.swift` — the ⓘ (SF `info.circle`) popover. Its card needs a fixed text width plus
   `.fixedSize(horizontal: false, vertical: true)` on each `Text`, or the popover cuts every line to one row.
-- `Components/MonoControls.swift` — `MonoComboField` must use `.menuStyle(.button)` + `.buttonStyle(.plain)`
-  + `.menuIndicator(.hidden)`; `.borderlessButton` renders it as bare text with a second chevron.
 - `SettingsWindowController.swift` — hosts the SwiftUI settings view in an AppKit window (`SettingsWindow`,
   which adopts TourKit's `TourKeysClaiming`: while any `RecorderWell` is recording, Return/Esc go to the
   well, never to a tour tag — `RecorderWell.anyRecording(in:)` in `ShortcutRecorderField.swift`). `makeWindow()`
