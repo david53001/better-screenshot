@@ -3,7 +3,40 @@
 **Read this first if you are picking this work up.** It is written for a fresh session with no memory
 of the one that produced it.
 
-## Latest status (session 4, 2026-09-29, later) — read this first
+## Latest status (session 5, 2026-09-29, evening) — read this first
+
+- **Speed + accuracy review done:** `docs/reviews/2026-09-29-ocr-speed-review.md` — overall **5/10**
+  (speed 7/10 math on, 9/10 off; accuracy 5/10). It added 30 frozen cases, `W01`–`W30`
+  (`tools/ocr-bench/FourthReviewCases.swift`): 14/30 at review time.
+- **Speed fixes (0 of 188 outputs changed by each):** DisplayMath dry run (parse a row with re-reads
+  stubbed to `"lim"`; only rows with real structure get Vision re-reads — removed 534 of 622 re-reads,
+  −23 % corpus time); per-capture re-read cache keyed by image bytes (`TextRecognizer.readLine`,
+  17 % of re-reads were duplicates); `warmUp` now OCRs real text ("Warm up") so the first capture
+  doesn't pay the model load (181 → 142 ms).
+- **Accuracy fixes:** `ScriptRecovery.mentionsTrig` (a trig name only as a word or before a
+  non-dictionary one-letter argument — `second`, `since`, `cost`, `tank` don't count); shape repairs
+  never inside an ordinary word (`Add`, `Tank`); Cyrillic `П`/`п` → `π` by shape or when alone
+  (`Homoglyphs.latinized`), else `n` → W03 and W07 pass.
+- **Tried and reverted:** an `isFaithful` rule forbidding a rewrite to drop a relation sign — 4 cases
+  worse (H07, H08, W01, W08), none better.
+- **Release timings (188 cases, `swift build -c release` in `tools/ocr-bench`, then the binary with and
+  without `--no-math`):** math on median 87 / p90 169 / max 276 ms; off 69 / 143 / 238. Per area on/off:
+  prose 81/78, lists 98/91, code 169/155, tables 83/72, **math 88/42**, layout 94/88, robustness 61/56.
+  The toggle now matters mainly on equations (≈ 2×), because the fixes removed math-on's waste on ordinary
+  text. Note `scripts/build-app.sh` builds **debug** by default (`CONFIG=${1:-debug}`) — times in the
+  installed app are higher than these unless it's built with `release`.
+- **Newest baseline:** `tools/ocr-bench/baselines/2026-09-29-cyrillic-pi.json` — existing 55/66 ·
+  H 19/35 · N 5/7 · V 31/44 · G 5/6 · W 16/30.
+- **Next, in order:** (1) the code second pass (language correction off) costs ~20–40 ms on code — run it
+  concurrently with the first pass or only on the code lines' crop (review speed item 4); (2) W01 loses
+  `=`, W08 `n/2` → `-`, W09 garbage `²ᵃ` (a recover rewrite that shouldn't be accepted — the relation guard
+  was the wrong fix; look at the per-word alignment instead); (3) W04 `×` for a letter X between
+  fractions, W18 a lone final `}`, W14 a paragraph split after `used up.`; (4) V05, V01 from session 4;
+  (5) ask the owner about a bundled on-device math model; (6) merge + CHANGELOG.
+- JVoice has an uncommitted companion doc, `../JVoice/docs/math-notation-format.md` (the shared Unicode
+  math format and what its own math toggle should skip).
+
+## Latest status (session 4, 2026-09-29, later) — superseded by session 5
 
 - **Rest of review fix 5 done:** `10g3 (` → `log₃(`, `In 2 /` → `ln 2 /`, a decimal point inside an exponent
   joins it (`e^(0.2t)`) — `ScriptRecovery.repairingLog` now also runs on every line's final text.

@@ -155,7 +155,9 @@ MathLayout can't; `ScriptRecovery.alignment` (a small dynamic program) assigns V
 glyphs; `TextRecognizer.cellLines` reads table cells Vision didn't box; `WordList.swift` (system word
 list) decides whether a line-end hyphen stays; `GridLines.swift` finds a table's faint vertical rules so
 cells land in the right column. **Settings → Capture → "Recognize math"** (`captureTextMath`, default on)
-gates the pixel math passes — off is ≈3× faster (`TextRecognizer.recognize(…, math:)`, bench `--no-math`).
+gates the pixel math passes (`TextRecognizer.recognize(…, math:)`, bench `--no-math`) — release build:
+equations 88 → 42 ms with it off, ordinary text within a few ms (speed review
+`docs/reviews/2026-09-29-ocr-speed-review.md`; build the bench with `-c release` to time it).
 `ScriptRecovery.swift` (+ `InkMap.swift`: Otsu binarization, 8-connected blobs) finds glyphs per line,
 marks raised/lowered ones against the full-size glyph before them, and re-reads a straightened copy through
 Vision when Vision's own characters can't be trusted; it also turns a radical blob into `√(…)`, `+` with a

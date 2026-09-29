@@ -38,8 +38,9 @@ enum SettingsHelp {
     static let captureTextMath = HelpText(
         "Recognize math",
         "Capture Text rebuilds math from the image: exponents and subscripts, square roots, fractions and "
-            + "displayed equations. Turn it off for faster captures of ordinary text.",
-        example: "On: x² + y² = z², H₂O, √(x + 1). Off: faster, but x² comes out as x2."
+            + "displayed equations. Off skips those steps: equations are captured about twice as fast but come out "
+            + "flat; ordinary text is barely affected.",
+        example: "On: x² + y² = z², H₂O, √(x + 1). Off: x2 + y2 = z2."
     )
 
     static let screenCorner = HelpText(

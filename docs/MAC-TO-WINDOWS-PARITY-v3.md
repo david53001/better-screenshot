@@ -3392,8 +3392,8 @@ Corpus harness: `tools/ocr-bench/` (below, §8.8).
   component as that row (label left, mono switch right), same 14 pt row spacing.
 - **Label:** `Recognize math` + ⓘ. **ⓘ tip** (verbatim): title **"Recognize math"**; text **"Capture Text
   rebuilds math from the image: exponents and subscripts, square roots, fractions and displayed equations.
-  Turn it off for faster captures of ordinary text."**; example **"On: x² + y² = z², H₂O, √(x + 1). Off:
-  faster, but x² comes out as x2."**
+  Off skips those steps: equations are captured about twice as fast but come out flat; ordinary text is
+  barely affected."**; example **"On: x² + y² = z², H₂O, √(x + 1). Off: x2 + y2 = z2."**
 - **Data:** `CaptureSettings.captureTextMath`, persisted in the flat settings dictionary under key
   **`captureTextMath`** as `"1"`/`"0"`; **absent = on**; default **on** (existing users get it on).
   macOS test: `recognizeMathDefaultsOnAndRoundTrips` in `CaptureSettingsTests.swift`.
@@ -3405,12 +3405,14 @@ Corpus harness: `tools/ocr-bench/` (below, §8.8).
   `nil`). **Still runs with it off:** dashes/dots/separators/checkboxes/icons (4c), the missing full stop
   (4a), table cells (5), code re-read (7), gridlines, all layout, and the cheap text-only tidying (`log`/`ln`
   look-alikes, `×` between numbers, math-line operator spacing).
-- **Measured speed difference (macOS, debug build of the harness, 158 cases, 2026-09-29):** median
-  **413 ms → 133 ms** per capture with it off (≈ 3×); per area on → off: tables 1162 → 228 ms, math
-  400 → 76 ms, prose 230 → 116 ms, code 624 → 386 ms, layout 705 → 327 ms. Accuracy on the third review's
-  44 cases: 30/44 on vs 24/44 off in the same run (31/44 on after later fixes; the cases lost with it off
-  are exponents, subscripts and fractions). **The port must
-  show the same kind of difference** — if "off" isn't clearly faster, something math-only is still running.
+- **Measured speed (macOS, *release* build of the harness, 188 cases, 2026-09-29, after the speed
+  review's fixes in §8.9):** math on median **87 ms** / p90 169 / max 276; off **69** / 143 / 238. The
+  difference sits where the math work is: **equations 88 → 42 ms (≈ 2×)**; prose 81 → 78, lists 98 → 91,
+  tables 83 → 72, code 169 → 155, layout 94 → 88. (Before those fixes, math-on also wasted time re-reading
+  table and code rows — debug medians 413 ms on vs 133 ms off.) Accuracy on the third review's 44 cases:
+  30/44 on vs 24/44 off in the same run (the cases lost with it off are exponents, subscripts and
+  fractions). **The port must show the same shape:** on equations "off" is clearly faster; on ordinary text
+  math-on costs only a few ms — if it costs more, a math pass is doing work on lines that can't be math.
 
 ### 8.2 The clipboard format (the contract — what a capture must paste)
 
@@ -3576,5 +3578,33 @@ baselines/<file>.json` for regressions — README in that folder). The cases are
 strings) in `Cases.swift`, `HeldOutCases.swift` (`H*`, `N*`), `ThirdReviewCases.swift` (`V*`, frozen),
 `GridCases.swift` (`G*`). To verify the port, export them (id, html, css, width, density, expected) and
 render with WebView2 offscreen, then compare pass counts and CER per area with the macOS numbers in
-`docs/PROGRESS-2026-09-28-ocr.md`. Newest macOS baseline: `tools/ocr-bench/baselines/2026-09-29-ddx.json`
-(existing 55/66 · H 19/35 · N 5/7 · V 31/44 · G 5/6 with math on).
+`docs/PROGRESS-2026-09-28-ocr.md`. Newest macOS baseline: `tools/ocr-bench/baselines/2026-09-29-cyrillic-pi.json`
+(existing 55/66 · H 19/35 · N 5/7 · V 31/44 · G 5/6 · W 16/30 with math on; `FourthReviewCases.swift` = `W*`,
+frozen).
+
+### 8.9 Speed fixes from the speed + accuracy review (2026-09-29)
+
+Review: `docs/reviews/2026-09-29-ocr-speed-review.md` (overall 5/10; speed 7/10 with math on, 9/10 off,
+measured before these fixes). Port all three — on macOS they changed **0 of 188** corpus outputs:
+1. **DisplayMath dry run** (`DisplayMath.rebuild`): parse each candidate row once with every OCR re-read
+   stubbed to return `"lim"`; keep the row only if that dry parse finds structure the box-level layer
+   can't build, and only then parse it for real. Every structure decision is geometric, and the stub can
+   only let *more* rows through, never fewer. It removed 534 of 622 re-reads (table and code rows were
+   re-read and thrown away): corpus time −23 % (debug); tables median 308 → 84 ms (release).
+2. **Re-read cache per capture** (`TextRecognizer.readLine`): key = the synthetic image's width, height and
+   pixel bytes; the same image always reads the same. 17 % of re-reads were duplicates. Empty it at the
+   start and the end of each capture (a lock guards it — re-reads run from parallel work).
+3. **Warm up on real text** (`TextRecognizer.warmUp`, run while the user is still dragging): OCR a
+   220 × 48 image of "Warm up" in 24 pt Helvetica — a blank image never loads the recognizer's models.
+   First capture 181 → 142 ms.
+
+Accuracy fixes in the same round (all pass the no-harm corpus diff):
+- A trig name only counts as one on its own or before a one-letter argument that is **not** a dictionary
+  word — `second`, `since`, `cost`, `tank` no longer switch on the `θ` repairs (`ScriptRecovery.mentionsTrig`).
+- The `Δ`/`π`/`θ`/`∫` shape repairs never fire inside an ordinary word (`Add`, `Tank`).
+- Cyrillic `П`/`п` that Vision returns for `π` or an italic `n`: in a script slot it is decided by shape
+  (flat top on two legs → `π`); in plain text (`Homoglyphs.latinized`) a lone one, or one beside a digit,
+  `/`, `=`, `(` or `)`, is `π`, anything else `n`.
+
+Tried and reverted (don't port): an `isFaithful` rule that a rewrite may never drop a relation sign
+(`=`, `<`, `>`…) — it fixed nothing and broke four cases (H07, H08, W01, W08).
