@@ -27,8 +27,11 @@ of the one that produced it.
   installed app are higher than these unless it's built with `release`.
 - **Newest baseline:** `tools/ocr-bench/baselines/2026-09-29-cyrillic-pi.json` — existing 55/66 ·
   H 19/35 · N 5/7 · V 31/44 · G 5/6 · W 16/30.
-- **Next, in order:** (1) the code second pass (language correction off) costs ~20–40 ms on code — run it
-  concurrently with the first pass or only on the code lines' crop (review speed item 4); (2) W01 loses
+- **Code second pass now overlaps the pipeline** (review speed item 4): when Vision's first read already
+  looks like code, the no-language-correction read starts on a background thread (`TextRecognizer.RawPass`)
+  and the final `containsCode` check still decides whether it's used → 0 outputs changed; release code
+  median 167 → 142 ms, everything else unchanged.
+- **Next, in order:** (1) nothing left from the speed review's list; (2) W01 loses
   `=`, W08 `n/2` → `-`, W09 garbage `²ᵃ` (a recover rewrite that shouldn't be accepted — the relation guard
   was the wrong fix; look at the per-word alignment instead); (3) W04 `×` for a letter X between
   fractions, W18 a lone final `}`, W14 a paragraph split after `used up.`; (4) V05, V01 from session 4;

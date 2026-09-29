@@ -26,6 +26,9 @@ public enum TextRecognizer {
 
         let size = CGSize(width: source.width, height: source.height)
         var lines = reflowLines(textRequest.results ?? [])
+        // The read without language correction that code needs (below) runs
+        // alongside the rest when Vision's first read already looks like code.
+        let rawPass = TextReflow.containsCode(lines, imageSize: size) ? RawPass(source) : nil
         let confidences = (textRequest.results ?? []).compactMap { $0.topCandidates(1).first?.confidence }
         var absorbed = Set<Int>()
         func pixels(_ b: CGRect) -> CGRect {
@@ -99,10 +102,7 @@ public enum TextRecognizer {
         // `items. reduce (`, `--parallel` → `-parallel`); when a block reads as
         // code, read the image again without it for those lines.
         if TextReflow.containsCode(lines, imageSize: size) {
-            let rawRequest = makeTextRequest()
-            rawRequest.usesLanguageCorrection = false
-            try VNImageRequestHandler(cgImage: source).perform([rawRequest])
-            let raw = reflowLines(rawRequest.results ?? [])
+            let raw = try (rawPass ?? RawPass(source)).lines()
             for i in lines.indices {
                 lines[i].rawText = raw.max { iou($0.box, lines[i].box) < iou($1.box, lines[i].box) }
                     .flatMap { iou($0.box, lines[i].box) > 0.5 ? $0.text : nil }
@@ -132,6 +132,30 @@ public enum TextRecognizer {
             return gridLines??.vertical(in: rect) ?? []
         })
         return RecognitionResolver.resolve(qrPayloads: qrs, textLines: text, qrDominant: dominant)
+    }
+
+    /// Vision's read of `image` without language correction, started on a
+    /// background thread as soon as it is made.
+    private final class RawPass: @unchecked Sendable {
+        private let done = DispatchSemaphore(value: 0)
+        private var result: Result<[TextReflow.Line], Error> = .success([])
+
+        init(_ image: CGImage) {
+            DispatchQueue.global(qos: .userInitiated).async { [self] in
+                let request = makeTextRequest()
+                request.usesLanguageCorrection = false
+                result = Result {
+                    try VNImageRequestHandler(cgImage: image).perform([request])
+                    return reflowLines(request.results ?? [])
+                }
+                done.signal()
+            }
+        }
+
+        func lines() throws -> [TextReflow.Line] {
+            done.wait()
+            return try result.get()
+        }
     }
 
     /// `3.00 x 10⁸`: a lone x between numbers is a times sign.

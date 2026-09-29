@@ -3585,7 +3585,7 @@ frozen).
 ### 8.9 Speed fixes from the speed + accuracy review (2026-09-29)
 
 Review: `docs/reviews/2026-09-29-ocr-speed-review.md` (overall 5/10; speed 7/10 with math on, 9/10 off,
-measured before these fixes). Port all three — on macOS they changed **0 of 188** corpus outputs:
+measured before these fixes). Port all four — on macOS they changed **0 of 188** corpus outputs:
 1. **DisplayMath dry run** (`DisplayMath.rebuild`): parse each candidate row once with every OCR re-read
    stubbed to return `"lim"`; keep the row only if that dry parse finds structure the box-level layer
    can't build, and only then parse it for real. Every structure decision is geometric, and the stub can
@@ -3597,6 +3597,10 @@ measured before these fixes). Port all three — on macOS they changed **0 of 18
 3. **Warm up on real text** (`TextRecognizer.warmUp`, run while the user is still dragging): OCR a
    220 × 48 image of "Warm up" in 24 pt Helvetica — a blank image never loads the recognizer's models.
    First capture 181 → 142 ms.
+4. **Overlap the code re-read** (`TextRecognizer.RawPass`): if the first read already looks like code
+   (`containsCode` on the first-pass lines), start the no-language-correction read on a background thread
+   right away; the existing check after DisplayMath still decides whether its lines are used (if that check
+   says code but nothing was started, run it then). Release: code captures median 167 → 142 ms.
 
 Accuracy fixes in the same round (all pass the no-harm corpus diff):
 - A trig name only counts as one on its own or before a one-letter argument that is **not** a dictionary
