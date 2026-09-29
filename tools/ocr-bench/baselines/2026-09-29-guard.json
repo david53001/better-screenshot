@@ -1,0 +1,14 @@
+[
+  {
+    "actual" : "F = G mıᵐZ\/r²",
+    "area" : "math",
+    "cer" : 0.3,
+    "density" : 2,
+    "desc" : "physics: Newton's gravitation F = G m₁m₂\/r² (subscripts in a fraction)",
+    "expected" : "F = Gm₁m₂\/r²",
+    "glyphCER" : 0.3,
+    "id" : "V11",
+    "ms" : 546,
+    "pass" : false
+  }
+]

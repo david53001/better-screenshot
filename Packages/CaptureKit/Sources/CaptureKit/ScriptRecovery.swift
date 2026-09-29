@@ -566,6 +566,10 @@ enum ScriptRecovery {
     /// it follows; false when there are none.
     static func classify(_ line: inout Line) -> Bool {
         let cap = line.capHeight
+        // The top of x-height letters (`a e o`), when the line has them.
+        let xTops = line.glyphs.filter { !$0.isStructure && $0.box.height >= 0.5 * cap && $0.box.height <= 0.85 * cap
+            && abs($0.box.maxY - line.baseline) < 0.1 * cap }.map(\.box.minY).sorted()
+        let xTop: CGFloat? = xTops.count >= 3 ? xTops[xTops.count / 2] : nil
         var base: Glyph?
         var pendingThin: [Int] = []
         for i in line.glyphs.indices {
@@ -589,10 +593,21 @@ enum ScriptRecovery {
             }
             // Commas, apostrophes and dots are smaller than any script digit.
             guard g.box.height >= 0.45 * cap else { continue }
+            // A script sits beside its base, not over the glyph after it (the
+            // top ring of a `%` overlaps its slash).
+            if i + 1 < line.glyphs.count {
+                let next = line.glyphs[i + 1].box
+                if min(g.box.maxX, next.maxX) - max(g.box.minX, next.minX) > 0.3 * g.box.width { continue }
+            }
             if g.box.maxY < refBottom - 0.4 * refHeight, g.box.minY < b.box.minY + 0.2 * b.box.height {
                 line.glyphs[i].kind = .sup
             } else if g.box.maxY > refBottom + 0.12 * refHeight, g.box.minY > b.box.minY + 0.25 * b.box.height,
-                      g.box.height <= 0.85 * max(b.box.height, cap) {
+                      g.box.height <= 0.85 * max(b.box.height, cap),
+                      // A subscript hangs off the glyph before it; after a word
+                      // space it is a descender letter (`organizează pe`, `, p. 42`)…
+                      g.box.minX - line.glyphs[i - 1].box.maxX < 0.35 * cap,
+                      // …and so is a lowered glyph whose top is at x-height.
+                      xTop.map({ g.box.minY > $0 + 0.12 * cap }) ?? true {
                 line.glyphs[i].kind = .sub
             }
         }

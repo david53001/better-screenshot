@@ -53,6 +53,20 @@ let scriptRecoveryTests: [TestCase] = [
         var line = measuredLine([glyph(0, 0, 20, 28), glyph(22, 8, 18, 28)], cap: 28, baseline: 28)
         t.isFalse(ScriptRecovery.classify(&line))
     },
+    TestCase("aLetterAtXHeightIsNotASubscriptEvenAfterATallerGlyph") { t in
+        // a e o ă p: after the breve-topped ă, the p's top sits lower and its
+        // tail below the line — but its top is at x-height, so it is a letter.
+        var line = measuredLine([glyph(0, 26, 12, 14), glyph(14, 26, 12, 14), glyph(28, 26, 12, 14),
+                                 glyph(42, 18, 12, 22), glyph(55, 26, 12, 18)], cap: 20, baseline: 40)
+        t.isFalse(ScriptRecovery.classify(&line))
+    },
+    TestCase("aPercentSignsRingIsNotASuperscript") { t in
+        // 5 0 %: the top ring is raised but overlaps the slash that follows it.
+        var line = measuredLine([glyph(0, 20, 12, 20), glyph(14, 20, 12, 20), glyph(28, 20, 8, 9),
+                                 glyph(32, 20, 12, 20), glyph(40, 31, 8, 9)], cap: 20, baseline: 40)
+        _ = ScriptRecovery.classify(&line)
+        t.equal(line.glyphs[2].kind, .normal)
+    },
     TestCase("wordsSplitAtTheWidestGaps") { t in
         let glyphs = [glyph(0, 0, 10, 10), glyph(12, 0, 10, 10), glyph(40, 0, 10, 10), glyph(52, 0, 10, 10)]
         t.equal(ScriptRecovery.segment(glyphs, into: 2) ?? [], [[0, 1], [2, 3]])
