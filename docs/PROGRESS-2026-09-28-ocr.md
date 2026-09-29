@@ -3,6 +3,50 @@
 **Read this first if you are picking this work up.** It is written for a fresh session with no memory
 of the one that produced it.
 
+## Latest status (session 3, 2026-09-29) — read this first
+
+A third independent review (`docs/reviews/2026-09-29-ocr-review.md`) scored Capture Text **4/10**: it
+passed 72% of cases it was tuned on but only 32% (14/44) of 44 new cases the reviewer wrote
+(`tools/ocr-bench/Sources/ocr-bench/ThirdReviewCases.swift`, ids `V01`–`V44`, committed as a **frozen**
+regression set). Its top 5 fixes were then worked through, each diffed against the corpus with 0 cases worse:
+
+1. **No-harm guard** (`ScriptRecovery.classify`): a lowered glyph after a word space, or whose top is at
+   x-height, is a descender letter, never a subscript (`organizează pe`, `, p. 42`); a raised glyph that
+   overlaps the glyph after it is never a script (the ring of `%` → no more `50⁰%`); punctuation the
+   glyph alignment skips is kept (`energy, which`).
+2. **Minimum evidence** (`TextReflow`): before a capital, a line only continues onto the next if the block
+   is flowing text (4 long lines) or 2 lines reach the edge, or it ends mid-phrase (`endsMidPhrase`);
+   `isMonospace` needs 3 lines (2 beside a numbered gutter); zsh `user@host dir % ` / `bash-3.2$ ` prompts
+   are code. Code repairs in `cleanedCode`: `1s`→`ls` at a command start, `itt)`→`i++)`, `$f…}`→`${…}`,
+   `'…${…}'`→backticks, `README•md`/`data.CSV`→`README.md`/`data.csv` (`withFileExtensions`).
+3. **Tables from gridlines** (done by a subagent in a worktree, merged as `6a4cf9b`): `GridLines.swift`
+   finds faint vertical rules (works on #e2e2e2 sheet lines, dark mode); `TextReflow.splittingAtRules` /
+   `ruledColumns` put cells in the column their gridline starts; `splittingAcrossBands` for gridless tables;
+   Vision word boxes are carried on `Line.wordBoxes`. New table cases `G01`–`G06` (`GridCases.swift`).
+4. **Math from pixels** — **NOT done yet** (next step): radical `√` and `∫` found from ink instead of from
+   Vision's characters (V01, V05, V07, H06), a missing numerator re-read above a fraction bar (V10), `d/dx`
+   alone as a fraction (V02).
+5. **Cheap symbols** (done): `≈`/`±` told from `=` by stroke shape (`ScriptRecovery.relationSymbols`);
+   Cyrillic `п` → `π` beside digits, `/`, `=`, brackets and `n` elsewhere; Romanian `ş ţ` → `ș ț` when `ro`
+   is a recognition language (`Homoglyphs.latinized(…, romanian:)`). Still open from item 5: `log₃(`
+   written `10g3 (` and `ln 2` → `In 2` before a number (`repairingLog` patterns), and `^(…)` for a script
+   run with a character that has no superscript glyph (`e^(0.2t)`, `ScriptRecovery.script`).
+
+**Numbers before the table merge** (baseline `tools/ocr-bench/baselines/2026-09-29-symbols.json`): existing
+55/66 · held-out H 19/35 · no-harm 5/7 · review-3 V **25/44** (was 14/44). The table agent alone took V
+to 16/44 and G to 5/6. **A full corpus run after the merge (`6a4cf9b`) was started but not checked** —
+first thing next session: `cd tools/ocr-bench && ./run.sh && python3 summarize.py && python3 diff.py
+baselines/2026-09-29-symbols.json` (expect V29/V30 better, nothing worse), then save it as a baseline.
+Unit tests after the merge: 199/199.
+
+**Caution for the next review:** the V set has now been looked at while fixing, so a fourth review must
+write new cases again. Always check a saved baseline has all cases (`len(json)` = 158 now) — a `--only`
+run overwrites `out/results.json`.
+
+Next steps, in order: (1) verify the merged run; (2) item 4 (math from pixels) and the rest of item 5;
+(3) update root `CLAUDE.md` with `GridLines.swift`; (4) fresh reviewer with new cases; (5) ask the owner
+about a bundled on-device math model; (6) merge `ocr-structure-math` into `main`.
+
 ## Latest status (session 2, overnight 2026-09-28 → 29) — read this first
 
 The owner asked to keep working overnight, then run a fresh independent reviewer. Everything below is
