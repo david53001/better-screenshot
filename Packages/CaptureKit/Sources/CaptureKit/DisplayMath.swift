@@ -578,12 +578,7 @@ enum DisplayMath {
     }
 
     /// `sinx` → `sin x`: a function name and its argument (Vision drops the space).
-    static func tidied(_ s: String) -> String {
-        functionArgument.stringByReplacingMatches(in: s, range: NSRange(s.startIndex..., in: s), withTemplate: "$1 ")
-    }
-
-    private static let functionArgument = try! NSRegularExpression(
-        pattern: #"(?<![A-Za-z])(sin|cos|tan|sec|csc|cot|log|ln|exp)(?=[a-zθ](?![A-Za-z]))"#)
+    static func tidied(_ s: String) -> String { TextReflow.spacedFunctionArguments(s) }
 
     /// `i = 1` → `i=1` for a script run.
     private static func compact(_ s: String) -> String { s.replacingOccurrences(of: " ", with: "") }

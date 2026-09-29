@@ -493,10 +493,13 @@ enum ScriptRecovery {
                 let glyph = line.glyphs[i]
                 close(before: glyph.box.midX)
                 var text = piece[k]
-                if glyph.container, let c = text.last, "Vv√/".contains(c) {
+                // A radical is found from its ink; Vision may have read it as
+                // anything or nothing (`|a| = 2² + …` with the root dropped).
+                if glyph.container, text.allSatisfy({ !$0.isLetter || "Vvl".contains($0) }), isRadical(glyph, line) {
+                    if let c = text.last, "Vv√/\\|1l-".contains(c) { text.removeLast() }
                     let under = line.glyphs.filter { !$0.container && $0.box.midX > glyph.box.minX + 0.25 * glyph.box.width
                                                      && $0.box.midX < glyph.box.maxX }.count
-                    text = String(text.dropLast()) + (under > 1 ? "√(" : "√")
+                    text += under > 1 ? "√(" : "√"
                     if under > 1 { openRoots.append(glyph.box.maxX) }
                 }
                 out += text
@@ -504,6 +507,21 @@ enum ScriptRecovery {
         }
         close(before: .infinity)
         return out
+    }
+
+    /// A radical's ink: a bar along the top and a tick down at the left — its
+    /// bottom row is inked only near the left (a box around text has a floor).
+    static func isRadical(_ glyph: Glyph, _ line: Line) -> Bool {
+        let box = glyph.box, w = Int(box.width), h = Int(box.height)
+        guard w >= 6, h >= 6 else { return false }
+        // Something sits under its bar (an `fi` ligature has a hook, not a roof).
+        guard line.glyphs.contains(where: { !$0.container && $0.box.midX > box.minX + 0.25 * box.width
+                                             && $0.box.midX < box.maxX && $0.box.minY > box.minY }) else { return false }
+        let ink = Set(glyph.blobs.flatMap { line.blobs[$0].pixels })
+        func row(_ y: Int) -> [Int] { (0..<w).filter { ink.contains((Int(box.minY) + y) * line.map.width + Int(box.minX) + $0) } }
+        let top = (0..<max(2, h / 8)).map { row($0).count }.max() ?? 0
+        let bottom = (h - max(2, h / 8)..<h).flatMap { row($0) }
+        return Double(top) >= 0.6 * Double(w) && !bottom.isEmpty && Double(bottom.max()!) < 0.45 * Double(w)
     }
 
     // MARK: - Glyphs

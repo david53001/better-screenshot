@@ -31,8 +31,11 @@ let mathLayoutTests: [TestCase] = [
         t.equal(TextReflow.repairedMathSymbols("x E R, n E N"), "x ∈ ℝ, n ∈ ℕ")
         t.equal(TextReflow.repairedMathSymbols("P(A|B) =. P(B)"), "P(A|B) = P(B)")
         t.equal(TextReflow.repairedMathSymbols("a ≤ b,c ≥ d at (1,2)"), "a ≤ b, c ≥ d at (1,2)")
+        t.equal(TextReflow.repairedMathSymbols("lal = √(14), a•b = | a|| b| cosθ"), "|a| = √14, a · b = |a||b| cos θ")
+        t.equal(TextReflow.repairedMathSymbols("y = sin3x"), "y = sin 3x")
         // Words stay words.
         t.equal(TextReflow.repairedMathSymbols("Use n = 5 in E = mc²"), "Use n = 5 in E = mc²")
+        t.equal(TextReflow.repairedMathSymbols("single, since, cost = 3"), "single, since, cost = 3")
     },
     TestCase("stackedFractionWithABarBecomesOneLine") { t in
         // The bar region handed over is twice the fraction's width; a bar as

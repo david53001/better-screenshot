@@ -174,7 +174,7 @@ extension TextReflow {
         for (pattern, template) in mathRepairs {
             out = pattern.stringByReplacingMatches(in: out, range: NSRange(out.startIndex..., in: out), withTemplate: template)
         }
-        return out
+        return spacedFunctionArguments(out)
     }
 
     private static let mathRepairs: [(NSRegularExpression, String)] = [
@@ -184,7 +184,30 @@ extension TextReflow {
         (#"(?<=∈ )N\b"#, "ℕ"), (#"(?<=∈ )Z\b"#, "ℤ"), (#"(?<=∈ )Q\b"#, "ℚ"), (#"(?<=∈ )R\b"#, "ℝ"),
         (#"= ?\.(?= |$)"#, "="),
         (#",(?=[^\s\d])|(?<=[^\d]),(?=\d)"#, ", "),
+        // `lal` / `| a|` → `|a|` (a norm or absolute value), `√(14)` → `√14`,
+        // `a•b` → `a · b`, `cosθ` / `sin3x` → `cos θ` / `sin 3x`.
+        (#"(?<![A-Za-z])l([a-zA-Z])l(?![A-Za-z])"#, "|$1|"),
+        (#"\| ([a-zA-Z])\|"#, "|$1|"),
+        (#"√\((\d+(?:\.\d+)?)\)"#, "√$1"),
+        (#"(?<=[\w)|]) ?[•·] ?(?=[\w(|])"#, " · "),
     ].map { (try! NSRegularExpression(pattern: $0.0), $0.1) }
+
+    /// `cosθ`, `sinx`, `sin3x` → `cos θ`, `sin x`, `sin 3x` — unless the
+    /// letter makes a word (`cost`, `sine`, `sect`).
+    static func spacedFunctionArguments(_ text: String) -> String {
+        var out = text
+        for match in functionArgument.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
+            guard let name = Range(match.range(at: 1), in: out) else { continue }
+            let next = out[name.upperBound]
+            if next.isLetter, WordList.contains(String(out[name]) + String(next)) == true { continue }
+            if next.isNumber, !["sin", "cos", "tan", "sec", "csc", "cot"].contains(String(out[name])) { continue }
+            out.insert(" ", at: name.upperBound)
+        }
+        return out
+    }
+
+    private static let functionArgument = try! NSRegularExpression(
+        pattern: #"(?<![A-Za-z])(sin|cos|tan|sec|csc|cot|log|ln|exp)(?=\d|[a-zθ](?![A-Za-z]))"#)
 
     /// A line of mostly-math: separate display equations are separate lines.
     static func isMath(_ text: String) -> Bool {
