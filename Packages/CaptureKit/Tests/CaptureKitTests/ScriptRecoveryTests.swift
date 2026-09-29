@@ -110,6 +110,9 @@ let scriptRecoveryTests: [TestCase] = [
         t.equal(ScriptRecovery.repairingLog("add 10g of salt"), "add 10g of salt")
         t.equal(ScriptRecovery.repairingLog("and In e³ = 3, In(x) = 0"), "and ln e³ = 3, ln(x) = 0")
         t.equal(ScriptRecovery.repairingLog("In a sense, In (b) we see"), "In a sense, In (b) we see")
+        t.equal(ScriptRecovery.repairingLog("Solve 10g3 (x + 1) = 1"), "Solve log₃(x + 1) = 1")
+        t.equal(ScriptRecovery.repairingLog("t = In 2 / 0.2"), "t = ln 2 / 0.2")
+        t.equal(ScriptRecovery.repairingLog("In 2019, the log10 file"), "In 2019, the log10 file")
     },
     TestCase("touchingItalicsTakeTwoCharactersAndScriptsOne") { t in
         // `2x³ + 1`: the 2 and the x touch (one wide glyph), ³ is raised.

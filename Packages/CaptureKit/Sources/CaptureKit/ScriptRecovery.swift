@@ -458,12 +458,20 @@ enum ScriptRecovery {
     /// read for it (`10g₂8`, `l0gₐx`); `ln` before its argument, which Vision
     /// reads as the word `In` (`In e³ = 3`, `In(x)`).
     static func repairingLog(_ text: String) -> String {
-        let log = logLookAlike.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "log")
+        var log = logLookAlike.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "log")
+        // `10g3 (x + 1)`: a base Vision didn't lower is a subscript.
+        for match in logWithBase.matches(in: log, range: NSRange(log.startIndex..., in: log)).reversed() {
+            guard let range = Range(match.range, in: log), let base = Range(match.range(at: 1), in: log) else { continue }
+            log.replaceSubrange(range, with: "log" + script(String(log[base]), superscript: false) + "(")
+        }
         return lnLookAlike.stringByReplacingMatches(in: log, range: NSRange(log.startIndex..., in: log), withTemplate: "ln")
     }
 
+    private static let logWithBase = try! NSRegularExpression(
+        pattern: #"(?<![\p{L}\p{N}])[l1I|][o0O]g(\d{1,2}) ?\("#)
+
     private static let lnLookAlike = try! NSRegularExpression(
-        pattern: #"(?<![\p{L}\p{N}])[I|]n(?=\(|[ ]?[a-zθ](?:[⁰-⁹¹²³]|\s?[=+)]))"#)
+        pattern: #"(?<![\p{L}\p{N}])[I|]n(?=\(|[ ]?[a-zθ](?:[⁰-⁹¹²³]|\s?[=+)])|[ ]?\d+(?:\.\d+)?\s?[/=)×·+\-])"#)
 
     private static let logLookAlike = try! NSRegularExpression(
         pattern: #"(?<![\p{L}\p{N}])[l1I|][o0O]g(?=[₀-₉ₐₑₒₓₕₖₗₘₙₚₛₜ(])"#)
@@ -907,6 +915,13 @@ enum ScriptRecovery {
             kinds[i] = .normal
             chars[i] = " "
             slotOut[i] = "\u{0}" + TextReflow.fractionPart(top) + "/" + TextReflow.fractionPart(bottom)
+        }
+        // A decimal point inside an exponent (`e^(0.2t)`) belongs to it: a
+        // speck between two script glyphs, raised off the baseline with them.
+        for i in chars.indices.dropFirst().dropLast() where chars[i] == "." && kinds[i] == .normal
+            && kinds[i - 1] != .normal && kinds[i + 1] == kinds[i - 1]
+            && line.glyphs[slotGlyph[i]].box.maxY < line.baseline - 0.25 * line.capHeight {
+            kinds[i] = kinds[i - 1]
         }
         var i = 0
         while i < chars.count {
