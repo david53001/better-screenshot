@@ -148,8 +148,17 @@ enum ScriptRecovery {
     /// A trig name as a word of its own or before its argument (`sin`, `cos2θ`,
     /// `sinx`) — not inside `second`, `since`, `cost` or `tank`.
     static func mentionsTrig(_ text: String) -> Bool {
-        text.range(of: #"(?<![A-Za-z])(?:sin|cos|tan|sec|csc|cot)(?![a-z]{2})"#, options: .regularExpression) != nil
+        let range = NSRange(text.startIndex..., in: text)
+        return trigWord.matches(in: text, range: range).contains { match in
+            guard let word = Range(match.range, in: text).map({ String(text[$0]) }),
+                  let tail = Range(match.range(at: 1), in: text).map({ text[$0] }) else { return false }
+            // `sin`, `cos2θ` and `sinx` are trig; a dictionary word (`cost`, `tank`) isn't.
+            return tail.isEmpty || tail.count == 1 && WordList.contains(word) != true
+        }
     }
+
+    private static let trigWord = try! NSRegularExpression(
+        pattern: #"(?<![A-Za-z])(?:sin|cos|tan|sec|csc|cot)([a-z]*)"#)
 
     /// `π`, which Vision reads as `T`: a bar across the top on two legs.
     static func isPi(_ glyph: Glyph, _ line: Line) -> Bool {
