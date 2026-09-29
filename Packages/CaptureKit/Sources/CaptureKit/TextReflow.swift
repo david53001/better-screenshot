@@ -128,7 +128,7 @@ public enum TextReflow {
                                 box: grid.members.dropFirst().reduce(segs[grid.members[0]].box) { $0.union(segs[$1].box) }))
         }
         for run in runs(segs, skipping: used) {
-            pieces += flow(run.map { segs[$0] })
+            pieces += flow(run.map { segs[$0] }, imageWidth: imageSize.width)
         }
         return titlesAboveGrids(pieces.sorted { $0.order < $1.order })
     }
@@ -649,7 +649,7 @@ public enum TextReflow {
 
     // MARK: - Flow (prose and code)
 
-    private static func flow(_ run: [Seg]) -> [Piece] {
+    private static func flow(_ run: [Seg], imageWidth: CGFloat) -> [Piece] {
         // Split where a paragraph gap could be, classify each block, then merge
         // neighbouring code blocks (their gaps are the code's blank lines).
         var blocks: [[Seg]] = []
@@ -690,7 +690,7 @@ public enum TextReflow {
                 pieces.append(Piece(kind: .code, text: codeText(group.lines), order: group.lines[0].order,
                                     box: group.lines.dropFirst().reduce(group.lines[0].box) { $0.union($1.box) }))
             } else {
-                pieces += prose(group.lines)
+                pieces += prose(group.lines, imageWidth: imageWidth)
             }
         }
         if let i = pieces.firstIndex(where: { $0.kind == .prose }), i == 0 { pieces[i].opensRun = true }
@@ -897,10 +897,10 @@ public enum TextReflow {
 
     // MARK: Prose
 
-    private static func prose(_ lines: [Seg]) -> [Piece] {
+    private static func prose(_ lines: [Seg], imageWidth: CGFloat) -> [Piece] {
         var paragraphs: [[Seg]] = []
         for line in lines {
-            if let para = paragraphs.last, continues(para, with: line, column: lines) {
+            if let para = paragraphs.last, continues(para, with: line, column: lines, imageWidth: imageWidth) {
                 paragraphs[paragraphs.count - 1].append(line)
             } else {
                 paragraphs.append([line])
@@ -917,7 +917,7 @@ public enum TextReflow {
         }
     }
 
-    private static func continues(_ para: [Seg], with line: Seg, column: [Seg]) -> Bool {
+    private static func continues(_ para: [Seg], with line: Seg, column: [Seg], imageWidth: CGFloat) -> Bool {
         let prev = para[para.count - 1]
         let tallest = max(prev.box.height, line.box.height)
         if line.box.minY - prev.box.maxY > maxGapRatio * tallest { return false }
@@ -940,7 +940,7 @@ public enum TextReflow {
         let charWidth = prev.charWidth
         if line.box.minX > prev.box.minX + 1.5 * charWidth, !startsWithListMarker(para[0].text),
            abs(line.box.midX - prev.box.midX) > 1.5 * charWidth { return false }
-        return wrapped(prev, before: line, column: column)
+        return wrapped(prev, before: line, column: column, imageWidth: imageWidth)
     }
 
     /// Heading → body and similar. Character width is reliable once both lines
@@ -952,7 +952,7 @@ public enum TextReflow {
     }
 
     /// Did `prev` end because the next word didn't fit?
-    private static func wrapped(_ prev: Seg, before next: Seg, column: [Seg]) -> Bool {
+    private static func wrapped(_ prev: Seg, before next: Seg, column: [Seg], imageWidth: CGFloat) -> Bool {
         // Display equations stand alone; they don't wrap into each other.
         if isMath(prev.shown) && isMath(next.shown) { return false }
         // A row of bare numbers (a matrix row, a score) isn't a sentence.
@@ -963,6 +963,16 @@ public enum TextReflow {
         // A column no wider than two words is a list of labels (a sidebar's
         // General · Appearance · Wi-Fi), not wrapped text.
         if (widest ?? prev).words <= 2, next.text.first?.isUppercase == true { return false }
+        let firstWord = next.text.prefix { !$0.isWhitespace }
+        let left = column.filter { overlapsHorizontally($0.box, prev.box) }.map(\.box.minX).min() ?? prev.box.minX
+        // A selection padded evenly on both sides (a card, a window) has its
+        // right margin mirror the left one: a line that reaches it wrapped
+        // (into a line of the same font — a bold question over its
+        // explanation can end there by chance).
+        let margin = imageWidth - left
+        let reachesMargin = left >= 2 * charWidth && prev.box.maxX <= margin + charWidth
+            && ratio(charWidth, next.charWidth) <= 1.1 && ratio(prev.box.height, next.box.height) <= 1.1
+            && prev.box.maxX + CGFloat(firstWord.count + 1) * charWidth > margin - 0.5 * charWidth
         // Before a capital, a wrap needs evidence: flowing text (four lines
         // most of the way across) or two lines reaching the column's edge.
         // Without it, separate short lines (a footer, a to-do line) would join
@@ -970,17 +980,16 @@ public enum TextReflow {
         // mid-phrase (`met with` / `Maria`).
         if next.text.first?.isUppercase == true {
             let lines = column.filter { overlapsHorizontally($0.box, prev.box) }
-            let left = lines.map(\.box.minX).min() ?? prev.box.minX
             let long = lines.filter { $0.box.maxX - left >= 0.75 * (right - left) }.count
             let atEdge = lines.filter { $0.box.maxX >= right - 1.5 * $0.charWidth }.count
-            if long < 4, atEdge < 2, !endsMidPhrase(prev.text) { return false }
+            if long < 4, atEdge < 2, !endsMidPhrase(prev.text), !reachesMargin { return false }
         }
         if prev.box.maxX < right - charWidth {
-            let firstWord = next.text.prefix { !$0.isWhitespace }
             return prev.box.maxX + CGFloat(firstWord.count + 1) * charWidth > right - 0.5 * charWidth
         }
         // `prev` is the column's longest line, so there's no edge to test
-        // against: go by the text instead.
+        // against but the margin: go by the text otherwise.
+        if reachesMargin { return true }
         if let c = next.text.first, c.isLowercase { return true }
         return !endsSentence(prev.text)
     }

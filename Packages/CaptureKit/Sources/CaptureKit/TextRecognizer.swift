@@ -115,9 +115,15 @@ public enum TextRecognizer {
                 }
             }
             // Into reading order: after the last line above it in its column.
-            for bracket in bracketLines(lines, in: source) {
-                let above = lines.lastIndex { $0.box.midY < bracket.box.midY && $0.box.maxX > bracket.box.minX }
-                lines.insert(bracket, at: above.map { $0 + 1 } ?? 0)
+            // Closing braces stack (`    }` then `}`): each find widens the
+            // search, so look again.
+            for _ in 0..<3 {
+                let found = bracketLines(lines, in: source)
+                for bracket in found {
+                    let above = lines.lastIndex { $0.box.midY < bracket.box.midY && $0.box.maxX > bracket.box.minX }
+                    lines.insert(bracket, at: above.map { $0 + 1 } ?? 0)
+                }
+                if found.isEmpty { break }
             }
         }
         let codes = qrRequest.results ?? []

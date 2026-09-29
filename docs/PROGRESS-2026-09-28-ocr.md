@@ -31,11 +31,17 @@ of the one that produced it.
   looks like code, the no-language-correction read starts on a background thread (`TextRecognizer.RawPass`)
   and the final `containsCode` check still decides whether it's used → 0 outputs changed; release code
   median 167 → 142 ms, everything else unchanged.
+- **Accuracy fixes after that (+3, 0 worse → 134/188):** a lone `x`/`X` between two fractions is `×`
+  (`MathLayout.mathRepairs`, W04); the bracket search repeats after each find so stacked closing braces
+  (`    }` then `}`) are all recovered (W18); a line that reaches the right margin of an evenly padded
+  selection wrapped even when it ends a sentence — only into a line of the same font, so a bold question
+  over its explanation stays apart (`TextReflow.wrapped`, `reachesMargin`, W14). Baseline:
+  `tools/ocr-bench/baselines/2026-09-29-w-fixes.json` (existing 55/66 · H 19/35 · N 5/7 · V 31/44 · G 5/6 ·
+  W 19/30).
 - **Next, in order:** (1) nothing left from the speed review's list; (2) W01 loses
   `=`, W08 `n/2` → `-`, W09 garbage `²ᵃ` (a recover rewrite that shouldn't be accepted — the relation guard
-  was the wrong fix; look at the per-word alignment instead); (3) W04 `×` for a letter X between
-  fractions, W18 a lone final `}`, W14 a paragraph split after `used up.`; (4) V05, V01 from session 4;
-  (5) ask the owner about a bundled on-device math model; (6) merge + CHANGELOG.
+  was the wrong fix; look at the per-word alignment instead); (3) V05, V01 from session 4;
+  (4) ask the owner about a bundled on-device math model; (5) merge + CHANGELOG.
 - JVoice has an uncommitted companion doc, `../JVoice/docs/math-notation-format.md` (the shared Unicode
   math format and what its own math toggle should skip).
 

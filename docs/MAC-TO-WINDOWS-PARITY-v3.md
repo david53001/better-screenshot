@@ -3578,8 +3578,8 @@ baselines/<file>.json` for regressions — README in that folder). The cases are
 strings) in `Cases.swift`, `HeldOutCases.swift` (`H*`, `N*`), `ThirdReviewCases.swift` (`V*`, frozen),
 `GridCases.swift` (`G*`). To verify the port, export them (id, html, css, width, density, expected) and
 render with WebView2 offscreen, then compare pass counts and CER per area with the macOS numbers in
-`docs/PROGRESS-2026-09-28-ocr.md`. Newest macOS baseline: `tools/ocr-bench/baselines/2026-09-29-cyrillic-pi.json`
-(existing 55/66 · H 19/35 · N 5/7 · V 31/44 · G 5/6 · W 16/30 with math on; `FourthReviewCases.swift` = `W*`,
+`docs/PROGRESS-2026-09-28-ocr.md`. Newest macOS baseline: `tools/ocr-bench/baselines/2026-09-29-w-fixes.json`
+(existing 55/66 · H 19/35 · N 5/7 · V 31/44 · G 5/6 · W 19/30 with math on; `FourthReviewCases.swift` = `W*`,
 frozen).
 
 ### 8.9 Speed fixes from the speed + accuracy review (2026-09-29)
@@ -3609,6 +3609,14 @@ Accuracy fixes in the same round (all pass the no-harm corpus diff):
 - Cyrillic `П`/`п` that Vision returns for `π` or an italic `n`: in a script slot it is decided by shape
   (flat top on two legs → `π`); in plain text (`Homoglyphs.latinized`) a lone one, or one beside a digit,
   `/`, `=`, `(` or `)`, is `π`, anything else `n`.
+
+- A lone `x`/`X` between two fractions on a math line is `×` (`dy/du X du/dx` → `dy/du × du/dx`).
+- Code: the search for braces Vision didn't box repeats (up to 3 times) after each find — it only looks
+  1.5 line heights past the boxed lines, so a closing `}` under another unboxed `}` was lost.
+- Paragraphs: when the selection is padded evenly (left margin ≥ 2 character widths), the right margin is
+  taken to mirror the left one; a line reaching it (the next word wouldn't fit) wrapped, even if it ends a
+  sentence and is the longest line — but only when both lines have the same character width and height
+  (±10 %), so a bold question over its explanation stays two paragraphs.
 
 Tried and reverted (don't port): an `isFaithful` rule that a rewrite may never drop a relation sign
 (`=`, `<`, `>`…) — it fixed nothing and broke four cases (H07, H08, W01, W08).

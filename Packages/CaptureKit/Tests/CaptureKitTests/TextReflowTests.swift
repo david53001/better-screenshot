@@ -29,6 +29,24 @@ let textReflowTests: [TestCase] = [
         ]
         t.equal(TextReflow.paragraphs(lines), ["The quick brown fox jumps over the lazy dog"])
     },
+    TestCase("aSentenceEndingAtAnEvenlyPaddedMarginWrapped") { t in
+        // Padded 0.1 on the left, so the right margin is at 0.9: "Their" didn't
+        // fit after "up." there, even though no other line shows the edge.
+        let first = "Enzymes lower the energy of a reaction without being used up."
+        let second = "Their activity depends on temperature."
+        let cw = 0.8 / CGFloat(first.count)
+        let padded = [
+            line(first, top: 0.10, left: 0.1, right: 0.9),
+            line(second, top: 0.158, left: 0.1, right: 0.1 + cw * CGFloat(second.count)),
+        ]
+        t.equal(TextReflow.paragraphs(padded), [first + " " + second])
+        // A tight selection has no margin to go by: two sentences stay apart.
+        let tight = [
+            line(first, top: 0.10, left: 0.01, right: 0.99),
+            line(second, top: 0.158, left: 0.01, right: 0.01 + 0.98 / CGFloat(first.count) * CGFloat(second.count)),
+        ]
+        t.equal(TextReflow.paragraphs(tight), [first, second])
+    },
     TestCase("shortLineEndsParagraph") { t in
         // Code-style: each short line leaves room for the next word, so none wrapped.
         let lines = [

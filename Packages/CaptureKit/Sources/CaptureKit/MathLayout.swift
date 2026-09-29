@@ -197,6 +197,8 @@ extension TextReflow {
         (#"(?<![A-Za-z])c[0O]s(?=[\s\dA-Za-zθ(])"#, "cos"),
         (#"(?<![A-Za-z])s[1l|]n(?=[\s\dA-Za-zθ(])"#, "sin"),
         (#"(?<=[\w)|]) ?[•·] ?(?=[\w(|])"#, " · "),
+        // A lone x between two fractions is a times sign (`dy/du X du/dx`).
+        (#"(?<=/[\w)]{1,12}) [xX] (?=[\w(]{1,12}/)"#, " × "),
     ].map { (try! NSRegularExpression(pattern: $0.0), $0.1) }
 
     /// `cosθ`, `sinx`, `sin3x` → `cos θ`, `sin x`, `sin 3x` — unless the
