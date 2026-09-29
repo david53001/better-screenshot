@@ -133,6 +133,18 @@ let scriptRecoveryTests: [TestCase] = [
             [glyph(0, 14, 10, 16), glyph(11, 4, 7, 12), glyph(24, 14, 10, 12), glyph(40, 10, 10, 20)].enumerated().map { i, g in
                 var g = g; if i == 1 { g.kind = .sup }; return g }, cap: 20, baseline: 30)) ?? [], [0..<1, 1..<1, 1..<2, 2..<3])
     },
+    TestCase("aSpacedEquationsSpacesFallOnItsWordGaps") { t in
+        // `ab + cd = ef + gh`: six gaps between words, four between letters —
+        // the typical letter gap is the small one, so none of Vision's spaces
+        // counts as inside a word.
+        let xs: [CGFloat] = [0, 12, 32, 52, 64, 84, 104, 116, 136, 156, 168]
+        let glyphs = xs.enumerated().map { i, x in
+            i == 5 ? glyph(x, 18, 10, 9.6) : [2, 8].contains(i) ? glyph(x, 17, 10, 10) : glyph(x, 16, 10, 14)
+        }
+        t.equal(ScriptRecovery.alignment(Array(0..<11), Array("ab+cd=ef+gh"), spaces: [2, 3, 5, 6, 8, 9],
+                                         measuredLine(glyphs, cap: 20, baseline: 30)) ?? [],
+                (0..<11).map { $0..<($0 + 1) })
+    },
     TestCase("aScriptTouchingItsLetterIsCutOff") { t in
         // Three capitals (20 tall, baseline y = 40), then an x-height block with
         // a raised block run into its top right: `x²` printed as one blob.

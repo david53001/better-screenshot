@@ -622,7 +622,9 @@ enum ScriptRecovery {
                                       && $0.box.width >= 0.4 * $0.box.height }.map(\.box.maxY).sorted()
         guard !bottoms.isEmpty else { return nil }
         var line = Line(glyphs: glyphs, blobs: blobs, map: map, capHeight: capHeight, baseline: bottoms[bottoms.count / 2])
-        let letters = glyphs.filter { !$0.isStructure && $0.box.width >= 0.4 * $0.box.height && $0.box.height >= 0.45 * capHeight }
+        // On the baseline: a raised `²` isn't a tall letter, nor `=` a short one.
+        let letters = glyphs.filter { !$0.isStructure && $0.box.width >= 0.4 * $0.box.height && $0.box.height >= 0.45 * capHeight
+            && abs($0.box.maxY - line.baseline) < 0.15 * capHeight }
         line.hasXHeight = letters.filter { $0.box.height < 0.8 * capHeight }.count >= 2
             && letters.contains { $0.box.height >= 0.9 * capHeight }
         return line
@@ -741,9 +743,15 @@ enum ScriptRecovery {
         var slotGlyph: [Int] = [], slotOf: [Int] = [], chars: [Character] = [], kinds: [Glyph.Kind] = []
         var slotSpaces = Set<Int>()
         var badSpans = Set<Int>(), shaped = Set<Int>()
+        // Script-like pieces of a `½` (its low `2`) that the alignment gave no
+        // character are part of it, not scripts.
+        let vulgarPieces = Set(group.indices.filter { k in
+            line.glyphs[group[k]].kind != .normal && spans[k].isEmpty && spans[k].lowerBound > 0
+                && vulgarFractions.contains(read[spans[k].lowerBound - 1])
+        })
         for (k, index) in group.enumerated() {
             let glyph = line.glyphs[index], span = spans[k]
-            let single = glyph.kind != .normal || glyph.fraction != nil
+            let single = glyph.kind != .normal && !vulgarPieces.contains(k) || glyph.fraction != nil
             let positions = single ? [span.lowerBound] : Array(span)
             if single && glyph.fraction == nil && span.count != 1 { badSpans.insert(chars.count) }
             // A glyph Vision skipped whose shape says what it is: a prime after
@@ -830,7 +838,9 @@ enum ScriptRecovery {
         }
         let hasScripts = kinds.contains { $0 != .normal }
         // Per glyph again: a punctuation demotion above is a glyph's kind now.
-        let glyphKinds = group.indices.map { k in slotOf.firstIndex(of: k).map { kinds[$0] } ?? line.glyphs[group[k]].kind }
+        let glyphKinds = group.indices.map { k in
+            slotOf.firstIndex(of: k).map { kinds[$0] } ?? (vulgarPieces.contains(k) ? .normal : line.glyphs[group[k]].kind)
+        }
         let text = misread || hasScripts ? rereadGroup(group, kinds: glyphKinds, line, reread) : nil
         if misread && text == nil { return nil }
         if let text {
@@ -889,7 +899,9 @@ enum ScriptRecovery {
                 && line.glyphs[slotGlyph[i]].box.height < 0.85 * line.capHeight {
                 chars[i] = Character(chars[i].lowercased())
             }
-            for i in chars.indices where "copsuvwxz".contains(chars[i]) && kinds[i] == .normal
+            // Only when the line shows both heights: with no capital or digit
+            // on the baseline, "cap height" is the x-height (`s = ut + ½at²`).
+            for i in chars.indices where line.hasXHeight && "copsuvwxz".contains(chars[i]) && kinds[i] == .normal
                 && slotGlyph.filter({ $0 == slotGlyph[i] }).count == 1
                 && line.glyphs[slotGlyph[i]].box.height >= 0.92 * line.capHeight
                 && line.glyphs[slotGlyph[i]].box.maxY < line.baseline + 0.1 * line.capHeight {
@@ -1002,6 +1014,8 @@ enum ScriptRecovery {
     /// full stop); a script glyph one; a stacked fraction any number. Shapes
     /// must agree (a bar is `=`/`−`, a speck `.`/`,`), and Vision's spaces must
     /// fall on real gaps. Nil when no assignment is cheap enough.
+    private static let vulgarFractions: Set<Character> = ["½", "¼", "¾", "⅓", "⅔", "⅕", "⅛", "⅜", "⅝", "⅞"]
+
     static func alignment(_ group: [Int], _ read: [Character], spaces: Set<Int>, _ line: Line,
                           kinds: [Glyph.Kind]? = nil) -> [Range<Int>]? {
         let glyphs = group.map { line.glyphs[$0] }
@@ -1014,7 +1028,9 @@ enum ScriptRecovery {
         let charWidth = widths.isEmpty ? 0.6 * cap : widths[widths.count / 2]
         let gaps = glyphs.indices.dropFirst().map { glyphs[$0].box.minX - glyphs[$0 - 1].box.maxX }
         let sortedGaps = gaps.sorted()
-        let letterGap: CGFloat? = sortedGaps.count >= 8 ? sortedGaps[sortedGaps.count / 2] : nil
+        // A third of the way up, not the median: a spaced equation (`v² = u² + 2as`)
+        // has as many gaps between words as between letters.
+        let letterGap: CGFloat? = sortedGaps.count >= 8 ? sortedGaps[sortedGaps.count / 3] : nil
 
         func shapeCost(_ g: Glyph, _ c: Character) -> Double {
             let h = g.box.height, w = g.box.width
@@ -1040,6 +1056,7 @@ enum ScriptRecovery {
             return total
         }
         func mergeable(_ c: Character) -> Bool { c.isLetter || c.isNumber || "()[]".contains(c) }
+        func partOfVulgarFraction(_ j: Int) -> Bool { j > 0 && vulgarFractions.contains(read[j - 1]) }
         /// Cost of glyph `k` taking `read[j..<j+count]`, or nil if it can't.
         func cost(_ k: Int, _ j: Int, _ count: Int) -> Double? {
             let g = glyphs[k], chars = read[j..<(j + count)]
@@ -1051,7 +1068,8 @@ enum ScriptRecovery {
                 total = count == 0 ? 0.3 : "Vv√/\\|".contains(chars.first!) ? 0 : 0.6
             } else if kinds[k] != .normal {
                 switch count {
-                case 0: total = 0.6
+                // The low `2` of a `½` passes for a subscript.
+                case 0: total = partOfVulgarFraction(j) ? 0.2 : 0.6
                 case 1: total = isScriptable(chars.first!) ? 0 : 0.3
                 case 2: total = 1.2
                 default: return nil
@@ -1061,7 +1079,7 @@ enum ScriptRecovery {
                 switch count {
                 // Vision skips specks and lone strokes (`|`, a prime) most.
                 // …and a `½` is two or three pieces of ink for one character.
-                case 0: total = j > 0 && "½¼¾⅓⅔⅕⅛⅜⅝⅞".contains(read[j - 1]) ? 0.2
+                case 0: total = partOfVulgarFraction(j) ? 0.2
                     : shapeCost(g, ".") == 0 || shapeCharacter(group[k], line) != nil ? 0.4 : 1.5
                 case 1:
                     let c = chars.first!
