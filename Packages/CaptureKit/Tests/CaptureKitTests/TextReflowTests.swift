@@ -57,10 +57,10 @@ let textReflowTests: [TestCase] = [
         ])
     },
     TestCase("twoLinesPastDoubleSpacingAreTwoParagraphs") { t in
-        // Character width 0.016; "Then" would not fit after the first line.
+        // Character width 0.016; "and" would not fit after the first line.
         func pair(pitch: CGFloat) -> [TextReflow.Line] {
             [line("It rained all day in the town, so we stayed in.", top: 0.1, left: 0.1, right: 0.852, height: 0.06),
-             line("Then the sun came out and we went for a long walk.", top: 0.1 + pitch, left: 0.1, right: 0.9,
+             line("and then the sun came out, so we went for a walk.", top: 0.1 + pitch, left: 0.1, right: 0.9,
                   height: 0.06)]
         }
         // Double spaced (4 character widths): still one paragraph.
@@ -102,6 +102,38 @@ let textReflowTests: [TestCase] = [
         ]
         t.equal(TextReflow.paragraphs(lines).joined(separator: "\n"),
                 "General\nAppearance\nWi-Fi\nBluetooth\nAppearance\tAuto\nAccent colour\tMulticolour")
+    },
+    TestCase("separateShortLinesDontJoinWithoutEvidenceOfWrapping") { t in
+        // A to-do line and the next one, which happens to be the longest.
+        let todo = [
+            line("p. 214, ex. 3-7 (odd)", top: 0.10, left: 0.1, right: 0.52),
+            line("Revise: sine & cosine rules", top: 0.18, left: 0.1, right: 0.64),
+        ]
+        t.equal(TextReflow.paragraphs(todo).count, 2)
+        // …but a line that stops mid-phrase still continues.
+        let wrapped = [
+            line("On Friday the class met with", top: 0.10, left: 0.1, right: 0.66),
+            line("Maria and Ion from the museum.", top: 0.18, left: 0.1, right: 0.70),
+        ]
+        t.equal(TextReflow.paragraphs(wrapped).count, 1)
+    },
+    TestCase("twoLinesOfEqualWidthAreNotEnoughToCallAFontMonospaced") { t in
+        let lines = [
+            line("Update to v2.11.0 from ~/Downloads/app.dmg, then", top: 0.10, left: 0.1, right: 0.9),
+            line("write to support@example.org if it complains.", top: 0.18, left: 0.1, right: 0.83),
+        ]
+        t.isFalse(TextReflow.containsCode(lines))
+    },
+    TestCase("zshAndBashPromptsAreCode") { t in
+        t.isTrue(TextReflow.looksLikeCode("david@MacBook ia % ls -1"))
+        t.isTrue(TextReflow.looksLikeCode("bash-3.2$ make test"))
+    },
+    TestCase("codeLookAlikesAreRepaired") { t in
+        t.equal(TextReflow.cleanedCode("david@MacBook ia % 1s -1"), "david@MacBook ia % ls -1")
+        t.equal(TextReflow.cleanedCode("data.CSV README•md main-py"), "data.csv README.md main.py")
+        t.equal(TextReflow.cleanedCode("for (int i = 1; i < n; itt)"), "for (int i = 1; i < n; i++)")
+        t.equal(TextReflow.cleanedCode("fetch('/api/${id}/grades\");"), "fetch(`/api/${id}/grades`);")
+        t.equal(TextReflow.cleanedCode("echo \"${HOME}\""), "echo \"${HOME}\"")
     },
     TestCase("numberedMarkerStartsNewParagraph") { t in
         let lines = [

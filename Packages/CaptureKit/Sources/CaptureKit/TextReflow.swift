@@ -214,7 +214,7 @@ public enum TextReflow {
         }
         guard best.count >= 3 else { return segs }
         let code = best.compactMap(rightNeighbour)
-        guard code.count * 3 >= best.count * 2, isMonospace(code) else { return segs }
+        guard code.count * 3 >= best.count * 2, isMonospace(code, evidence: 2) else { return segs }
         let drop = Set(best)
         return segs.indices.filter { !drop.contains($0) }.map { segs[$0] }
     }
@@ -525,8 +525,9 @@ public enum TextReflow {
     private static let strongCodeSignals = try! NSRegularExpression(pattern: [
         #"[;{}]\s*$"#,
         #"^\s*[}\])]"#,
-        // `$ `, `% `, `>>> `, `~/ib-ia $ `, `user@host:~$ `, `PS C:\> `
-        #"^(?:\$|%|>>>|[\w.-]+@[\w.-]+[:\w~/.-]*\s?[$%#]|[\w/.~-]+ \$|PS [^>]*>) "#,
+        // `$ `, `% `, `>>> `, `~/ib-ia $ `, `user@host:~$ `, zsh's `user@host dir % `,
+        // `bash-3.2$ `, `PS C:\> `
+        #"^(?:\$|%|>>>|[\w.-]+@[\w.-]+(?:[:\w~/.-]*| \S+)\s?[$%#]|[\w/.~-]+ \$|bash-[\d.]+\$|PS [^>]*>) "#,
         #"^\s*(#include|#import|#!|// |/\*)"#,
         #"^\s*(def|class|import|from|return|if|elif|else|for|while|func|let|var|const|function|struct|enum|public|private|static|void|int|fn|pub|use|try|catch|except|switch|case|package|using|val|lambda|async|await)\b.*[(){}:;=\[\]]"#,
         #"^\s*"[^"]+"\s*:"#,
@@ -552,9 +553,11 @@ public enum TextReflow {
 
     /// Character width (box width ÷ characters) constant across lines within
     /// 10% — only a monospaced font does that over short and long lines alike.
-    static func isMonospace(_ lines: [Seg]) -> Bool {
+    static func isMonospace(_ lines: [Seg], evidence: Int = 3) -> Bool {
         let widths = lines.filter { $0.text.count >= 4 }.map(\.charWidth)
-        guard widths.count >= 2, let lo = widths.min(), let hi = widths.max(), lo > 0 else { return false }
+        // Two widths agreeing within 10% happens by chance in any font (a
+        // numbered gutter beside them is evidence enough on its own).
+        guard widths.count >= evidence, let lo = widths.min(), let hi = widths.max(), lo > 0 else { return false }
         return hi / lo <= 1.1
     }
 
@@ -596,16 +599,46 @@ public enum TextReflow {
             .replacingOccurrences(of: "‹", with: "<").replacingOccurrences(of: "›", with: ">")
         text = spacedMemberAccess.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text),
                                                            withTemplate: ".")
-        text = dashedExtension.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text),
-                                                        withTemplate: ".$1")
+        text = withFileExtensions(text)
+        for (pattern, template) in codeLookAlikes {
+            text = pattern.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text),
+                                                    withTemplate: template)
+        }
         text = withHexDigits(text)
         text = withTripleQuotes(text)
         return withBalancedBrackets(text)
     }
 
-    /// `main-py` → `main.py`: Vision reads a file name's dot as a hyphen.
-    private static let dashedExtension = try! NSRegularExpression(
-        pattern: #"(?<=[A-Za-z0-9_])-(py|js|jsx|ts|tsx|swift|txt|md|json|sh|c|h|cpp|java|rb|go|rs|html|css|log|csv|yml|yaml|toml|xml|sql)\b(?![-/])"#)
+    /// `main-py`, `README•md`, `data.CSV` → `main.py`, `README.md`, `data.csv`:
+    /// Vision reads a file name's dot as a hyphen or a bullet, and capitalises
+    /// the extension after a lower-case name.
+    static func withFileExtensions(_ line: String) -> String {
+        var text = line
+        for match in fileExtension.matches(in: line, range: NSRange(line.startIndex..., in: line)).reversed() {
+            guard let range = Range(match.range, in: text), let sep = Range(match.range(at: 2), in: text),
+                  let ext = Range(match.range(at: 3), in: text), let name = Range(match.range(at: 1), in: text) else { continue }
+            let extText = String(text[ext])
+            let lowered = extText == extText.uppercased() && text[name].contains(where: \.isLowercase) ? extText.lowercased() : extText
+            guard text[sep] != "." || lowered != extText else { continue }
+            text.replaceSubrange(range, with: String(text[name]) + "." + lowered)
+        }
+        return text
+    }
+
+    private static let fileExtension = try! NSRegularExpression(
+        pattern: #"([A-Za-z0-9_]+)([-•·.])(py|js|jsx|ts|tsx|swift|txt|md|json|sh|c|h|cpp|java|rb|go|rs|html|css|log|csv|yml|yaml|toml|xml|sql)\b(?![-/])"#,
+        options: [.caseInsensitive])
+
+    /// Code look-alikes: `1s -1` at a command's start is `ls`, `itt)` is
+    /// `i++)`, `$fres.status}` is `${res.status}`, and a string holding `${…}`
+    /// in single or mismatched quotes is a template literal Vision can't see
+    /// the backticks of (`"${HOME}"` in double quotes is a shell string, kept).
+    private static let codeLookAlikes: [(NSRegularExpression, String)] = [
+        (#"(?<=^|[%$#|] |&& )1s(?= |$)"#, "ls"),
+        (#"(?<![A-Za-z])([a-z])tt(?=[);\s]|$)"#, "$1++"),
+        (#"\$f(?=[A-Za-z_][\w.]*\})"#, #"\${"#),
+        (#"'([^'"`]*\$\{[^'"`]*)['"]|"([^'"`]*\$\{[^'"`]*)'"#, "`$1$2`"),
+    ].map { (try! NSRegularExpression(pattern: $0.0), $0.1) }
 
     /// A commit hash or hex id (`alb2c3d`): `l` is `1` and `O`/`o` is `0`.
     static func withHexDigits(_ line: String) -> String {
@@ -750,6 +783,18 @@ public enum TextReflow {
         // A column no wider than two words is a list of labels (a sidebar's
         // General · Appearance · Wi-Fi), not wrapped text.
         if (widest ?? prev).words <= 2, next.text.first?.isUppercase == true { return false }
+        // Before a capital, a wrap needs evidence: flowing text (four lines
+        // most of the way across) or two lines reaching the column's edge.
+        // Without it, separate short lines (a footer, a to-do line) would join
+        // whenever the next one is the longest — unless the line ends
+        // mid-phrase (`met with` / `Maria`).
+        if next.text.first?.isUppercase == true {
+            let lines = column.filter { overlapsHorizontally($0.box, prev.box) }
+            let left = lines.map(\.box.minX).min() ?? prev.box.minX
+            let long = lines.filter { $0.box.maxX - left >= 0.75 * (right - left) }.count
+            let atEdge = lines.filter { $0.box.maxX >= right - 1.5 * $0.charWidth }.count
+            if long < 4, atEdge < 2, !endsMidPhrase(prev.text) { return false }
+        }
         if prev.box.maxX < right - charWidth {
             let firstWord = next.text.prefix { !$0.isWhitespace }
             return prev.box.maxX + CGFloat(firstWord.count + 1) * charWidth > right - 0.5 * charWidth
@@ -759,6 +804,21 @@ public enum TextReflow {
         if let c = next.text.first, c.isLowercase { return true }
         return !endsSentence(prev.text)
     }
+
+    /// A line that stops where a sentence can't: after a comma, a hyphen or a
+    /// word that needs a following one (`with`, `the`, `and`).
+    static func endsMidPhrase(_ text: String) -> Bool {
+        guard let last = text.last else { return false }
+        if ",-–—".contains(last) { return true }
+        let word = text.split(separator: " ").last.map { $0.lowercased() } ?? ""
+        return midPhraseWords.contains(word)
+    }
+
+    private static let midPhraseWords: Set<String> = [
+        "a", "an", "the", "and", "or", "but", "of", "to", "in", "on", "at", "by", "for", "with", "from", "into",
+        "as", "that", "which", "who", "is", "are", "was", "were", "be", "has", "have", "had", "not", "than",
+        "its", "their", "his", "her", "our", "my", "your", "this", "these", "those", "de", "și", "la", "în", "cu", "pe",
+    ]
 
     /// Nesting level per paragraph: list items' left edges clustered into levels.
     private static func listLevels(_ paragraphs: [[Seg]]) -> [Int] {
