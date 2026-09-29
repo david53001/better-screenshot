@@ -3,7 +3,7 @@
 // line-per-line with indentation, table cells separated by TABS, multi-column
 // text in reading order, math as readable Unicode (x², xᵢ, (a + b)/2, √(x + 1)).
 
-let cases: [Case] = prose + lists + code + tables + math + layout + robustness + heldOut + noHarm + thirdReview
+let cases: [Case] = prose + lists + code + tables + math + layout + robustness + heldOut + noHarm + thirdReview + gridCases
 
 // MARK: - Prose
 

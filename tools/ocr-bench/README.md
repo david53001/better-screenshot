@@ -17,10 +17,10 @@ the app's line→paragraph/table/code rebuilding step (`Packages/CaptureKit/Sour
 
 Shortcut: `./run.sh [options]` (from anywhere) builds, runs every case under a timeout guard and prints
 the failing case ids plus the per-area table; details land in `run.log`. New source files in CaptureKit
-need the manifest touched before SwiftPM sees them — `run.sh` does that.
+need the manifests touched before SwiftPM sees them (both this one and CaptureKit's) — `run.sh` does that.
 
-Split by set: `python3 summarize.py [IDS…]` (existing / held-out / no-harm, plus expected vs actual for the
-given ids). **Regressions:** `python3 diff.py baselines/<file>.json [--show]` lists every case whose
+Split by set: `python3 summarize.py [IDS…]` (existing / held-out / no-harm / frozen review-3 `V*` / table
+grid `G*` from `GridCases.swift`, plus expected vs actual for the given ids). **Regressions:** `python3 diff.py baselines/<file>.json [--show]` lists every case whose
 pass/fail or CER moved against a saved run; save one with `cp out/results.json baselines/<name>.json`.
 `run --only` overwrites `out/results.json`, so do a full run before diffing.
 
