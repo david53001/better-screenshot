@@ -14,7 +14,8 @@ text recognition. Imported by the `App/` target (mainly `App/Capture`).
 - `ImageEncoder.swift` — PNG/JPEG encode; `FileNamer.swift` — output filename rules.
 - `OverlayPositioner.swift` — where post-capture overlays sit (pure).
 - `TextRecognizer.swift` + `RecognitionResult.swift` — Vision OCR / QR ("Capture Text"). Layout and math
-  rebuilding: `TextReflow.swift` (reading order, tables, code, paragraphs, lists), `MathLayout.swift`
+  rebuilding: `TextReflow.swift` (reading order, tables, code, paragraphs, lists), `GridLines.swift` (a
+  table's vertical grid lines — faint spreadsheet ones too — which TextReflow uses as cell boundaries), `MathLayout.swift`
   (stacked fractions, detached exponents; `spacedOperators` / `repairedMathSymbols` tidy math lines),
   `DisplayMath.swift` (display equations from pixels: ∫/∑ limits, `lim`, matrices), `ScriptRecovery.swift`
   + `InkMap.swift` (super/subscripts, √, ±, inline fractions, dashes, checkboxes, icons from pixels),

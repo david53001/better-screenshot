@@ -29,11 +29,17 @@ public enum TextReflow {
         /// (ScriptRecovery); what prose and tables show. `text` stays Vision's
         /// own read, which layout decisions and code use.
         public var recovered: String?
-        public init(text: String, box: CGRect, rawText: String? = nil, recovered: String? = nil) {
+        /// Vision's box for each whitespace-separated word of `text`, left to
+        /// right (same coordinates as `box`); lets a line that runs across
+        /// table cells be cut between them. Nil when unknown.
+        public var wordBoxes: [CGRect]?
+        public init(text: String, box: CGRect, rawText: String? = nil, recovered: String? = nil,
+                    wordBoxes: [CGRect]? = nil) {
             self.text = text
             self.box = box
             self.rawText = rawText
             self.recovered = recovered
+            self.wordBoxes = wordBoxes
         }
     }
 
@@ -50,12 +56,21 @@ public enum TextReflow {
     static let fontChangeRatio: CGFloat = 1.4
     /// Same-row fragments closer than this many character widths are one line.
     static let sameRowJoinChars: CGFloat = 1.5
+    /// A table's vertical grid line runs past the text beside it: it must be
+    /// unbroken over the row's text height plus this much of it above and
+    /// below, which no letter's stem is.
+    static let ruleReach: CGFloat = 0.2
 
     /// `ruleLength` (optional) measures the longest horizontal run of ink in a
     /// pixel region; with it, stacked fractions are rebuilt (see MathLayout).
+    /// `verticalRules` (optional) gives the x positions of vertical lines that
+    /// cross all of a pixel region; with it, a gridded table's cells are
+    /// separated by its grid lines (see `splittingAtRules`, `ruledColumns`).
     public static func paragraphs(_ lines: [Line], imageSize: CGSize = CGSize(width: 1, height: 1),
-                                  ruleLength: ((CGRect) -> CGFloat)? = nil) -> [String] {
-        joinedAcrossColumns(layout(lines, imageSize: imageSize, ruleLength: ruleLength)).map(\.text)
+                                  ruleLength: ((CGRect) -> CGFloat)? = nil,
+                                  verticalRules: ((CGRect) -> [CGFloat])? = nil) -> [String] {
+        joinedAcrossColumns(layout(lines, imageSize: imageSize, ruleLength: ruleLength,
+                                   verticalRules: verticalRules)).map(\.text)
     }
 
     /// True when some block reads as source code; the recognizer then re-reads
@@ -75,6 +90,10 @@ public enum TextReflow {
         var box: CGRect
         /// Vision's order of the first fragment — the reading order.
         var order: Int
+        /// Pixel boxes of the words of `text`, when known (see `Line.wordBoxes`).
+        var wordBoxes: [CGRect]? = nil
+        /// x positions of the table grid lines crossing this fragment's row.
+        var rowRules: [CGFloat] = []
         var charWidth: CGFloat { box.width / CGFloat(max(text.count, 1)) }
         var words: Int { text.split(whereSeparator: \.isWhitespace).count }
     }
@@ -94,11 +113,13 @@ public enum TextReflow {
         var closesRun = false
     }
 
-    static func layout(_ lines: [Line], imageSize: CGSize, ruleLength: ((CGRect) -> CGFloat)? = nil) -> [Piece] {
+    static func layout(_ lines: [Line], imageSize: CGSize, ruleLength: ((CGRect) -> CGFloat)? = nil,
+                       verticalRules: ((CGRect) -> [CGFloat])? = nil) -> [Piece] {
         var segs = segments(columnOrdered(lines), imageSize: imageSize)
         if let ruleLength { segs = stackingFractions(segs, ruleLength: ruleLength) }
         segs = attachingDetachedScripts(segs)
         segs = droppingLineNumbers(segs)
+        if let verticalRules { segs = splittingAtRules(segs, imageWidth: imageSize.width, rules: verticalRules) }
         var pieces: [Piece] = []
         var used = Set<Int>()
         for grid in grids(segs) {
@@ -165,10 +186,12 @@ public enum TextReflow {
             let text = normalize(line.text)
             guard !text.isEmpty else { continue }
             let b = line.box
+            func pixels(_ b: CGRect) -> CGRect {
+                CGRect(x: b.minX * imageSize.width, y: b.minY * imageSize.height,
+                       width: b.width * imageSize.width, height: b.height * imageSize.height)
+            }
             var seg = Seg(text: text, shown: line.recovered.map(normalize) ?? text, raw: line.rawText.map(normalize),
-                          box: CGRect(x: b.minX * imageSize.width, y: b.minY * imageSize.height,
-                                      width: b.width * imageSize.width, height: b.height * imageSize.height),
-                          order: index)
+                          box: pixels(b), order: index, wordBoxes: line.wordBoxes?.map(pixels))
             while let j = segs.firstIndex(where: { isSameRow($0.box, seg.box) && isAdjacent($0, seg) }) {
                 seg = joined(segs.remove(at: j), seg)
             }
@@ -186,8 +209,11 @@ public enum TextReflow {
             && (r.text.first.map { ",.;:)]}!?%".contains($0) } == true || l.text.last.map { "([{/".contains($0) } == true)
         let sep = tight ? "" : " "
         let raw = (l.raw == nil && r.raw == nil) ? nil : (l.raw ?? l.text) + sep + (r.raw ?? r.text)
+        // Each side's word boxes survive the join, so a grid line between the
+        // two can still cut them apart (`splittingAtRules`).
+        let words = sep.isEmpty ? nil : validWordBoxes(l).flatMap { a in validWordBoxes(r).map { a + $0 } }
         return Seg(text: l.text + sep + r.text, shown: l.shown + sep + r.shown, raw: raw,
-                   box: l.box.union(r.box), order: min(l.order, r.order))
+                   box: l.box.union(r.box), order: min(l.order, r.order), wordBoxes: words)
     }
 
     /// A code view's gutter: a left column of consecutive integers (1, 2, 3 …)
@@ -263,6 +289,78 @@ public enum TextReflow {
         return rows.map { $0.sorted { segs[$0].box.minX < segs[$1].box.minX } }
     }
 
+    /// A table's grid lines are cell boundaries. Every fragment learns its
+    /// row's vertical grid lines (`rowRules`), and one that runs across a grid
+    /// line — Vision read two cells as one line (`1200 48`), or `segments`
+    /// joined a narrow cell to its neighbour (`Paper 2` + `IA`) — is cut there,
+    /// between words. A line counts only if another row has one at the same x:
+    /// that is a table, not a stray vertical stroke.
+    static func splittingAtRules(_ segs: [Seg], imageWidth: CGFloat, rules: (CGRect) -> [CGFloat]) -> [Seg] {
+        let rows = rows(segs)
+        guard rows.filter({ $0.count >= 2 }).count >= 2 else { return segs }
+        var found = rows.map { row -> [CGFloat] in
+            let tops = row.map { segs[$0].box.minY }.sorted(), bottoms = row.map { segs[$0].box.maxY }.sorted()
+            let top = tops[tops.count / 2], bottom = bottoms[bottoms.count / 2]
+            let reach = ruleReach * (bottom - top)
+            return rules(CGRect(x: 0, y: top - reach, width: imageWidth, height: bottom - top + 2 * reach))
+        }
+        let tolerance = ruleTolerance(segs.indices, segs)
+        found = found.indices.map { r in
+            found[r].filter { x in found.indices.contains { $0 != r && found[$0].contains { abs($0 - x) <= tolerance } } }
+        }
+        guard found.contains(where: { !$0.isEmpty }) else { return segs }
+        var rowOf: [Int: Int] = [:]
+        for (r, row) in rows.enumerated() { for i in row { rowOf[i] = r } }
+        var out: [Seg] = []
+        for i in segs.indices {
+            var seg = segs[i]
+            seg.rowRules = found[rowOf[i]!]
+            var cuts = Set<Int>()
+            if let boxes = validWordBoxes(seg) {
+                for x in seg.rowRules where x > seg.box.minX && x < seg.box.maxX {
+                    // The word gap nearest the line, if the line lies in it.
+                    func distance(_ k: Int) -> CGFloat { abs(x - (boxes[k - 1].maxX + boxes[k].minX) / 2) }
+                    let gaps = boxes.indices.dropFirst().filter { boxes[$0 - 1].midX < x && x < boxes[$0].midX }
+                    if let k = gaps.min(by: { distance($0) < distance($1) }) { cuts.insert(k) }
+                }
+            }
+            out += split(seg, at: cuts.sorted()) ?? [seg]
+        }
+        return out
+    }
+
+    /// How far apart two sightings of one grid line may be.
+    private static func ruleTolerance<S: Sequence>(_ indices: S, _ segs: [Seg]) -> CGFloat where S.Element == Int {
+        let heights = indices.map { segs[$0].box.height }.sorted()
+        return heights.isEmpty ? 0 : 0.3 * heights[heights.count / 2]
+    }
+
+    /// A fragment's word boxes when they still line up with its words; a
+    /// one-word fragment's box is its word's.
+    static func validWordBoxes(_ seg: Seg) -> [CGRect]? {
+        if let boxes = seg.wordBoxes, boxes.count == seg.words { return boxes }
+        return seg.words == 1 ? [seg.box] : nil
+    }
+
+    /// `seg` cut into pieces before each word index in `cuts`. Nil when the
+    /// shown text no longer lines up word for word with Vision's (a rebuilt
+    /// formula), which then stays whole.
+    static func split(_ seg: Seg, at cuts: [Int]) -> [Seg]? {
+        guard !cuts.isEmpty, let boxes = validWordBoxes(seg) else { return nil }
+        let text = seg.text.split(whereSeparator: \.isWhitespace)
+        let shown = seg.shown.split(whereSeparator: \.isWhitespace)
+        let raw = seg.raw?.split(whereSeparator: \.isWhitespace)
+        guard shown.count == text.count, cuts.allSatisfy({ $0 > 0 && $0 < text.count }) else { return nil }
+        let bounds = [0] + cuts + [text.count]
+        return zip(bounds, bounds.dropFirst()).map { a, b in
+            let left = boxes[a..<b].map(\.minX).min()!, right = boxes[a..<b].map(\.maxX).max()!
+            return Seg(text: text[a..<b].joined(separator: " "), shown: shown[a..<b].joined(separator: " "),
+                       raw: raw.flatMap { $0.count == text.count ? $0[a..<b].joined(separator: " ") : nil },
+                       box: CGRect(x: left, y: seg.box.minY, width: right - left, height: seg.box.height),
+                       order: seg.order, wordBoxes: Array(boxes[a..<b]), rowRules: seg.rowRules)
+        }
+    }
+
     /// A sidebar beside a table (Settings' General · Appearance · Wi-Fi): a
     /// column of short items at the layout's left or right edge, most of which
     /// line up with no row of what is beside it. It is never part of a grid.
@@ -324,16 +422,25 @@ public enum TextReflow {
     }
 
     private static func grid(_ run: [[Int]], _ segs: [Seg]) -> Grid? {
-        let multi = run.filter { $0.count >= 2 }
+        let members = run.flatMap { $0 }
+        var multi = run.filter { $0.count >= 2 }
         if multi.count == 1 {
             // One isolated row of short pieces: a running header and its page
             // number, a label and its value, a row of buttons.
             guard run.count == 1, run[0].allSatisfy({ segs[$0].words <= 6 }) else { return nil }
             return Grid(members: run[0], text: run[0].map { segs[$0].shown }.joined(separator: "\t"))
         }
-        let bands = columnBands(multi, segs)
-        guard bands.count >= 2 else { return nil }
+        var run = run, segs = segs
+        let ruled = ruledColumns(run, segs)
+        if ruled == nil {
+            (run, segs) = splittingAcrossBands(run, segs)
+            multi = run.filter { $0.count >= 2 }
+        }
+        let bands = ruled == nil ? columnBands(multi, segs) : []
+        let bandCount = ruled?.count ?? bands.count
+        guard bandCount >= 2 else { return nil }
         func band(_ i: Int) -> Int {
+            if let ruled { return ruled.column[i]! }
             let box = segs[i].box
             return bands.indices.max { a, b in
                 score(bands[a], box) < score(bands[b], box)
@@ -343,7 +450,7 @@ public enum TextReflow {
             let overlap = min(band.upperBound, box.maxX) - max(band.lowerBound, box.minX)
             return overlap > 0 ? overlap : -abs(box.midX - (band.lowerBound + band.upperBound) / 2)
         }
-        var byBand = [[Int]](repeating: [], count: bands.count)
+        var byBand = [[Int]](repeating: [], count: bandCount)
         for row in run { for i in row { byBand[band(i)].append(i) } }
         let flowing = byBand.map { isFlowingText($0.map { segs[$0] }) }
 
@@ -380,8 +487,78 @@ public enum TextReflow {
             previous = row
         }
         flush()
-        return Grid(members: run.flatMap { $0 }, text: lines.joined(separator: "\n"))
+        return Grid(members: members, text: lines.joined(separator: "\n"))
     }
+
+    /// Columns from a table's vertical grid lines, when it has them. Each cell
+    /// goes to the column that starts at the nearest grid line left of it *on
+    /// its own row*, so a merged cell (Lunch across Mon–Wed) lands in the first
+    /// column it spans, like a spreadsheet's merged range, and a narrow column
+    /// can't be swallowed by a wide neighbour. Nil — use the text's own column
+    /// bands — unless grid lines seen on two or more rows split the cells into
+    /// two or more columns with no two cells of a row in one column (a lone
+    /// divider beside a gridless table is not its grid).
+    private static func ruledColumns(_ run: [[Int]], _ segs: [Seg]) -> (count: Int, column: [Int: Int])? {
+        let tolerance = ruleTolerance(run.joined(), segs)
+        var sightings: [(x: CGFloat, row: Int)] = []
+        for (r, row) in run.enumerated() {
+            for x in Set(row.flatMap { segs[$0].rowRules }) { sightings.append((x, r)) }
+        }
+        sightings.sort { $0.x < $1.x }
+        var groups: [[(x: CGFloat, row: Int)]] = []
+        for s in sightings {
+            if let last = groups.last?.last, s.x - last.x <= tolerance { groups[groups.count - 1].append(s) }
+            else { groups.append([s]) }
+        }
+        let rules = groups.filter { Set($0.map(\.row)).count >= 2 }.map { $0.map(\.x).reduce(0, +) / CGFloat($0.count) }
+        guard !rules.isEmpty else { return nil }
+        var column: [Int: Int] = [:]
+        for row in run {
+            let own = rules.indices.filter { j in row.contains { segs[$0].rowRules.contains { abs($0 - rules[j]) <= tolerance } } }
+            let present = own.isEmpty ? Array(rules.indices) : own
+            for i in row {
+                column[i] = present.last { rules[$0] < segs[i].box.midX }.map { $0 + 1 } ?? 0
+            }
+            guard Set(row.map { column[$0]! }).count == row.count else { return nil }
+        }
+        let used = Set(column.values).sorted()
+        guard used.count >= 2 else { return nil }
+        let index = Dictionary(uniqueKeysWithValues: used.enumerated().map { ($1, $0) })
+        return (used.count, column.mapValues { index[$0]! })
+    }
+
+    /// A gridless table's cells that Vision read as one line (`Gold Silver`
+    /// under the Gold and Silver columns) are cut where the *other* rows'
+    /// columns say: only a short line whose every word overlaps exactly one of
+    /// those columns, left to right, into pieces of at most three words.
+    private static func splittingAcrossBands(_ run: [[Int]], _ segs: [Seg]) -> ([[Int]], [Seg]) {
+        var run = run, segs = segs
+        for r in run.indices {
+            for i in run[r] where (2...maxSplitWords).contains(segs[i].words) {
+                guard let boxes = validWordBoxes(segs[i]) else { continue }
+                let others = run.indices.map { $0 == r ? run[$0].filter { $0 != i } : run[$0] }.filter { $0.count >= 2 }
+                let bands = columnBands(others, segs)
+                let hits = boxes.map { w in
+                    bands.indices.filter { min(bands[$0].upperBound, w.maxX) > max(bands[$0].lowerBound, w.minX) }
+                }
+                guard hits.allSatisfy({ $0.count == 1 }) else { continue }
+                let columns = hits.map { $0[0] }
+                guard zip(columns, columns.dropFirst()).allSatisfy({ $0 <= $1 }) else { continue }
+                let cuts = columns.indices.dropFirst().filter { columns[$0] != columns[$0 - 1] }
+                let bounds = [0] + cuts + [columns.count]
+                guard zip(bounds, bounds.dropFirst()).allSatisfy({ $1 - $0 <= 3 }),
+                      let pieces = split(segs[i], at: cuts) else { continue }
+                segs[i] = pieces[0]
+                var ids = [i]
+                for piece in pieces.dropFirst() { segs.append(piece); ids.append(segs.count - 1) }
+                run[r] = run[r].flatMap { $0 == i ? ids : [$0] }
+            }
+        }
+        return (run, segs)
+    }
+
+    /// Longest line `splittingAcrossBands` will cut: a row of short cells, not prose.
+    private static let maxSplitWords = 8
 
     /// One output line for a grid row. Within a cell, stacked lines (a wrapped
     /// cell) join with a space and side-by-side pieces with a tab. In a table,

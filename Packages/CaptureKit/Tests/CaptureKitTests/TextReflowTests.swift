@@ -11,6 +11,12 @@ private func line(_ text: String, top: CGFloat, left: CGFloat, right: CGFloat,
     TextReflow.Line(text: text, box: CGRect(x: left, y: top, width: right - left, height: height))
 }
 
+/// A line with Vision's per-word boxes, given as (left, right) per word.
+private func words(_ text: String, top: CGFloat, _ spans: [(CGFloat, CGFloat)], height: CGFloat = 0.05) -> TextReflow.Line {
+    let boxes = spans.map { CGRect(x: $0.0, y: top, width: $0.1 - $0.0, height: height) }
+    return TextReflow.Line(text: text, box: boxes.dropFirst().reduce(boxes[0]) { $0.union($1) }, wordBoxes: boxes)
+}
+
 let textReflowTests: [TestCase] = [
     TestCase("emptyInputIsEmpty") { t in
         t.equal(TextReflow.paragraphs([]), [])
@@ -220,6 +226,83 @@ let textReflowTests: [TestCase] = [
         ]
         // The empty middle cell keeps its tab so the row still lines up.
         t.equal(TextReflow.paragraphs(lines), ["Country\tCapital\tPop\nRomania\tBucharest\t19.0\nTotal\t\t19.0"])
+    },
+    TestCase("gridLineSeparatesNarrowCellFromItsNeighbour") { t in
+        // A 1× sheet: "IA" and "18" sit closer to their left neighbours than
+        // the same-row join distance; the grid line at 0.45 is the boundary.
+        let lines = [
+            line("Name", top: 0.10, left: 0.05, right: 0.15),
+            line("Ana", top: 0.20, left: 0.05, right: 0.10),
+            line("Dan", top: 0.30, left: 0.05, right: 0.10),
+            words("Paper 2", top: 0.10, [(0.32, 0.40), (0.41, 0.44)]),
+            line("41", top: 0.20, left: 0.41, right: 0.44),
+            line("45", top: 0.30, left: 0.41, right: 0.44),
+            line("IA", top: 0.10, left: 0.455, right: 0.48),
+            line("18", top: 0.20, left: 0.455, right: 0.48),
+            line("22", top: 0.30, left: 0.455, right: 0.48),
+        ]
+        t.equal(TextReflow.paragraphs(lines, verticalRules: { _ in [0.25, 0.45] }),
+                ["Name\tPaper 2\tIA\nAna\t41\t18\nDan\t45\t22"])
+    },
+    TestCase("visionLineAcrossGridLineIsCutBetweenWords") { t in
+        let lines = [
+            line("Item", top: 0.10, left: 0.05, right: 0.12),
+            words("Budget %", top: 0.10, [(0.30, 0.39), (0.41, 0.48)]),
+            line("Rent", top: 0.20, left: 0.05, right: 0.12),
+            words("1200 48", top: 0.20, [(0.30, 0.39), (0.40, 0.48)]),
+            line("Food", top: 0.30, left: 0.05, right: 0.12),
+            line("450", top: 0.30, left: 0.33, right: 0.39),
+        ]
+        t.equal(TextReflow.paragraphs(lines, verticalRules: { _ in [0.2, 0.40] }),
+                ["Item\tBudget\t%\nRent\t1200\t48\nFood\t450"])
+    },
+    TestCase("mergedCellGoesToFirstColumnItSpans") { t in
+        // "Lunch" is centred under Tue, but its row has no grid lines between
+        // Mon, Tue and Wed: it is one cell starting at Mon.
+        let lines = [
+            line("Day", top: 0.10, left: 0.05, right: 0.12), line("Mon", top: 0.10, left: 0.25, right: 0.32),
+            line("Tue", top: 0.10, left: 0.45, right: 0.52), line("Wed", top: 0.10, left: 0.65, right: 0.72),
+            line("1", top: 0.20, left: 0.05, right: 0.07), line("Maths", top: 0.20, left: 0.25, right: 0.35),
+            line("English", top: 0.20, left: 0.45, right: 0.57), line("Physics", top: 0.20, left: 0.65, right: 0.77),
+            line("L", top: 0.30, left: 0.05, right: 0.07), line("Lunch", top: 0.30, left: 0.44, right: 0.54),
+            line("2", top: 0.40, left: 0.05, right: 0.07), line("Art", top: 0.40, left: 0.25, right: 0.30),
+            line("Free", top: 0.40, left: 0.45, right: 0.52), line("TOK", top: 0.40, left: 0.65, right: 0.71),
+        ]
+        let rules: (CGRect) -> [CGFloat] = { $0.midY > 0.3 && $0.midY < 0.35 ? [0.2] : [0.2, 0.4, 0.6] }
+        t.equal(TextReflow.paragraphs(lines, verticalRules: rules),
+                ["Day\tMon\tTue\tWed\n1\tMaths\tEnglish\tPhysics\nL\tLunch\n2\tArt\tFree\tTOK"])
+    },
+    TestCase("strayVerticalStrokeOnOneRowCutsNothing") { t in
+        let lines = [
+            line("Subject", top: 0.10, left: 0.05, right: 0.20), line("Level", top: 0.10, left: 0.30, right: 0.40),
+            line("Maths", top: 0.20, left: 0.05, right: 0.15), words("Maths HL", top: 0.20, [(0.30, 0.40), (0.41, 0.45)]),
+            line("Physics", top: 0.30, left: 0.05, right: 0.17), words("Physics SL", top: 0.30, [(0.30, 0.42), (0.43, 0.47)]),
+        ]
+        let rules: (CGRect) -> [CGFloat] = { $0.midY > 0.2 && $0.midY < 0.25 ? [0.405] : [] }
+        t.equal(TextReflow.paragraphs(lines, verticalRules: rules),
+                ["Subject\tLevel\nMaths\tMaths HL\nPhysics\tPhysics SL"])
+    },
+    TestCase("dividerBesideGridlessTableIsNotItsGrid") { t in
+        // A line between the first column and the rest would put Capital and
+        // Pop in one column: the text's own columns win.
+        let lines = [
+            line("Country", top: 0.10, left: 0.05, right: 0.19), line("Romania", top: 0.20, left: 0.05, right: 0.19),
+            line("Capital", top: 0.10, left: 0.35, right: 0.47), line("Bucharest", top: 0.20, left: 0.35, right: 0.50),
+            line("Pop", top: 0.10, left: 0.65, right: 0.70), line("19.0", top: 0.20, left: 0.65, right: 0.72),
+        ]
+        t.equal(TextReflow.paragraphs(lines, verticalRules: { _ in [0.3] }),
+                ["Country\tCapital\tPop\nRomania\tBucharest\t19.0"])
+    },
+    TestCase("gridlessRowReadAsOneLineIsCutByTheOtherRowsColumns") { t in
+        // Vision read the header cells "Gold" and "Silver" as one line.
+        let lines = [
+            line("Country", top: 0.10, left: 0.05, right: 0.20), words("Gold Silver", top: 0.10, [(0.30, 0.44), (0.45, 0.60)]),
+            line("Norway", top: 0.20, left: 0.05, right: 0.18), line("16", top: 0.20, left: 0.38, right: 0.42),
+            line("8", top: 0.20, left: 0.54, right: 0.56),
+            line("Canada", top: 0.30, left: 0.05, right: 0.18), line("11", top: 0.30, left: 0.38, right: 0.42),
+            line("10", top: 0.30, left: 0.52, right: 0.56),
+        ]
+        t.equal(TextReflow.paragraphs(lines), ["Country\tGold\tSilver\nNorway\t16\t8\nCanada\t11\t10"])
     },
     TestCase("wrappedTableCellStaysInItsRow") { t in
         let lines = [

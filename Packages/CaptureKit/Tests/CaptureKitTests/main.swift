@@ -21,6 +21,7 @@ runTests("CaptureKitTests",
     displayMathTests +
     scriptRecoveryTests +
     inkMapTests +
+    gridLinesTests +
     homoglyphsTests +
     textRecognizerTests +
     windowPickingTests +

@@ -110,7 +110,12 @@ public enum TextRecognizer {
         let codes = qrRequest.results ?? []
         let qrs = codes.compactMap { $0.payloadStringValue }
         let dominant = codes.contains { $0.boundingBox.width * $0.boundingBox.height >= dominantQRArea }
-        let text = TextReflow.paragraphs(lines, imageSize: size) { InkMap(source, rect: $0)?.longestRun() ?? 0 }
+        var gridLines: GridLines??
+        let text = TextReflow.paragraphs(lines, imageSize: size, ruleLength: { InkMap(source, rect: $0)?.longestRun() ?? 0 },
+                                         verticalRules: { rect in
+            if gridLines == nil { gridLines = .some(GridLines(source)) }
+            return gridLines??.vertical(in: rect) ?? []
+        })
         return RecognitionResolver.resolve(qrPayloads: qrs, textLines: text, qrDominant: dominant)
     }
 
@@ -264,11 +269,37 @@ public enum TextRecognizer {
     /// top-left, so flip y. Order is kept — it is Vision's reading order.
     private static func reflowLines(_ observations: [VNRecognizedTextObservation]) -> [TextReflow.Line] {
         observations.compactMap { observation in
-            guard let read = observation.topCandidates(1).first?.string else { return nil }
+            guard let candidate = observation.topCandidates(1).first else { return nil }
+            let read = candidate.string
             let text = Homoglyphs.latinized(read, keepCyrillic: scripts.cyrillic, keepGreek: scripts.greek)
             let b = observation.boundingBox
-            return TextReflow.Line(text: text, box: CGRect(x: b.minX, y: 1 - b.maxY, width: b.width, height: b.height))
+            return TextReflow.Line(text: text, box: CGRect(x: b.minX, y: 1 - b.maxY, width: b.width, height: b.height),
+                                   wordBoxes: wordBoxes(candidate))
         }
+    }
+
+    /// Vision's box per word (top-left origin), for the short lines a table
+    /// row is made of; a line of prose is never cut into cells, so it skips
+    /// the per-word calls.
+    private static func wordBoxes(_ candidate: VNRecognizedText) -> [CGRect]? {
+        let string = candidate.string
+        var ranges: [Range<String.Index>] = []
+        var start: String.Index?
+        for i in string.indices {
+            if string[i].isWhitespace {
+                if let s = start { ranges.append(s..<i); start = nil }
+            } else if start == nil {
+                start = i
+            }
+        }
+        if let s = start { ranges.append(s..<string.endIndex) }
+        guard (2...8).contains(ranges.count) else { return nil }
+        var boxes: [CGRect] = []
+        for range in ranges {
+            guard let b = (try? candidate.boundingBox(for: range))?.boundingBox else { return nil }
+            boxes.append(CGRect(x: b.minX, y: 1 - b.maxY, width: b.width, height: b.height))
+        }
+        return boxes
     }
 
     private static func iou(_ a: CGRect, _ b: CGRect) -> CGFloat {
