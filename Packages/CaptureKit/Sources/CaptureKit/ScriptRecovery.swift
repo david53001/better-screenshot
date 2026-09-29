@@ -257,6 +257,31 @@ enum ScriptRecovery {
             && abs(g.maxY - line.baseline) < 0.15 * cap && g.minX > before.maxX
     }
 
+    /// `≈` and `±` Vision reads as `=`: two strokes, but wavy ones (each spans
+    /// far more height than its thickness), or a plus over a bar.
+    static func relationSymbols(_ text: String, rect: CGRect, in image: CGImage, excluding others: [CGRect] = []) -> String? {
+        guard text.contains("=") else { return nil }
+        let chars = Array(text)
+        let positions = chars.indices.filter { !chars[$0].isWhitespace }
+        let read = positions.map { chars[$0] }
+        guard let line = lineGlyphs(rect: rect, in: image, excluding: others),
+              let spans = alignment(Array(line.glyphs.indices), read, spaces: spacePositions(text), line) else { return nil }
+        var out = chars
+        for (k, span) in spans.enumerated() where span.count == 1 && read[span.lowerBound] == "=" {
+            let parts = line.glyphs[k].blobs.map { line.blobs[$0] }.sorted { $0.box.minY < $1.box.minY }
+            guard parts.count == 2 else { continue }
+            let (upper, lower) = (parts[0], parts[1])
+            let flat = { (b: InkMap.Blob) in b.box.height <= 1.6 * CGFloat(b.pixels.count) / b.box.width }
+            if upper.box.height >= 0.6 * upper.box.width, flat(lower), lower.box.minY >= upper.box.maxY - 1 {
+                out[positions[span.lowerBound]] = "±"
+            } else if !flat(upper), !flat(lower) {
+                out[positions[span.lowerBound]] = "≈"
+            }
+        }
+        let result = String(out)
+        return result == text ? nil : result
+    }
+
     /// Dashes and dots Vision flattens, told apart by size: an em dash is
     /// about a capital wide or more, an en dash about three quarters (`14:00–17:00`,
     /// ` – ` between words), a hyphen half; a middle dot `·` is a speck, a

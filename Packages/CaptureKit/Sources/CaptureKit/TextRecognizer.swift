@@ -38,6 +38,9 @@ public enum TextRecognizer {
             if ScriptRecovery.missingFullStop(lines[i].text, rect: rect, in: source, excluding: others) {
                 lines[i].text += "."
             }
+            if let fixed = ScriptRecovery.relationSymbols(lines[i].text, rect: rect, in: source, excluding: others) {
+                lines[i].text = fixed
+            }
             if let fixed = ScriptRecovery.dashesAndDots(lines[i].text, rect: rect, in: source, excluding: others) {
                 lines[i].text = fixed
             }
@@ -265,7 +268,8 @@ public enum TextRecognizer {
     private static func reflowLines(_ observations: [VNRecognizedTextObservation]) -> [TextReflow.Line] {
         observations.compactMap { observation in
             guard let read = observation.topCandidates(1).first?.string else { return nil }
-            let text = Homoglyphs.latinized(read, keepCyrillic: scripts.cyrillic, keepGreek: scripts.greek)
+            let text = Homoglyphs.latinized(read, keepCyrillic: scripts.cyrillic, keepGreek: scripts.greek,
+                                            romanian: scripts.romanian)
             let b = observation.boundingBox
             return TextReflow.Line(text: text, box: CGRect(x: b.minX, y: 1 - b.maxY, width: b.width, height: b.height))
         }
