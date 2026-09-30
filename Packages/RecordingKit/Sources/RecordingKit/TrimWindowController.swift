@@ -126,7 +126,7 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.appearance = NSAppearance(named: .darkAqua)
         // A dark translucent backdrop; the video itself stays opaque.
-        window.contentView = WindowMaterial.make(.underWindowBackground)
+        window.contentView = WindowMaterial.make()
         super.init(window: window)
         window.delegate = self
         buildUI()
@@ -185,7 +185,7 @@ public final class TrimWindowController: NSWindowController, NSWindowDelegate {
 
     /// The dark HUD card: transport row · timeline · selected-segment row · hint line.
     private func buildCard() -> NSView {
-        let card = HUDSurfaceView(cornerRadius: 12, blending: .withinWindow, tint: 0)   // on the dark window only
+        let card = HUDSurfaceView(cornerRadius: 12, blending: .withinWindow, placement: .docked)   // on the dark window only
         card.translatesAutoresizingMaskIntoConstraints = false
 
         // Transport + edit row.

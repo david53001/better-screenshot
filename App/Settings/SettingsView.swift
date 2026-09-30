@@ -113,6 +113,7 @@ struct SettingsView: View {
             inTheVideoCard
             historyCard
             saveLocationCard
+            appearanceCard
         }
         .frame(width: Layout.columnWidth)
     }
@@ -185,6 +186,37 @@ struct SettingsView: View {
                                              (value: 20, label: "20 pt")])
                 }
                 switchRow("Drop shadow", SettingsHelp.dropShadow, isOn: bind(\.pinShadow))
+            }
+        }
+    }
+
+    /// Settings → Appearance → Opacity (shared spec `MacStats/docs/design-language/opacity-setting.md` §2):
+    /// one slider for every window, panel and floating control, applied live through DesignKit's `UIOpacity`.
+    private var appearanceCard: some View {
+        SettingsCard("APPEARANCE") {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    fieldLabel("Opacity", SettingsHelp.opacity)
+                    Spacer(minLength: 8)
+                    Button("Default") { store.settings.uiOpacity = CaptureSettings.default.uiOpacity; store.persist() }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(store.settings.uiOpacity == CaptureSettings.default.uiOpacity)
+                }
+                HStack(spacing: 8) {
+                    Text("Transparent")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Slider(value: bind(\.uiOpacity), in: 0...1)
+                        .controlSize(.small)
+                    Text("Opaque")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Text("How much of what's behind the app shows through its windows and panels.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

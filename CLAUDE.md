@@ -42,12 +42,17 @@ Local Swift packages + a menu-bar app target:
 - `RecordingKit` — screen/GIF recording (ScreenCaptureKit + AVAssetWriter), camera bubble, click/keystroke
   overlays, and the video editor (cut list, per-segment speed/mute, exporter).
 - `DesignKit` — the shared native look (MacStats design language, v3.1.0): tokens, the
-  one dark floating surface `HUDSurfaceView` (`.hudWindow` blur + 50 % black tint, white text ≥ 6:1 over a white
-  page; **not** Liquid Glass — glass adapts to what's behind it and dropped a pill to 2.4:1; `tint: 0` for
-  panels that only sit on the editor's dark window), `continuousRoundedRect` /
-  `CALayer.setContinuousCorners`, SwiftUI `CardBackground`, `WindowMaterial`. Use it for every new floating
-  surface; never `layer.cornerRadius` without a continuous curve (true circles excepted). Status and
-  follow-ups: `docs/PROGRESS-2026-09-29-native-look.md`.
+  one dark floating surface `HUDSurfaceView` (`.hudWindow` blur + black tint; **not** Liquid Glass — glass adapts
+  to what's behind it and dropped a pill to 2.4:1; `placement: .docked` for panels that only sit on the editor's
+  dark window), `continuousRoundedRect` / `CALayer.setContinuousCorners`, SwiftUI `CardBackground`,
+  `WindowMaterial` (`.popover` material + a window-colour layer). **Settings → Appearance → Opacity**
+  (`CaptureSettings.uiOpacity`, default 0.5; AppDelegate pushes it into `UIOpacity.shared`) drives all of them
+  live through the pure, tested `OpacityCurve` (`UIOpacity.swift`): at 0.5 the HUD tint is 42 % (white text
+  4.86:1 over a white page), clamped at 22 % at 0 (3.17:1), solid dark grey at 1; window layer 0.15 / 0.52 / 1.
+  Re-measure contrast over white before changing any of those numbers
+  (`docs/PROGRESS-2026-09-30-opacity.md`). Use DesignKit for every new floating surface; never
+  `layer.cornerRadius` without a continuous curve (true circles excepted). Status and follow-ups:
+  `docs/PROGRESS-2026-09-29-native-look.md`.
 - `TourKit` — guided tours (v3 Part 7): tour model + catalog, engine, new-user classifier, the red tag
   overlay and the ⓘ button. The app side is `App/Tours/TourCoordinator.swift`.
 - `App/` (target) — hotkeys, menu bar, settings, and capture→overlay→editor→output orchestration; every app

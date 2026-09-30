@@ -48,7 +48,7 @@ final class SettingsWindowController {
                                backing: .buffered, defer: false)
         w.title = "Settings"
         w.isReleasedWhenClosed = false
-        WindowMaterial.install(hosting, in: w, material: .sidebar)
+        WindowMaterial.install(hosting, in: w)
 
         let maxH = (NSScreen.main?.visibleFrame.height ?? 900) * 0.98
         let fittingHeight = hosting.fittingSize.height

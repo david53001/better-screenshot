@@ -64,4 +64,15 @@ let captureSettingsTests: [TestCase] = [
         let back = CaptureSettings(dictionary: s.dictionary)
         t.isFalse(back.playSound)
     },
+    TestCase("uiOpacityDefaultsToTheMiddleRoundTripsAndClamps") { t in
+        t.equal(CaptureSettings.default.uiOpacity, 0.5)
+        var s = CaptureSettings.default
+        s.uiOpacity = 0.37
+        t.equal(CaptureSettings(dictionary: s.dictionary).uiOpacity, 0.37)
+        t.equal(CaptureSettings(dictionary: [:]).uiOpacity, 0.5)          // older settings: the default
+        t.equal(CaptureSettings(dictionary: ["uiOpacity": "junk"]).uiOpacity, 0.5)
+        t.equal(CaptureSettings(dictionary: ["uiOpacity": "nan"]).uiOpacity, 0.5)
+        t.equal(CaptureSettings(dictionary: ["uiOpacity": "1.7"]).uiOpacity, 1)
+        t.equal(CaptureSettings(dictionary: ["uiOpacity": "-2"]).uiOpacity, 0)
+    },
 ]

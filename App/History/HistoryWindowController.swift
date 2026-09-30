@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import HistoryKit
 import TourKit
+import DesignKit
 
 /// Closures the History window needs from the capture layer (annotate/pin
 /// reuse CaptureCoordinator's existing flows).
@@ -34,12 +35,14 @@ final class HistoryWindowController {
     }
 
     /// Builds the window (not shown). Internal so probes can show it behind the owner's windows.
+    /// The grid sits on the shared translucent window material, like Settings (follows Settings → Opacity).
     func makeWindow() -> NSWindow {
         let view = HistoryView(history: history, actions: actions)
-        let w = NSWindow(contentViewController: NSHostingController(rootView: view))
-        w.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 700, height: 500),
+                         styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                         backing: .buffered, defer: false)
+        WindowMaterial.install(NSHostingView(rootView: view), in: w)
         w.title = "History"
-        w.setContentSize(NSSize(width: 700, height: 500))
         w.isReleasedWhenClosed = false
         InfoButton.install(in: w, tour: .history, shortcuts: Self.infoShortcuts)
         return w

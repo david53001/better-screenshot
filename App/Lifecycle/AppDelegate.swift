@@ -1,5 +1,7 @@
 import AppKit
+import Combine
 import CaptureKit
+import DesignKit
 import HistoryKit
 import OverlayKit
 import TourKit
@@ -18,8 +20,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var tempFiles: TempFileService!
     private var tours: TourCoordinator!
     private let hud = HUDController()
+    private var opacityWatch: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Settings → Appearance → Opacity drives every DesignKit surface, live.
+        opacityWatch = settings.$settings.map(\.uiOpacity).removeDuplicates()
+            .sink { UIOpacity.shared.value = $0 }
         // Guided tours (v3 spec §14.9): decide once, for good, whether this is a new user — before
         // anything below writes a preference (status item, launch-at-login flag…) that would look like
         // earlier use. Existing users are never asked and never get a tour by themselves.

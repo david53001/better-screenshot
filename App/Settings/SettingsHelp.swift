@@ -29,6 +29,12 @@ enum SettingsHelp {
         example: "PNG keeps crisp edges and transparency; JPG makes smaller files."
     )
 
+    static let opacity = HelpText(
+        "Opacity",
+        "How see-through BetterScreenshot's windows, panels and floating controls are. Transparent lets more of what's behind them show through; Opaque makes them solid.",
+        example: "Default puts it back in the middle. Floating controls always keep enough dark tint that their text stays readable over a white page."
+    )
+
     static let playSound = HelpText(
         "Play a sound on capture",
         "Plays a short shutter sound whenever you take a screenshot.",

@@ -10,7 +10,7 @@ public enum Design {
     public static let outerPadding: CGFloat = 20
     public static let cardSpacing: CGFloat = 12
     public static let cardPadding: CGFloat = 12
-    /// `Color.primary` opacities.
+    /// `Color.primary` opacities (the fill at the default Settings → Opacity; see `OpacityCurve.cardFill`).
     public static let cardFill: Double = 0.04
     public static let cardHairline: Double = 0.08
     /// Borders are hairlines: one physical pixel on Retina.

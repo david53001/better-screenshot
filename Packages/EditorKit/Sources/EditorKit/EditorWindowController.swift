@@ -88,7 +88,7 @@ public final class EditorWindowController: NSWindowController {
         canvas.style = defaultStyle
         // A dark translucent backdrop (the window is always dark, see above); the
         // image canvas itself stays opaque.
-        window.contentView = WindowMaterial.make(.underWindowBackground)
+        window.contentView = WindowMaterial.make()
         buildUI()
         // Delete / [ / ] are handled in the canvas's keyDown — make it the
         // first responder up front instead of requiring a click first.
@@ -171,7 +171,7 @@ public final class EditorWindowController: NSWindowController {
     private func buildToolbar() -> HUDSurfaceView {
         // Floats over the canvas: the shared HUD surface (glass on macOS 26).
         // No black tint: it only ever sits on the dark window (a tint made a black slab).
-        let pill = HUDSurfaceView(cornerRadius: 15, blending: .withinWindow, tint: 0)
+        let pill = HUDSurfaceView(cornerRadius: 15, blending: .withinWindow, placement: .docked)
         pill.translatesAutoresizingMaskIntoConstraints = false
         pill.tourAnchor = "editor.toolbar"
 

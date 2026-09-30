@@ -83,7 +83,7 @@ final class EditorInspectorView: HUDSurfaceView {
 
     init(recentColors: [RGBAColor]) {
         recents = RecentColors(recentColors)
-        super.init(frame: .zero, cornerRadius: 12, blending: .withinWindow, tint: 0)   // on the dark window only
+        super.init(frame: .zero, cornerRadius: 12, blending: .withinWindow, placement: .docked)   // on the dark window only
         translatesAutoresizingMaskIntoConstraints = false
 
         titleLabel.font = InspectorStyle.font(.headline, weight: .semibold)

@@ -25,6 +25,9 @@ public struct CaptureSettings: Equatable {
     /// `$TMPDIR/BetterScreenshot-<UUID>/`. 0 == keep forever (the ∞ stop).
     public var tempRetentionSeconds: Int
     public var playSound: Bool
+    /// Settings → Appearance → Opacity, 0 (transparent) … 1 (opaque); 0.5 is the designed look
+    /// (the same default as DesignKit's `UIOpacity.defaultValue`, which the app keeps in step).
+    public var uiOpacity: Double
 
     public static let `default` = CaptureSettings(
         afterCapture: .showOverlay, format: .png,
@@ -40,7 +43,8 @@ public struct CaptureSettings: Equatable {
          "historyEnabled": historyEnabled ? "true" : "false",
          "historyCap": String(historyCap),
          "tempRetentionSeconds": String(tempRetentionSeconds),
-         "playSound": playSound ? "1" : "0"]
+         "playSound": playSound ? "1" : "0",
+         "uiOpacity": String(uiOpacity)]
     }
 
     public init(afterCapture: AfterCaptureBehavior, format: SettingsImageFormat,
@@ -48,7 +52,8 @@ public struct CaptureSettings: Equatable {
                 pinCornerRadius: Int = 8, pinShadow: Bool = true,
                 historyEnabled: Bool = true, historyCap: Int = 50,
                 tempRetentionSeconds: Int = 300,
-                playSound: Bool = true) {
+                playSound: Bool = true,
+                uiOpacity: Double = 0.5) {
         self.afterCapture = afterCapture
         self.format = format
         self.overlayCorner = overlayCorner
@@ -59,6 +64,7 @@ public struct CaptureSettings: Equatable {
         self.historyCap = historyCap
         self.tempRetentionSeconds = tempRetentionSeconds
         self.playSound = playSound
+        self.uiOpacity = uiOpacity
     }
 
     public init(dictionary: [String: String]) {
@@ -82,5 +88,7 @@ public struct CaptureSettings: Equatable {
         // Snap to the slider's stop table, same as overlayAutoDismissSeconds above.
         self.tempRetentionSeconds = TempFileRetentionScale.snap(rawRetention)
         self.playSound = (dictionary["playSound"] ?? "1") != "0"
+        let rawOpacity = Double(dictionary["uiOpacity"] ?? "").flatMap { $0.isFinite ? $0 : nil } ?? d.uiOpacity
+        self.uiOpacity = min(max(rawOpacity, 0), 1)
     }
 }
