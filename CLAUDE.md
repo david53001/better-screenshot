@@ -170,7 +170,7 @@ never be prompted. Every part must also update `docs/MAC-TO-WINDOWS-PARITY-v3.md
 
 **Background/wallpaper styling: dropped by owner decision (2026-06-05) — do not build or re-propose.**
 
-Later (no spec yet): scrolling capture · freeze/self-timer/repeat-area · small quick wins (Repeat Previous Area, editor ⌘D/⌘⇧S bindings, capture sound, JPG-quality + filename settings; details in the local `CODEBASE-SCAN.md` if present) · P5 `betterscreenshot://` URL automation.
+Later (no spec yet): scrolling capture · self-timer/repeat-area (freeze screen shipped 2026-09-30: area + Capture Text selections draw over a still `FrozenScreen` grabbed at the hotkey and crop from it — `CaptureCoordinator.presentFrozenSelection`) · small quick wins (Repeat Previous Area, editor ⌘D/⌘⇧S bindings, capture sound, JPG-quality + filename settings; details in the local `CODEBASE-SCAN.md` if present) · P5 `betterscreenshot://` URL automation.
 
 ## Executing the plans
 Plans use checkbox steps. Execute task-by-task with the **superpowers:subagent-driven-development** (fresh subagent per task) or **superpowers:executing-plans** skill. Each task ends in a commit; each plan ends in a git tag (`v0.1-capture-core`, `v0.2-quick-access`, `v1.0`). Plan 1 Task 1 runs `git init` and `brew install xcodegen` (prerequisite).

@@ -14,7 +14,10 @@ public final class SelectionOverlayController {
     public init() {}
 
     /// Presents selection overlays on all screens; calls completion with the result (or nil if cancelled).
-    public func present(completion: @escaping (SelectionResult?) -> Void) {
+    /// `frozen`: display id → that display's image grabbed just before (freeze screen) — shown under the
+    /// selection instead of the live screen, so what the user selects is exactly what gets cut out of it.
+    public func present(frozen: [CGDirectDisplayID: CGImage] = [:],
+                        completion: @escaping (SelectionResult?) -> Void) {
         // Re-entry guard: a second capture hotkey (e.g. ⌘⇧7 during ⌘⇧4's
         // selection) cancels the open selection instead of stacking windows
         // and orphaning the first completion.
@@ -35,7 +38,21 @@ public final class SelectionOverlayController {
             window.backgroundColor = .clear
             window.isOpaque = false
             window.ignoresMouseEvents = false
-            window.contentView = view
+            if let image = frozen[Self.displayID(of: screen)] {
+                // Freeze screen: the still image fills the window; the selection view's dim (with its clear
+                // hole) sits on top, so the hole shows the frozen pixels that will be cut out.
+                let backdrop = NSView(frame: NSRect(origin: .zero, size: screen.frame.size))
+                backdrop.wantsLayer = true
+                backdrop.layer?.contents = image
+                backdrop.layer?.contentsGravity = .resize
+                view.frame = backdrop.bounds
+                view.autoresizingMask = [.width, .height]
+                backdrop.addSubview(view)
+                window.contentView = backdrop
+                window.isOpaque = true
+            } else {
+                window.contentView = view
+            }
             window.makeKeyAndOrderFront(nil)
             // Borderless windows can't become key by default; KeyableOverlayWindow
             // overrides that, so make the view first responder to receive Escape.
@@ -65,9 +82,11 @@ public final class SelectionOverlayController {
         guard let rect else { completion(nil); return }
         let clamped = SelectionClamp.clamp(rect, to: screen.frame)
         guard clamped.width >= 1, clamped.height >= 1 else { completion(nil); return }
-        let displayID = (screen.deviceDescription[
-            NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value ?? 0
-        completion(SelectionResult(globalRect: clamped, displayID: displayID))
+        completion(SelectionResult(globalRect: clamped, displayID: Self.displayID(of: screen)))
+    }
+
+    private static func displayID(of screen: NSScreen) -> CGDirectDisplayID {
+        (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value ?? 0
     }
 }
 

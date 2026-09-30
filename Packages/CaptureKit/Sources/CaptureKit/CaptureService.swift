@@ -34,10 +34,8 @@ public struct CaptureService {
             let (filter, config) = try displayFilter(displayID, content: content, hiding: hidden)
             let full = try await SCScreenshotManager.captureImage(
                 contentFilter: filter, configuration: config)
-            let scale = CGFloat(full.width) / CGFloat(display.width)
-            let pixelRect = CaptureGeometry.pixelRect(
-                forGlobalRect: rect, inDisplayFrame: display.frame, scale: scale)
-            guard let cropped = ImageCropper.crop(full, to: pixelRect)
+            guard let cropped = FrozenScreen(displayID: displayID, image: full, displayFrame: display.frame)
+                .crop(rect)
             else { throw CaptureError.cropFailed }
             return cropped
 
@@ -55,6 +53,25 @@ public struct CaptureService {
             }
             return try await SCScreenshotManager.captureImage(
                 contentFilter: filter, configuration: config)
+        }
+    }
+
+    /// Every display as it looks right now (`FrozenScreen`), grabbed together — for an area capture
+    /// that freezes the screen while the user selects.
+    public func freezeDisplays(excludingWindowIDs: Set<CGWindowID> = []) async throws -> [FrozenScreen] {
+        let content = try await SCShareableContent.excludingDesktopWindows(
+            false, onScreenWindowsOnly: true)
+        let hidden = content.windows.filter { excludingWindowIDs.contains($0.windowID) }
+        return try await withThrowingTaskGroup(of: FrozenScreen.self) { group in
+            for display in content.displays {
+                let (filter, config) = try displayFilter(display.displayID, content: content, hiding: hidden)
+                group.addTask {
+                    let image = try await SCScreenshotManager.captureImage(
+                        contentFilter: filter, configuration: config)
+                    return FrozenScreen(displayID: display.displayID, image: image, displayFrame: display.frame)
+                }
+            }
+            return try await group.reduce(into: []) { $0.append($1) }
         }
     }
 

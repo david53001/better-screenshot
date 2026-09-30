@@ -71,11 +71,30 @@ final class CaptureCoordinator {
     func captureArea() {
         rememberFrontmostApp()
         guard ensurePermission() else { return }
-        overlay.present { [weak self] result in
+        presentFrozenSelection { [weak self] result, frozen in
             guard let self else { return }
             guard let result else { self.restoreFrontmostApp(); return }
-            Task { await self.run(.area(rect: result.globalRect, displayID: result.displayID),
-                                  sourceRect: result.globalRect) }
+            if let image = frozen?.crop(result.globalRect) {
+                TourEvents.post(.captureTaken)
+                self.handle(image, sourceRect: result.globalRect)
+            } else {
+                // The freeze failed: capture the live screen, as before.
+                Task { await self.run(.area(rect: result.globalRect, displayID: result.displayID),
+                                      sourceRect: result.globalRect) }
+            }
+        }
+    }
+
+    /// Freeze screen (owner, 2026-09-30): every display is grabbed the moment the hotkey fires and the
+    /// selection is drawn over that still image, so the shot is the screen at that exact moment — a video,
+    /// animation or disappearing menu doesn't change while the user drags. `completion` gets the frozen
+    /// display the selection was made on (nil if the freeze failed; the selection then shows the live screen).
+    private func presentFrozenSelection(_ completion: @escaping (SelectionResult?, FrozenScreen?) -> Void) {
+        Task {
+            let frozen = (try? await service.freezeDisplays(excludingWindowIDs: Self.tourTagWindowIDs)) ?? []
+            overlay.present(frozen: Dictionary(frozen.map { ($0.displayID, $0.image) }) { a, _ in a }) { result in
+                completion(result, result.flatMap { r in frozen.first { $0.displayID == r.displayID } })
+            }
         }
     }
 
@@ -98,18 +117,23 @@ final class CaptureCoordinator {
         guard ensurePermission() else { return }
         // Load Vision's text model while the user drags — cold start is 0.5–1s.
         Task.detached(priority: .userInitiated) { TextRecognizer.warmUp() }
-        overlay.present { [weak self] result in
+        presentFrozenSelection { [weak self] result, frozen in
             guard let self else { return }
             guard let result else { self.restoreFrontmostApp(); return }
-            Task { await self.runCaptureText(result) }
+            Task { await self.runCaptureText(result, frozen: frozen) }
         }
     }
 
-    private func runCaptureText(_ result: SelectionResult) async {
+    private func runCaptureText(_ result: SelectionResult, frozen: FrozenScreen?) async {
         do {
-            let image = try await service.capture(
-                .area(rect: result.globalRect, displayID: result.displayID),
-                excludingWindowIDs: Self.tourTagWindowIDs)
+            let image: CGImage
+            if let cut = frozen?.crop(result.globalRect) {
+                image = cut
+            } else {
+                image = try await service.capture(
+                    .area(rect: result.globalRect, displayID: result.displayID),
+                    excludingWindowIDs: Self.tourTagWindowIDs)
+            }
             TourEvents.post(.captureTaken)
             // Vision's perform() blocks — keep it off the main actor.
             let pointWidth = result.globalRect.width
