@@ -29,7 +29,7 @@ specifies everything the v3 document does not cover (§4 below).
 |---|---|
 | `windows-port` | The Windows port. **You work here.** Before this doc: tip `eb16ae0`. It split from the Mac history at `d2b5eb6` (Windows' own commits since then: freeze screen `ba2ee04`/`b7aa0ef`/`2d5a874`, temp-copy lifetime setting `eb16ae0`). |
 | `origin/main` | The macOS app, v3.1.0 + the Opacity setting, tour polish, current-desktop windows, freeze screen (tip `d895045`). ≈230 commits the port doesn't have. |
-| `ocr-structure-math` | **Local to the Mac, NOT on GitHub.** The Capture Text structure + maths rework (62 commits, unmerged WIP, last updated 2026-09-29). Its sources are copied into `docs/mac-reference/src/ocr-structure-math/`. |
+| `origin/ocr-structure-math` | The Capture Text structure + maths rework (62 commits, unmerged WIP, last updated 2026-09-29; pushed 2026-09-30 — `git show origin/ocr-structure-math:<path>`). Its sources are also copied into `docs/mac-reference/src/ocr-structure-math/`. |
 
 - Read any Mac file from `main` without switching branches:
   `git fetch origin && git show origin/main:Packages/OverlayKit/Sources/OverlayKit/QuickAccessContrast.swift`.
