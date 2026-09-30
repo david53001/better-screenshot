@@ -6,14 +6,33 @@ import CaptureKit
 /// covering the whole screen, or in macOS full screen (maths in CaptureKit's `WindowPlacement`;
 /// stored in UserDefaults as `windowPlacement.<key>`).
 ///
-/// Call `place` right before showing a window. A window that's already on screen is left where it is.
+/// Every window opens on the Space (desktop) the user is on — Settings and Welcome also over an app in full
+/// screen — instead of macOS switching them to the desktop where the window was last (owner, 2026-09-30:
+/// "open it in your current page"). One still open on another desktop is brought here, re-centred under
+/// the pointer.
+///
+/// Call `place` right before showing a window. A window already on screen on this desktop is left where it is.
 @MainActor
 enum WindowPlacer {
     /// One per remembered window, alive until that window closes.
     private static var trackers: [ObjectIdentifier: Tracker] = [:]
 
     static func place(_ window: NSWindow, rememberAs key: String? = nil) {
-        guard !window.isVisible else { return }
+        // `.moveToActiveSpace`: ordering it front moves it to the current desktop rather than switching
+        // desktops. `.fullScreenAuxiliary` (it may show on top of a full-screen app's Space) only for the
+        // fixed-size windows: the remembered ones can go full screen themselves (`.fullScreenPrimary`),
+        // and AppKit doesn't define both at once.
+        window.collectionBehavior.insert(.moveToActiveSpace)
+        if key == nil { window.collectionBehavior.insert(.fullScreenAuxiliary) }
+        if window.isVisible {
+            // Open on another desktop (and not a full-screen window, which is its own Space): it comes to
+            // this one as the caller orders it front — centre it on the screen the user is looking at.
+            if !window.isOnActiveSpace, !window.styleMask.contains(.fullScreen) {
+                window.setFrame(WindowPlacement.centred(window.frame.size, in: screenUnderPointer().visibleFrame),
+                                display: false)
+            }
+            return
+        }
         let visible = screenUnderPointer().visibleFrame
         guard let key else {
             window.setFrame(WindowPlacement.centred(window.frame.size, in: visible), display: false)
