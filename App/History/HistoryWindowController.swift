@@ -87,7 +87,7 @@ struct HistoryView: View {
                                     dragItems: { dragItems(startingAt: entry) }))
                                 .contextMenu { contextItems(for: entry) }
                                 // The History tour's "select a capture" steps point at the newest one.
-                                .tourAnchor(entry.id == history.entries.first?.id ? "history.item" : "")
+                                .tourAnchor(entry.id == history.entries.first?.id ? "history.item" : "", cornerRadius: 12)
                         }
                     }
                     .padding(12)

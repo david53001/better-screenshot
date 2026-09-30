@@ -32,6 +32,9 @@ stream building the tag overlay + ⓘ button in TourKit (status: `docs/PROGRESS-
   - `onFinished(id)` fires when a finished run leaves the screen (incl. when the next tour replaces its
     "Done" state, from `stopRunning`, and a last-step tour finished by its hand-over) — `AppDelegate` closes
     the Welcome window when the Welcome tour finishes. Not on Skip tour.
+  - `onStepShown(anchor?)` fires with the anchor of the step whose tag is on screen, and nil when none is
+    (done state, pause, end). `AppDelegate` runs the Settings tour's Opacity demo (`App/Settings/OpacityDemo.swift`)
+    while `settings.opacity` shows — it previews values through `SettingsStore.opacityPreview`, never saved.
   - Persists exactly: `tourAudience`, `tourQuestionAnswered`, `firstUseToursEnabled`, `toursSeen`,
     `toursPaused` (`TourPreferenceKey`).
   - Anchors are looked up in the tour's host window, then in `extraAnchorWindows()` (only windows visible on

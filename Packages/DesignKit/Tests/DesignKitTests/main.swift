@@ -30,6 +30,22 @@ runTests("DesignKitTests", [
             t.equal(hud.tint.layer?.cornerCurve, .continuous)
         }
     },
+    TestCase("opacityDemoSweepsDownToTransparentUpToOpaqueAndBack") { t in
+        let v = { (time: Double) in OpacityDemoPath.value(at: time, from: 0.5) }
+        t.approxEqual(v(0), 0.5)
+        t.approxEqual(v(0.6 + 2.4 + 0.4), 0)          // holding at Transparent
+        t.approxEqual(v(0.6 + 2.4 + 0.8 + 3.2 + 0.4), 1)  // holding at Opaque
+        t.approxEqual(v(OpacityDemoPath.period - 0.5), 0.5)
+        t.approxEqual(v(OpacityDemoPath.period), 0.5)   // loops
+        // Slow and continuous: never jumps more than 0.05 in 1/60 s, always inside 0…1.
+        var last = v(0)
+        for i in 1...Int(OpacityDemoPath.period * 60) {
+            let now = v(Double(i) / 60)
+            t.isTrue(abs(now - last) <= 0.05 && now >= 0 && now <= 1, "step at frame \(i)")
+            last = now
+        }
+        t.approxEqual(OpacityDemoPath.value(at: 1, from: 9), OpacityDemoPath.value(at: 1, from: 1))   // clamps
+    },
     TestCase("opacityCurveIsPiecewiseLinearThroughItsThreePointsAndClamps") { t in
         func f(_ v: Double) -> Double { OpacityCurve.value(at: v, transparent: 0.2, standard: 0.4, opaque: 1) }
         t.approxEqual(f(0), 0.2); t.approxEqual(f(0.25), 0.3); t.approxEqual(f(0.5), 0.4); t.approxEqual(f(0.75), 0.7); t.approxEqual(f(1), 1)

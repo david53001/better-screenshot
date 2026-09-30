@@ -172,7 +172,8 @@ public final class TagOverlayController: TourTagPresenting {
             laidOut = nil
             return
         }
-        let anchorRect = host.convertToScreen(anchor.convert(anchor.bounds, to: nil))
+        let outline = anchor.tourOutline
+        let anchorRect = host.convertToScreen(anchor.convert(outline.rect, to: nil))
         // What the user sees of the host: the pill's capsule, not its window grown for a hover hint.
         let shape = (host as? TourHostShaping)?.tourHostShape
         let hostRect = shape?.frame ?? host.frame
@@ -207,6 +208,7 @@ public final class TagOverlayController: TourTagPresenting {
         decorView.dimAlpha = TagStyle.dimAlpha(hostIsDark: Self.isDark(anchor.effectiveAppearance))
         decorView.box = local(p.box)
         decorView.outer = local(p.outer)
+        decorView.boxRadius = TagStyle.boxRadius(anchorRadius: outline.cornerRadius, box: p.box.size)
         decorView.leader = p.leader.map { (local($0.from), local($0.to)) }
         decor.setFrame(frame, display: false)
         decorView.frame = NSRect(origin: .zero, size: frame.size)

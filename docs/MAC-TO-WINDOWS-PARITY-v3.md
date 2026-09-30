@@ -2407,7 +2407,7 @@ WCAG AA 4.5:1. Measured with the WCAG 2.x formula (gamma-expanded relative lumin
 
 | Part | Spec |
 |---|---|
-| **Outline box** | Rounded rect = the control's bounds grown by **4** on every side, corner radius **6**; a **2**-thick stroke drawn *outside* that edge (it covers 4–6 from the control; outer corner radius 8). No fill. |
+| **Outline box** | Rounded rect = the control's bounds grown by **4** on every side; a **2**-thick stroke drawn *outside* that edge (it covers 4–6 from the control). No fill. Corner radius of the inner edge: **concentric** with the control — the control's own corner radius **+ 4** (the editor tool pill's 15 → 19, a Settings card's 10 → 14, a History cell's 12 → 16), never more than half the box's height (a capsule stays a capsule); **6** for a square control. The dim's hole uses that radius + 2. The radius comes from the control's own layer or a same-size rounded background inside it (`NSView.tourOutline`, `TourAnchor.swift`); SwiftUI anchors pass it (`.tourAnchor(id, cornerRadius:)`). A plain stack with padding and no background of its own (the editor side panel's sections) is outlined around its **content**, not its padding — the whole-width section put the outline along, and past, the panel's edge. (2026-09-30, owner: "it doesn't perfectly outline that pill or that box".) |
 | **Dim** | Black **20 %** — **35 %** when the highlighted control is dark (its effective appearance is Dark Aqua or vibrant dark: the editor, video editor, record strip, pill and Settings always are, and every window is in system Dark Mode; review T7) — over the host window's **whole frame** (title bar included), clipped to the window's rounded outline, with a hole = the box's outer edge (radius 8). Window corner radius: titled windows 16 on macOS 26 (10 on macOS 14/15) — **on Windows use 8 (Windows 11) or 0 (Windows 10)**; borderless panels use their own background's radius (record strip 12, recording pill 20). A host that reports a **shape** (`TourHostShaping` — the recording pill) is dimmed only inside that shape, not its whole window (see Placement 4). No dim when the control is in the menu bar / tray. WPF: decide dark from the port's theme of that window. |
 | **Leader line** | **2**-thick, round caps, from the tag's edge to the box's outer edge; **24** long when straight. Its end on the tag stays ≥ 12 from the tag's corners, its end on the box ≥ 6 from the box's corners (it goes diagonal only when the tag had to slide along its side to stay on screen). |
 | **Tag bubble** | Filled #C62D22, corner radius **12**, system drop shadow. Width = widest of (title, body on one line, footer) + 24, clamped to **200 … 260**. Padding **12** left/right, **10** top, **10** bottom. |
@@ -3256,7 +3256,8 @@ the screen (847 pt on a 956 pt screen), and the Keyboard Shortcuts card is below
 |---|---|---|---|---|---|---|---|
 | 1 | E | `settings.cards` → the three-column card grid (everything between the header and Keyboard Shortcuts) | Your settings | Related settings share a card. Changes apply right away. | Next | — | automatic |
 | 2 | E | `settings.tip` → the "After a capture" label **together with** its ⓘ help icon (first row of the Capture card) | Tips on every row | Hover any ⓘ for a plain explanation of that setting and an example. | Next | — | `above` |
-| 3 | E | `settings.shortcuts` → the full-width Keyboard Shortcuts card (scrolled into view) | Keyboard shortcuts | Click any shortcut, then press new keys to change it. Esc cancels. | Done | — | automatic |
+| 3 | E | `settings.opacity` → the Appearance card's Opacity label, slider and help line (scrolled into view) | Opacity | Watch the app turn see-through, then solid. Drag to choose; Default resets it. | Next | — | automatic |
+| 4 | E | `settings.shortcuts` → the full-width Keyboard Shortcuts card (scrolled into view) | Keyboard shortcuts | Click any shortcut, then press new keys to change it. Esc cancels. | Done | — | automatic |
 
 - Step 1: `settings.cards` fills most of the window, so the automatic big-control rule (§7.3) puts the tag
   beside the window when the screen has room, else inside the cards' top-right corner (over the first rows of
@@ -3266,7 +3267,14 @@ the screen (847 pt on a 956 pt screen), and the Keyboard Shortcuts card is below
   label-and-ⓘ row; WPF: the `StackPanel` holding both). With only the 16 pt ⓘ outlined, the tag sat left of it
   and hid the label, so the user couldn't see which setting the ⓘ belonged to (S2). `above` puts the tag over
   the page title and the Capture card's header; automatically it went below, over the next rows.
-- Step 3's tag sits above the card.
+- Step 3 is a **live demo** (added 2026-09-30): while its tag shows, the Opacity slider moves by itself —
+  hold 0.6 s at the user's value, ease down to 0 (Transparent) over 2.4 s, hold 0.8 s, ease up to 1 (Opaque)
+  over 3.2 s, hold 0.8 s, ease back over 1.6 s, rest 1 s, repeat (smoothstep easing; `OpacityDemoPath` in
+  `Packages/DesignKit/Sources/DesignKit/OpacityDemo.swift`). Every window and panel follows it live. The demo
+  value is a **preview that is never saved** (`SettingsStore.opacityPreview`); the step leaving (Next, Skip,
+  done, window closed) puts the saved value back, and a drag on the slider or Default ends the demo and keeps
+  the user's choice (`App/Settings/OpacityDemo.swift`, driven by `TourCoordinator.onStepShown`).
+- Step 4's tag sits above the card.
 
 **History tour** — id `history`, version 1, surface `history`, trigger `surfaceShown(history)`, no hand-over.
 

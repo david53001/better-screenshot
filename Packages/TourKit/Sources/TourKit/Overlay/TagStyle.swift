@@ -27,8 +27,16 @@ public enum TagStyle {
     public static let boxPadding: CGFloat = 4
     /// Outline thickness; drawn outside the padding (it covers 4–6 pt outside the control).
     public static let boxStroke: CGFloat = 2
-    /// Corner radius of the outline's inner edge.
+    /// Corner radius of the outline's inner edge around a square-cornered control.
     public static let boxRadius: CGFloat = 6
+
+    /// The outline's inner-edge radius for a control whose own corners are `anchorRadius`: concentric
+    /// with them (radius + `boxPadding`), so a pill or card gets an outline that follows its curve;
+    /// `boxRadius` when the control is square. Never rounder than a capsule of the box's size.
+    public static func boxRadius(anchorRadius: CGFloat, box: CGSize) -> CGFloat {
+        let radius = anchorRadius > 0 ? anchorRadius + boxPadding : boxRadius
+        return max(0, min(radius, min(box.width, box.height) / 2))
+    }
     public static let leaderWidth: CGFloat = 2
     /// Gap between the outline's outer edge and the tag, spanned by the leader line.
     public static let leaderLength: CGFloat = 24

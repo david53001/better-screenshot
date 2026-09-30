@@ -34,6 +34,8 @@ final class TagDecorView: NSView {
     /// Outline's inner edge (anchor + padding) and outer edge (inner + stroke).
     var box: CGRect = .zero
     var outer: CGRect = .zero
+    /// The box's inner-edge radius (`TagStyle.boxRadius(anchorRadius:box:)`).
+    var boxRadius = TagStyle.boxRadius
     var leader: (from: CGPoint, to: CGPoint)?
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
@@ -44,7 +46,7 @@ final class TagDecorView: NSView {
             let windowShape = NSBezierPath(continuousRoundedRect: dim.rect, radius: dim.radius)
             windowShape.addClip()   // the part of the hole outside the window must stay clear, not flip to dim
             let path = NSBezierPath(continuousRoundedRect: dim.rect, radius: dim.radius)
-            let outerRadius = TagStyle.boxRadius + TagStyle.boxStroke
+            let outerRadius = boxRadius + TagStyle.boxStroke
             path.append(NSBezierPath(continuousRoundedRect: outer, radius: outerRadius))
             path.windingRule = .evenOdd
             NSColor.black.withAlphaComponent(dimAlpha).setFill()
@@ -54,7 +56,7 @@ final class TagDecorView: NSView {
 
         TagStyle.tourRed.setStroke()
         let half = TagStyle.boxStroke / 2
-        let radius = TagStyle.boxRadius + half
+        let radius = boxRadius + half
         let outline = NSBezierPath(continuousRoundedRect: box.insetBy(dx: -half, dy: -half), radius: radius)
         outline.lineWidth = TagStyle.boxStroke
         outline.stroke()

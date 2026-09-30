@@ -22,6 +22,9 @@ final class TourCoordinator {
     /// A tour was finished (its last step done or handed over — not Skip tour). The app closes the Welcome
     /// window when the Welcome tour ends, so it isn't left behind the tours that follow (review W4).
     var onFinished: ((TourID) -> Void)?
+    /// The anchor of the step whose tag is on screen, nil when none (done state, paused, ended). The app
+    /// runs the Opacity demo while `settings.opacity` shows.
+    var onStepShown: ((String?) -> Void)?
     /// Windows besides a tour's host where a step's anchor may live, searched after the host: the
     /// menu-bar status item's window (the Welcome tour's first step points at the icon). The tag then
     /// attaches to that window; the host still decides pausing.
@@ -322,6 +325,7 @@ final class TourCoordinator {
         shownProgress = progress
         tagPresenter.show(step: step, body: body, number: progress.number,
                           total: progress.total, anchor: anchor, host: anchorWindow)
+        onStepShown?(step.anchor)
     }
 
     /// Redoes "n of m" for the step on screen; the tag is told only when it changed.
@@ -339,6 +343,7 @@ final class TourCoordinator {
         let token = generation
         showingCompleted = true
         tagPresenter.showCompleted()
+        onStepShown?(nil)
         DispatchQueue.main.asyncAfter(deadline: .now() + completedDelay) { [weak self] in
             guard let self, self.generation == token else { return }
             self.showingCompleted = false
@@ -355,6 +360,7 @@ final class TourCoordinator {
         shownProgress = nil
         running = nil
         presenter?.hide()
+        onStepShown?(nil)
         if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
         closeObserver = nil
         watchdog?.invalidate()

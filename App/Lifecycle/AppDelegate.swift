@@ -21,10 +21,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var tours: TourCoordinator!
     private let hud = HUDController()
     private var opacityWatch: AnyCancellable?
+    private var opacityDemo: OpacityDemo!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Settings → Appearance → Opacity drives every DesignKit surface, live.
-        opacityWatch = settings.$settings.map(\.uiOpacity).removeDuplicates()
+        // The Settings tour's demo previews values without saving them (`SettingsStore.opacityPreview`).
+        opacityWatch = settings.$settings.map(\.uiOpacity).combineLatest(settings.$opacityPreview)
+            .map { saved, preview in preview ?? saved }.removeDuplicates()
             .sink { UIOpacity.shared.value = $0 }
         // Guided tours (v3 spec §14.9): decide once, for good, whether this is a new user — before
         // anything below writes a preference (status item, launch-at-login flag…) that would look like
@@ -111,6 +114,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         tours.onFinished = { [weak self] id in
             if id == .welcome { self?.onboarding.close() }
         }
+        // The Settings tour's Opacity step demonstrates the setting on the real windows.
+        opacityDemo = OpacityDemo(store: settings)
+        tours.onStepShown = { [weak self] anchor in self?.opacityDemo.setRunning(anchor == OpacityDemo.anchor) }
         coordinator.presentSetup = { [weak self] in self?.onboarding.show(.needsPermission) }
         recordingCoordinator.presentSetup = { [weak self] in self?.onboarding.show(.needsPermission) }
         // Help & Tours can open these windows so a requested tour starts; the rest wait for the user.

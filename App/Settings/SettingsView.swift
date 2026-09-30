@@ -55,7 +55,7 @@ struct SettingsView: View {
                 }
                 .tourAnchor("settings.cards")
                 shortcutsCard
-                    .tourAnchor("settings.shortcuts")
+                    .tourAnchor("settings.shortcuts", cornerRadius: Design.cardCornerRadius)
                 footer
             }
             .padding(Design.outerPadding)
@@ -198,7 +198,11 @@ struct SettingsView: View {
                 HStack(spacing: 6) {
                     fieldLabel("Opacity", SettingsHelp.opacity)
                     Spacer(minLength: 8)
-                    Button("Default") { store.settings.uiOpacity = CaptureSettings.default.uiOpacity; store.persist() }
+                    Button("Default") {
+                        store.opacityPreview = nil
+                        store.settings.uiOpacity = CaptureSettings.default.uiOpacity
+                        store.persist()
+                    }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                         .disabled(store.settings.uiOpacity == CaptureSettings.default.uiOpacity)
@@ -207,7 +211,10 @@ struct SettingsView: View {
                     Text("Transparent")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Slider(value: bind(\.uiOpacity), in: 0...1)
+                    // Shows the tour demo's preview while it runs; a drag takes over from it.
+                    Slider(value: Binding(get: { store.opacityPreview ?? store.settings.uiOpacity },
+                                          set: { store.opacityPreview = nil; store.settings.uiOpacity = $0; store.persist() }),
+                           in: 0...1)
                         .controlSize(.small)
                     Text("Opaque")
                         .font(.caption)
@@ -218,6 +225,7 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            .tourAnchor("settings.opacity")   // the Settings tour's demo step (`OpacityDemo`)
         }
     }
 

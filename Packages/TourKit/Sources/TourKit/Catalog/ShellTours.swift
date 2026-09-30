@@ -10,6 +10,10 @@ extension TourCatalog {
         // covered the next rows of the Capture card.
         TourStep(anchor: "settings.tip", kind: .explain, title: "Tips on every row",
                  body: "Hover any ⓘ for a plain explanation of that setting and an example.", placement: .above),
+        // While this shows, the app sweeps the slider Transparent → Opaque → back on every window and
+        // panel (`App/Settings/OpacityDemo.swift`); nothing is saved unless the user drags it.
+        TourStep(anchor: "settings.opacity", kind: .explain, title: "Opacity",
+                 body: "Watch the app turn see-through, then solid. Drag to choose; Default resets it."),
         TourStep(anchor: "settings.shortcuts", kind: .explain, title: "Keyboard shortcuts",
                  body: "Click any shortcut, then press new keys to change it. Esc cancels."),
     ])

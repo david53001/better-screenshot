@@ -14,6 +14,9 @@ final class SettingsStore: ObservableObject {
     @Published var editorStyle: AnnotationStyle
     /// The editor's "Recent" colours, newest first (JSON under `editorRecentColors`).
     @Published var editorRecentColors: [RGBAColor]
+    /// The Settings tour's Opacity demo (`OpacityDemo`): shown on the slider and every surface but never
+    /// saved. Nil = the saved `settings.uiOpacity`. Touching the slider clears it.
+    @Published var opacityPreview: Double?
 
     private let defaults = UserDefaults.standard
 

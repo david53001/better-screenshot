@@ -394,6 +394,35 @@ let tagKeysTests: [TestCase] = [
 ]
 
 let tagStyleTests: [TestCase] = [
+    TestCase("outlineIsConcentricWithARoundedControl") { t in
+        let box = CGSize(width: 400, height: 50)
+        t.equal(TagStyle.boxRadius(anchorRadius: 0, box: box), TagStyle.boxRadius)          // square control
+        t.equal(TagStyle.boxRadius(anchorRadius: 15, box: box), 15 + TagStyle.boxPadding)   // editor tool pill
+        // A capsule stays a capsule, never rounder than half the box.
+        t.equal(TagStyle.boxRadius(anchorRadius: 21, box: CGSize(width: 300, height: 50)), 25)
+        t.equal(TagStyle.boxRadius(anchorRadius: 40, box: CGSize(width: 300, height: 50)), 25)
+    },
+    TestCase("outlineFollowsTheAnchorsOwnShape") { t in
+        // A pill: the radius comes from a same-size rounded background inside the anchor.
+        let pill = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 42))
+        let bg = NSView(frame: pill.bounds)
+        bg.wantsLayer = true
+        bg.layer?.cornerRadius = 15
+        pill.addSubview(bg)
+        t.equal(pill.tourOutline.rect, pill.bounds)
+        t.equal(pill.tourOutline.cornerRadius, 15)
+        // A plain section stack: outlined around its content, not its padding.
+        let stack = NSStackView(frame: NSRect(x: 0, y: 0, width: 280, height: 100))
+        stack.edgeInsets = NSEdgeInsets(top: 12, left: 16, bottom: 14, right: 16)
+        t.equal(stack.tourOutline.rect.width, 248)
+        t.equal(stack.tourOutline.rect.height, 74)
+        t.equal(stack.tourOutline.rect.minX, 16)
+        t.equal(stack.tourOutline.cornerRadius, 0)
+        // A plain view: its bounds, square.
+        let plain = NSView(frame: NSRect(x: 0, y: 0, width: 20, height: 20))
+        t.equal(plain.tourOutline.rect, plain.bounds)
+        t.equal(plain.tourOutline.cornerRadius, 0)
+    },
     TestCase("footerStrings") { t in
         t.equal(TagStyle.counter(2, of: 7), "2 of 7")
         t.equal(TagStyle.nextButtonTitle(number: 2, total: 7), "Next")
