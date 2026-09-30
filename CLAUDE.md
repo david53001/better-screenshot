@@ -170,6 +170,16 @@ never be prompted. Every part must also update `docs/MAC-TO-WINDOWS-PARITY-v3.md
 
 **Background/wallpaper styling: dropped by owner decision (2026-06-05) — do not build or re-propose.**
 
+**README simplified + license changed** (2026-09-30, docs only, at the owner's request): `README.md` was
+rewritten short and emoji-free, with **Install and update** at the very top for **macOS** (the
+`scripts/install.sh` one-liner, which also updates) and **Windows** (no prebuilt download exists — clone the
+`windows-port` branch and run `pwsh windows/scripts/publish-app.ps1`; update = quit, `git pull`, rerun). Keep it
+that way: short, plain, no emojis, install/update first. The project license changed from **MIT** to
+**PolyForm Strict 1.0.0** (`LICENSE`, with a `Required Notice:` copyright line) — people may view and use the
+app but not redistribute, modify or sell it. Don't call the project "open source" anymore. If a Windows
+release asset is ever published, switch the README's Windows section to a
+`releases/latest/download/<asset>` link.
+
 Later (no spec yet): scrolling capture · self-timer/repeat-area (freeze screen shipped 2026-09-30: area + Capture Text selections draw over a still `FrozenScreen` grabbed at the hotkey and crop from it — `CaptureCoordinator.presentFrozenSelection`) · small quick wins (Repeat Previous Area, editor ⌘D/⌘⇧S bindings, capture sound, JPG-quality + filename settings; details in the local `CODEBASE-SCAN.md` if present) · P5 `betterscreenshot://` URL automation.
 
 ## Executing the plans
