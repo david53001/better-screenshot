@@ -52,25 +52,42 @@ public sealed class CaptureCoordinator : IAppCommands
 
     public void CaptureFullscreen()
     {
+        RememberFrontmostApp();
         var monitor = Screens.Primary();
-        Handle(ScreenCapture.CaptureDisplay(monitor));
+        var image = ScreenCapture.CaptureDisplay(monitor);
+        RestoreFrontmostApp();
+        Handle(image);
     }
 
     public void CaptureWindow()
     {
+        RememberFrontmostApp();
         // Freeze first, while the app you were using still has focus — the picker overlay is what makes it lose it.
         var frozen = Freeze();
         _picker.Present(pick =>
         {
-            if (pick is { } p && p.Hwnd != IntPtr.Zero) Handle(p.Frozen ?? ScreenCapture.CaptureWindow(p.Hwnd));
+            if (pick is { } p && p.Hwnd != IntPtr.Zero)
+            {
+                var image = p.Frozen ?? ScreenCapture.CaptureWindow(p.Hwnd);
+                RestoreFrontmostApp(); // only after the pixels are grabbed — the restored z-order must not leak in
+                Handle(image);
+            }
+            else RestoreAfterCancel();
         }, frozen);
     }
 
     public void CaptureArea()
     {
+        RememberFrontmostApp();
         _selection.Present(_settings.Capture.FreezeScreen, selection =>
         {
-            if (selection is { } s) Handle(Pixels(s));
+            if (selection is { } s)
+            {
+                var image = Pixels(s);
+                RestoreFrontmostApp();
+                Handle(image);
+            }
+            else RestoreAfterCancel();
         });
     }
 
@@ -78,10 +95,34 @@ public sealed class CaptureCoordinator : IAppCommands
     /// which wins — lands on the clipboard. HUD confirms.</summary>
     public void CaptureText()
     {
+        RememberFrontmostApp();
         _selection.Present(_settings.Capture.FreezeScreen, selection =>
         {
             if (selection is { } s) _ = CaptureTextAsync(s);
+            else RestoreAfterCancel();
         });
+    }
+
+    // ---- Return focus to the previous app (Mac v2.8.0; rules in Capture/FocusRestore.cs). Recording isn't covered.
+    private readonly FocusMemory<IntPtr> _focus = new();
+
+    private void RememberFrontmostApp()
+    {
+        var (hwnd, pid) = ForegroundWindow.Current();
+        if (hwnd == IntPtr.Zero) return;
+        _focus.Record(hwnd, pid, ForegroundWindow.OwnProcessId, _selection.IsPresenting || _picker.IsPresenting);
+    }
+
+    private void RestoreFrontmostApp()
+    {
+        if (_focus.RestoreTarget(ForegroundWindow.OwnProcessId) is { } hwnd) ForegroundWindow.Restore(hwnd);
+    }
+
+    /// <summary>A cancelled selection hands focus back too — unless it was cancelled BY a second capture hotkey,
+    /// whose new overlay is already up and needs the keyboard.</summary>
+    private void RestoreAfterCancel()
+    {
+        if (!_selection.IsPresenting && !_picker.IsPresenting) RestoreFrontmostApp();
     }
 
     /// <summary>A still of every screen when "Freeze the screen" is on, else null (overlays stay see-through
@@ -97,6 +138,7 @@ public sealed class CaptureCoordinator : IAppCommands
         try
         {
             var image = Pixels(selection);
+            RestoreFrontmostApp();
             var result = await TextRecognizerService.RecognizeAsync(image);
             if (result.ClipboardString is { } text) ClipboardService.SetText(text);
             HudController.Show(result.HudMessage);

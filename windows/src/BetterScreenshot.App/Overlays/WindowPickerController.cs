@@ -19,9 +19,18 @@ public sealed class WindowPickerController
     public void Present(Action<WindowPick?> onPicked, FrozenScreen? frozen = null)
     {
         var monitor = OverlayHelpers.MonitorUnderCursor();
+        _open++;
         var window = new WindowPickerWindow(monitor, frozen, pick =>
+        {
+            _open--;
             System.Windows.Application.Current.Dispatcher.BeginInvoke(
-                DispatcherPriority.Background, new Action(() => onPicked(pick))));
+                DispatcherPriority.Background, new Action(() => onPicked(pick)));
+        });
         window.Show();
     }
+
+    private int _open;
+
+    /// <summary>True while a picker is up.</summary>
+    public bool IsPresenting => _open > 0;
 }

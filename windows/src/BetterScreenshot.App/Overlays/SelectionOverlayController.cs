@@ -50,6 +50,9 @@ public sealed class SelectionOverlayController
             if (w.Monitor.DeviceName == cursorMonitor.DeviceName) w.ActivateForKeyboard();
     }
 
+    /// <summary>True while the selection overlays are up.</summary>
+    public bool IsPresenting => _windows != null;
+
     /// <summary>Dismisses an in-flight selection (if any), firing its completion with null.</summary>
     public void Cancel() => Finish(null);
 
