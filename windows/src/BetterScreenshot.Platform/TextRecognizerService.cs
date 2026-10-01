@@ -47,7 +47,21 @@ public static class TextRecognizerService
 
         using var software = await ToSoftwareBitmapAsync(image);
         var result = await engine.RecognizeAsync(software);
-        return result.Lines.Select(l => l.Text).ToList();
+        return TextReflow.Paragraphs(result.Lines.Select(ToReflowLine)).ToList();
+    }
+
+    /// <summary>An OCR line with its box = the union of its words' boxes (pixels, top-left origin).</summary>
+    internal static TextReflow.Line ToReflowLine(OcrLine line)
+    {
+        double l = double.MaxValue, t = double.MaxValue, r = double.MinValue, b = double.MinValue;
+        foreach (var w in line.Words)
+        {
+            var box = w.BoundingRect;
+            l = Math.Min(l, box.X); t = Math.Min(t, box.Y);
+            r = Math.Max(r, box.X + box.Width); b = Math.Max(b, box.Y + box.Height);
+        }
+        var rect = line.Words.Count == 0 ? default : Core.PxRect.FromLtrb(l, t, r, b);
+        return new TextReflow.Line(line.Text, rect);
     }
 
     private static async Task<SoftwareBitmap> ToSoftwareBitmapAsync(BitmapSource image)

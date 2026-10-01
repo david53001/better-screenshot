@@ -35,4 +35,45 @@ public class TextRecognizerServiceTests
         Assert.Equal(RecognitionKind.Qr, result.Kind);
         Assert.Equal(payload, result.Value);
     }
+
+    /// <summary>Renders lines of text (one per entry, left-aligned, fixed pitch) like a slide at 1× density.</summary>
+    internal static BitmapSource RenderLines(int width, double fontSize, params string[] lines)
+    {
+        var visual = new DrawingVisual();
+        double pitch = fontSize * 1.35;
+        using (var dc = visual.RenderOpen())
+        {
+            dc.DrawRectangle(Brushes.White, null, new System.Windows.Rect(0, 0, width, 40 + pitch * lines.Length));
+            var face = new Typeface("Segoe UI");
+            for (int i = 0; i < lines.Length; i++)
+                dc.DrawText(new FormattedText(lines[i], System.Globalization.CultureInfo.InvariantCulture,
+                    System.Windows.FlowDirection.LeftToRight, face, fontSize, Brushes.Black, 1.0),
+                    new System.Windows.Point(20, 20 + i * pitch));
+        }
+        var bmp = new RenderTargetBitmap(width, (int)(40 + pitch * lines.Length), 96, 96, PixelFormats.Pbgra32);
+        bmp.Render(visual);
+        bmp.Freeze();
+        return bmp;
+    }
+
+    [Fact]
+    [Trait("category", "hardware")]
+    public async Task WrappedParagraphPastesAsOneLine_andBulletsStaySeparate()
+    {
+        // Two wrapped bullets: each wraps onto a second visual line that must join its bullet.
+        var image = RenderLines(560, 22,
+            "• The Boston Consulting Group matrix is",
+            "a planning tool for product portfolios.",
+            "• It looks at market growth and the",
+            "market share of each business unit.");
+
+        var result = await TextRecognizerService.RecognizeAsync(image);
+
+        Assert.Equal(RecognitionKind.Text, result.Kind);
+        var paragraphs = result.Value.Split('\n');
+        Assert.Equal(2, paragraphs.Length);
+        Assert.StartsWith("• The Boston", paragraphs[0]);
+        Assert.EndsWith("portfolios.", paragraphs[0]);
+        Assert.StartsWith("• It looks", paragraphs[1]);
+    }
 }
