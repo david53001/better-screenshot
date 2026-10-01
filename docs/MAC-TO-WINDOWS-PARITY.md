@@ -87,8 +87,8 @@ Priority P1 (do first) / P2 / P3.
 | 4 | Refocus the previous app after a screenshot (v2.8.0) | **MISSING** | P1 | §4.3 |
 | 5 | History multi-select (⇧/⌘-click), multi-file drag-out, batch Copy/Delete/Reveal, confirmed bulk delete (v2.8.0) | **MISSING** (single selection) | P2 | §4.4 |
 | 6 | History UI-review fixes H1–H4 (full labels, size/length details, helpful empty state, Clear All in a ⋯ menu) | **MISSING** | P2 | §4.4 |
-| 7 | Guaranteed Quick Access button contrast (v2.9.0) | **MISSING** (`QuickAccessContrast.cs` still mean-luminance) | P1 | §4.5 |
-| 8 | Quick Access card **Pin button removed** (v2.9.0) | **MISSING** (Windows card still has "Pin to screen") | P2 | §4.5 |
+| 7 | Guaranteed Quick Access button contrast (v2.9.0) | **DONE `87f528c`** | P1 | §4.5 |
+| 8 | Quick Access card **Pin button removed** (v2.9.0) | **DONE `c0805ee`** | P2 | §4.5 |
 | 9 | Capture Text: warm OCR during the drag, explicit languages, upscale < 2× (v2.10.0) | **PARTIAL** | P2 | §4.6 |
 | 10 | Capture Text paragraph reflow `TextReflow` (v2.11.0) | **MISSING** (Windows joins OCR lines with newlines) | P1 | §4.6 |
 | 11 | Capture Text structure + maths rework, "Recognize math" setting (unmerged Mac WIP) | **MISSING** | P2 | v3 Part 8 + §4.13 |

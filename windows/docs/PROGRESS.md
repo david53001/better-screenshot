@@ -18,6 +18,15 @@
 The loop (`windows/LOOP-PROMPT.md`) reads this first every firing to avoid redoing work. Keep it current: check off
 finished tasks, move the pointer, log assumptions/known-issues. One firing = one durable increment.
 
+## 2026-10-02 — Overnight parity revamp (docs/MAC-TO-WINDOWS-PARITY.md), newest first
+- **#8 Pin removed from the Quick Access card** (`c0805ee`): 4 buttons (Copy/Edit/Save/Close); Pin stays in History + tray.
+- **#7 Guaranteed card contrast** (`87f528c`): pure `Core/QuickAccessContrast.cs` (Srgb, BandLuminance p10/p90,
+  AspectFillMap, closed-form scrim plan 4.5:1, alpha 0.18–0.85) + 26 ported tests; App samples the row's final rect by
+  POINT-sampling source pixels at ≥2× device density (never box-filtered), +0.05 alpha screen margin. Measured on
+  rendered cards: white 14.0 · black 14.8 · bimodal 5.3 · photo 5.3 :1.
+- **Preview/perf tooling** (`a3141bd`): `--ui-preview <dir> [--scale s] [--settings-dir d]` renders every window
+  off-screen to PNGs (temp profile via `BETTERSCREENSHOT_SETTINGS_DIR`); `--perf-ready-log <file>`.
+
 ## 2026-07-05 — "Launch at login" now actually registers with Windows (owner request — it was a dead flag)
 Owner asked for a setting to "pick if this app starts on startup." **The Settings UI already had it** — a "Startup" `DarkSection`
 card with a `LaunchAtLoginCheck` `Theme.MonoSwitch`, an InfoTip, and the `SettingsStore.LaunchAtLogin` bool round-tripping to
