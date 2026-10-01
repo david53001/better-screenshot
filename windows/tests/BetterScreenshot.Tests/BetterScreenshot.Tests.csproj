@@ -27,6 +27,7 @@
     <ProjectReference Include="..\..\src\BetterScreenshot.Recording\BetterScreenshot.Recording.csproj" />
     <ProjectReference Include="..\..\src\BetterScreenshot.Platform\BetterScreenshot.Platform.csproj" />
     <ProjectReference Include="..\..\src\BetterScreenshot.App\BetterScreenshot.App.csproj" />
+    <ProjectReference Include="..\..\src\BetterScreenshot.Tours\BetterScreenshot.Tours.csproj" />
   </ItemGroup>
 
 </Project>

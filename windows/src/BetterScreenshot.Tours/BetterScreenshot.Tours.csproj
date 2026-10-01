@@ -1,0 +1,11 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- UI-free guided-tour engine (v3 Part 7): model, audience rules, engine, tag layout/keys, catalog.
+       No WPF and no app references, so another app (JVoice) can reuse it with its own catalog. -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

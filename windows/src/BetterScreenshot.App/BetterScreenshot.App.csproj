@@ -7,6 +7,7 @@
     <ProjectReference Include="..\BetterScreenshot.History\BetterScreenshot.History.csproj" />
     <ProjectReference Include="..\BetterScreenshot.Recording\BetterScreenshot.Recording.csproj" />
     <ProjectReference Include="..\BetterScreenshot.Platform\BetterScreenshot.Platform.csproj" />
+    <ProjectReference Include="..\BetterScreenshot.Tours\BetterScreenshot.Tours.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
