@@ -41,6 +41,25 @@ public static class WindowPlacement
         };
     }
 
+    /// <summary>
+    /// Brings an already-open window forward on the desktop the user is looking at (§4.11): one left on another
+    /// virtual desktop is moved here and re-centred under the pointer; then it's activated.
+    /// </summary>
+    public static void BringHere(Window window)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        if (VirtualDesktops.BringToCurrent(hwnd) && window.WindowState == WindowState.Normal)
+        {
+            var work = WorkAreaUnderCursor();
+            var frame = WindowPlacementRules.Centred(new PxSize(window.ActualWidth, window.ActualHeight),
+                new PxRect(work.X, work.Y, work.Width, work.Height));
+            window.Left = frame.X;
+            window.Top = frame.Y;
+        }
+        if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
+        window.Activate();
+    }
+
     /// <summary>The work area (DIPs) of the monitor a shown window is on.</summary>
     private static PxRect WorkAreaOf(Window window)
     {

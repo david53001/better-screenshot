@@ -275,7 +275,7 @@ public sealed class CaptureCoordinator : IAppCommands
         }
         else
         {
-            _historyWindow.Activate();
+            Controls.WindowPlacement.BringHere(_historyWindow);
         }
     }
 
@@ -320,7 +320,7 @@ public sealed class CaptureCoordinator : IAppCommands
             if (string.Equals(open.FilePath, path, StringComparison.OrdinalIgnoreCase))
             {
                 if (restoreCard is not null) open.AddRestore(restoreCard);
-                open.Activate();
+                Controls.WindowPlacement.BringHere(open);
                 return;
             }
             open.Close();

@@ -109,7 +109,7 @@ public partial class App : System.Windows.Application
     /// <summary>The Welcome window: asks the tour question only for a new user who hasn't answered.</summary>
     private void ShowWelcome()
     {
-        if (_welcome is not null) { _welcome.Activate(); return; }
+        if (_welcome is not null) { Controls.WindowPlacement.BringHere(_welcome); return; }
         bool ask = TourRules.ShouldAskQuestion(TourAudience.Parse(_settings.TourAudience), _settings.TourQuestionAnswered == true);
         _welcome = new WelcomeWindow(_settings.Hotkeys, ask);
         _welcome.Answered += yes =>
@@ -170,7 +170,7 @@ public partial class App : System.Windows.Application
 
     private void ShowSettings()
     {
-        if (_settingsWindow != null) { _settingsWindow.Activate(); return; }
+        if (_settingsWindow != null) { Controls.WindowPlacement.BringHere(_settingsWindow); return; }
         _settingsWindow = new SettingsWindow(_settings, _hotkeys);
         _settingsWindow.HotkeysChanged += () => _tray.UpdateShortcuts(_settings.Hotkeys);
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
