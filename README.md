@@ -30,6 +30,16 @@ This builds the app and puts a BetterScreenshot shortcut on your Desktop.
 
 To update: quit BetterScreenshot (right-click the tray icon, then Quit), run `git pull` in the same folder, and run the last command again. Your settings and history are kept. More detail: [Windows guide](https://github.com/david53001/better-screenshot/blob/windows-port/windows/README-win.md).
 
+## Uninstall
+
+On macOS, paste this into Terminal:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/david53001/better-screenshot/main/scripts/uninstall.sh | bash
+```
+
+It quits BetterScreenshot and removes the app, its settings, capture history and caches, and its Screen Recording permission. Screenshots and recordings you saved are kept. You can read the script first: [`scripts/uninstall.sh`](scripts/uninstall.sh).
+
 ## Unverified developer (macOS)
 
 The app is not notarized (checked and approved) by Apple. The Terminal command handles this for you. If you downloaded it by hand, macOS blocks the first launch: open **System Settings > Privacy & Security** and click **Open Anyway**.
