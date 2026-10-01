@@ -84,7 +84,7 @@ Priority P1 (do first) / P2 / P3.
 | 1 | Windows→Mac parity P1–P3 (July): JVoice-style Settings, full-bleed Quick Access card, auto-dismiss, text chip, clamps, history cap 100, play sound | **DONE** (ported *from* Windows) | — | — |
 | 2 | Quick Access hold duration 30 s…30 m…∞ (v2.5.0) + "∞" label (v2.6.1) | **DONE** (`Capture/OverlayDismissScale.cs`, mirrored in `a15d286`) — verify the ∞ label | P3 | §4.1 |
 | 3 | Temp-file retention 10 s…1 h…∞, default 5 min (v2.7.0) | **PARTIAL** — Windows: 5–30 min slider (`TempRetentionScale.cs`) | P2 | §4.2 |
-| 4 | Refocus the previous app after a screenshot (v2.8.0) | **MISSING** | P1 | §4.3 |
+| 4 | Refocus the previous app after a screenshot (v2.8.0) | **DONE `00ea02e`** | P1 | §4.3 |
 | 5 | History multi-select (⇧/⌘-click), multi-file drag-out, batch Copy/Delete/Reveal, confirmed bulk delete (v2.8.0) | **MISSING** (single selection) | P2 | §4.4 |
 | 6 | History UI-review fixes H1–H4 (full labels, size/length details, helpful empty state, Clear All in a ⋯ menu) | **MISSING** | P2 | §4.4 |
 | 7 | Guaranteed Quick Access button contrast (v2.9.0) | **DONE `87f528c`** | P1 | §4.5 |

@@ -19,6 +19,9 @@ The loop (`windows/LOOP-PROMPT.md`) reads this first every firing to avoid redoi
 finished tasks, move the pointer, log assumptions/known-issues. One firing = one durable increment.
 
 ## 2026-10-02 — Overnight parity revamp (docs/MAC-TO-WINDOWS-PARITY.md), newest first
+- **#4 Refocus the previous app** (`00ea02e`): pure `Capture/FocusRestore.cs` (`FocusMemory` rules) + `Platform/ForegroundWindow.cs`
+  (SetForegroundWindow, AttachThreadInput fallback); restore after pixels are grabbed or on cancel. Live-tested with
+  `REVAMP-2026-10\bs-focus-test.ps1` (single / double press / Esc → focus back on the target).
 - **#8 Pin removed from the Quick Access card** (`c0805ee`): 4 buttons (Copy/Edit/Save/Close); Pin stays in History + tray.
 - **#7 Guaranteed card contrast** (`87f528c`): pure `Core/QuickAccessContrast.cs` (Srgb, BandLuminance p10/p90,
   AspectFillMap, closed-form scrim plan 4.5:1, alpha 0.18–0.85) + 26 ported tests; App samples the row's final rect by
