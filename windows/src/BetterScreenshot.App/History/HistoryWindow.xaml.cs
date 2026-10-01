@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using BetterScreenshot.App.Controls;
@@ -10,11 +11,16 @@ using Brush = System.Windows.Media.Brush;
 using Brushes = System.Windows.Media.Brushes;
 using Color = System.Windows.Media.Color;
 using Cursors = System.Windows.Input.Cursors;
+using FontFamily = System.Windows.Media.FontFamily;
+using DataObject = System.Windows.DataObject;
+using DragDropEffects = System.Windows.DragDropEffects;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using Image = System.Windows.Controls.Image;
+using Keyboard = System.Windows.Input.Keyboard;
 using MouseButtonEventArgs = System.Windows.Input.MouseButtonEventArgs;
+using MouseEventArgs = System.Windows.Input.MouseEventArgs;
 using Orientation = System.Windows.Controls.Orientation;
-using Path = System.Windows.Shapes.Path;
+using Point = System.Windows.Point;
 
 namespace BetterScreenshot.App.History;
 
@@ -23,25 +29,36 @@ public sealed record HistoryWindowActions(Action<BitmapSource> Annotate, Action<
 {
     /// <summary>Edit Video… on a single MP4 recording whose file still exists (v3 Part 6; nothing is restored on close).</summary>
     public Action<string>? EditVideo { get; init; }
+
+    /// <summary>The live Capture Area chord ("Ctrl+Shift+4"), named by the empty state (v3 §4.4 H3); null when unbound.</summary>
+    public Func<string?>? CaptureAreaChord { get; init; }
 }
 
 /// <summary>
-/// The capture-history browser: a thumbnail grid over <see cref="HistoryService"/> with a kind badge + relative
-/// date, single-click select, double-click open (annotate / play), and an action bar
-/// (Copy / Annotate / Pin / Show in Explorer / Delete / Clear All). Screenshots are annotate/pin-able; recordings
-/// are copy/reveal/open only. The grid refreshes after any mutation.
+/// The capture-history browser (v3 §4.4): a thumbnail grid over <see cref="HistoryService"/> with a kind badge, the
+/// relative date and the capture's pixel size or recording length; Ctrl/Shift multi-select
+/// (<see cref="HistorySelection"/>), multi-file drag-out, double-click to open; an action bar (Copy · Annotate · Pin ·
+/// Edit Video… · Show in Explorer · Delete) where Copy / Show in Explorer / Delete act on the whole selection and Delete
+/// confirms when more than one is selected; "Clear All History…" lives in the ⋯ menu.
 /// </summary>
 public partial class HistoryWindow : Window
 {
-    private static readonly Brush CellBg = new SolidColorBrush(Color.FromRgb(0x16, 0x16, 0x18));
-    private static readonly Brush ThumbBg = new SolidColorBrush(Color.FromRgb(0x0E, 0x0E, 0x0E));
-    private static readonly Brush SelectedBorder = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF)); // monochrome selection (was blue)
-    private static readonly Brush BadgeBrush = new SolidColorBrush(Color.FromRgb(0xB0, 0xB0, 0xB5));
-    private static readonly Brush WarnBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x9F, 0x0A));
+    private static readonly Brush CellBg = Frozen(Color.FromRgb(0x16, 0x16, 0x18));
+    private static readonly Brush CellHoverBg = Frozen(Color.FromRgb(0x22, 0x22, 0x25));
+    private static readonly Brush ThumbBg = Frozen(Color.FromRgb(0x0E, 0x0E, 0x0E));
+    private static readonly Brush SelectedBorder = Frozen(Color.FromRgb(0xFF, 0xFF, 0xFF)); // monochrome selection
+    private static readonly Brush BadgeBrush = Frozen(Color.FromRgb(0xB0, 0xB0, 0xB5));
+    private static readonly Brush WarnBrush = Frozen(Color.FromRgb(0xFF, 0x9F, 0x0A));
+    private static readonly Brush PlayDisc = Frozen(Color.FromArgb(0x99, 0x00, 0x00, 0x00));
 
     private readonly HistoryService _history;
     private readonly HistoryWindowActions _actions;
-    private Guid? _selected;
+    private readonly Dictionary<Guid, Border> _cells = new();
+    private readonly Dictionary<Guid, string?> _infoCache = new();
+    private HistorySelectionState _selection = HistorySelectionState.Empty;
+    private Guid? _pendingPlainClick;
+    private Point? _pressAt;
+    private Guid? _pressId;
 
     public HistoryWindow(HistoryService history, HistoryWindowActions actions)
     {
@@ -52,44 +69,63 @@ public partial class HistoryWindow : Window
         InfoSlot.Content = new Tours.InfoButton(BetterScreenshot.Tours.TourId.History, () => new (string, string)[]
         {
             ("Click", "Select a capture"),
+            ("Ctrl+click", "Add or remove one"),
+            ("Shift+click", "Select a range"),
+            ("Drag", "Drop the selection into another app"),
             ("Double-click", "Open (screenshots open in the editor)"),
-            ("Right-click", "More actions"),
         });
         Reload();
         ContentRendered += (_, _) => Tours.TourEvents.SurfaceShown(BetterScreenshot.Tours.TourSurface.History, this);
     }
 
-    private HistoryEntry? Selected => _selected is { } id ? _history.Entry(id) : null;
+    private IReadOnlyList<Guid> Order => _history.Entries.Select(e => e.Id).ToList();
+
+    private IReadOnlyList<HistoryEntry> SelectedEntries =>
+        _selection.InOrder(Order).Select(_history.Entry).OfType<HistoryEntry>().ToList();
+
+    private HistoryEntry? Single => SelectedEntries is { Count: 1 } one ? one[0] : null;
 
     private void Reload()
     {
         CellsPanel.Children.Clear();
+        _cells.Clear();
         var entries = _history.Entries;
-        if (_selected is { } id && _history.Entry(id) is null) _selected = null;
+        _selection = HistorySelection.Prune(_selection, Order);
 
         foreach (var entry in entries)
-            CellsPanel.Children.Add(BuildCell(entry));
+        {
+            var cell = BuildCell(entry);
+            _cells[entry.Id] = cell;
+            CellsPanel.Children.Add(cell);
+        }
         // Tour anchors: the newest cell, and the action bar only while there's something to act on (review H1).
         if (CellsPanel.Children.Count > 0) Tours.TourAnchors.Set(CellsPanel.Children[0], "history.item");
         Tours.TourAnchors.Set(ActionBar, entries.Count == 0 ? "" : "history.actions");
 
-        EmptyLabel.Visibility = entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        var (title, detail) = HistoryEmptyState.Text(_history.Enabled, _actions.CaptureAreaChord?.Invoke());
+        EmptyTitle.Text = title;
+        EmptyDetail.Text = detail;
+        EmptyState.Visibility = entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         Scroller.Visibility = entries.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
-        CountLabel.Text = $"{entries.Count} item{(entries.Count == 1 ? "" : "s")}";
         UpdateButtons();
     }
 
     private void UpdateButtons()
     {
-        var sel = Selected;
-        bool isScreenshot = sel?.Kind == HistoryKind.Screenshot;
-        CopyButton.IsEnabled = sel != null;
+        var selected = SelectedEntries;
+        var single = selected.Count == 1 ? selected[0] : null;
+        bool isScreenshot = single?.Kind == HistoryKind.Screenshot;
+        int total = _history.Entries.Count;
+        CountLabel.Text = selected.Count > 1
+            ? $"{selected.Count} of {total} selected"
+            : $"{total} item{(total == 1 ? "" : "s")}";
+        CopyButton.IsEnabled = selected.Count > 0;
         AnnotateButton.IsEnabled = isScreenshot;
         PinButton.IsEnabled = isScreenshot;
-        EditVideoButton.IsEnabled = sel is { } r && EditablePath(r) is not null && _actions.EditVideo is not null;
-        RevealButton.IsEnabled = sel != null && CanReveal(sel);
-        DeleteButton.IsEnabled = sel != null;
-        ClearAllButton.IsEnabled = _history.Entries.Count > 0;
+        EditVideoButton.IsEnabled = single is { } r && EditablePath(r) is not null && _actions.EditVideo is not null;
+        RevealButton.IsEnabled = selected.Any(CanReveal);
+        DeleteButton.IsEnabled = selected.Count > 0;
+        MoreButton.IsEnabled = total > 0;
     }
 
     /// <summary>The MP4 behind a recording entry, if it still exists.</summary>
@@ -97,30 +133,27 @@ public partial class HistoryWindow : Window
         e.Kind == HistoryKind.Recording && _history.SavedFilePath(e) is { } p && File.Exists(p)
         && string.Equals(System.IO.Path.GetExtension(p), ".mp4", StringComparison.OrdinalIgnoreCase) ? p : null;
 
-    private void EditVideo_Click(object sender, RoutedEventArgs e)
-    {
-        if (Selected is { } s && EditablePath(s) is { } p) _actions.EditVideo?.Invoke(p);
-    }
-
-    private bool CanReveal(HistoryEntry e) => e.Kind == HistoryKind.Screenshot
-        ? _history.ImagePath(e) is { } p && File.Exists(p)
-        : _history.SavedFileExists(e);
+    private bool CanReveal(HistoryEntry e) => _history.FileFor(e) is not null;
 
     private Border BuildCell(HistoryEntry entry)
     {
-        var thumb = new Image
+        var thumb = new Image { Stretch = Stretch.Uniform, Height = 110, Source = LoadThumb(entry) };
+        var thumbGrid = new Grid();
+        thumbGrid.Children.Add(thumb);
+        if (entry.Kind == HistoryKind.Recording)
         {
-            Stretch = Stretch.Uniform,
-            Height = 110,
-            Source = LoadThumb(entry),
-        };
-        var thumbHost = new Border
-        {
-            Background = ThumbBg,
-            CornerRadius = new CornerRadius(6),
-            Height = 110,
-            Child = thumb,
-        };
+            // H2: recordings carry a play badge on the thumbnail.
+            var play = new Grid { Width = 34, Height = 34, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false };
+            play.Children.Add(new System.Windows.Shapes.Ellipse { Fill = PlayDisc });
+            play.Children.Add(new TextBlock
+            {
+                Text = "", FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), FontSize = 14,
+                Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(2, 0, 0, 0),
+            });
+            thumbGrid.Children.Add(play);
+        }
+        var thumbHost = new Border { Background = ThumbBg, CornerRadius = new CornerRadius(6), Height = 110, Child = thumbGrid };
 
         var badgeRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(2, 4, 0, 0) };
         badgeRow.Children.Add(new IconPresenter
@@ -131,13 +164,17 @@ public partial class HistoryWindow : Window
             Height = 15,
             VerticalAlignment = VerticalAlignment.Center,
         });
+        string text = HistoryDateFormat.Relative(DateTime.UtcNow, entry.Date);
+        if (Info(entry) is { } info) text += "  ·  " + info;
         badgeRow.Children.Add(new TextBlock
         {
-            Text = HistoryDateFormat.Relative(DateTime.UtcNow, entry.Date),
+            Text = text,
             Foreground = BadgeBrush,
             FontSize = 11,
             Margin = new Thickness(5, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxWidth = 146,
         });
         if (entry.Kind == HistoryKind.Recording && !_history.SavedFileExists(entry))
         {
@@ -162,24 +199,128 @@ public partial class HistoryWindow : Window
             CornerRadius = new CornerRadius(8),
             Background = CellBg,
             BorderThickness = new Thickness(2),
-            BorderBrush = _selected == entry.Id ? SelectedBorder : Brushes.Transparent,
+            BorderBrush = _selection.IsSelected(entry.Id) ? SelectedBorder : Brushes.Transparent,
             Cursor = Cursors.Hand,
             Child = stack,
         };
-        if (EditablePath(entry) is { } editable && _actions.EditVideo is { } editVideo)
+        System.Windows.Automation.AutomationProperties.SetName(cell, (entry.Kind == HistoryKind.Recording ? "Recording, " : "Screenshot, ") + text);
+        cell.MouseEnter += (_, _) => cell.Background = CellHoverBg;
+        cell.MouseLeave += (_, _) => cell.Background = CellBg;
+        cell.ContextMenu = BuildContextMenu(entry);
+        cell.MouseRightButtonDown += (_, _) =>
         {
-            var item = new System.Windows.Controls.MenuItem { Header = "Edit Video…" };
-            item.Click += (_, _) => editVideo(editable);
-            cell.ContextMenu = new System.Windows.Controls.ContextMenu { Items = { item } };
-        }
-        cell.MouseRightButtonDown += (_, _) => Select(entry.Id);
-        cell.MouseLeftButtonDown += (_, e) =>
-        {
-            if (e.ClickCount == 2) Open(entry);
-            else Select(entry.Id);
-            if (e.ClickCount == 1) Tours.TourEvents.Post(BetterScreenshot.Tours.TourEvent.Action("history.selected"));
+            if (!_selection.IsSelected(entry.Id)) Apply(HistorySelection.Click(_selection, entry.Id, HistoryClickModifier.None, Order));
         };
+        cell.MouseLeftButtonDown += (_, e) => OnCellDown(entry, cell, e);
+        cell.MouseMove += (_, e) => OnCellMove(cell, e);
+        cell.MouseLeftButtonUp += (_, _) => OnCellUp(entry);
         return cell;
+    }
+
+    private System.Windows.Controls.ContextMenu BuildContextMenu(HistoryEntry entry)
+    {
+        var menu = new System.Windows.Controls.ContextMenu();
+        void Add(string header, Action onClick, Func<bool> enabled)
+        {
+            var item = new System.Windows.Controls.MenuItem { Header = header };
+            item.Click += (_, _) => onClick();
+            menu.Opened += (_, _) => item.IsEnabled = enabled();
+            menu.Items.Add(item);
+        }
+        Add("Copy", CopySelection, () => SelectedEntries.Count > 0);
+        Add("Show in Explorer", RevealSelection, () => SelectedEntries.Any(CanReveal));
+        if (EditablePath(entry) is { } editable && _actions.EditVideo is { } editVideo)
+            Add("Edit Video…", () => editVideo(editable), () => SelectedEntries.Count == 1);
+        menu.Items.Add(new Separator());
+        Add("Delete", DeleteSelection, () => SelectedEntries.Count > 0);
+        return menu;
+    }
+
+    // ------------------------------------------------------------------ selection + drag-out
+
+    private static HistoryClickModifier CurrentModifier() =>
+        (Keyboard.Modifiers & ModifierKeys.Shift) != 0 ? HistoryClickModifier.Range
+        : (Keyboard.Modifiers & ModifierKeys.Control) != 0 ? HistoryClickModifier.Toggle
+        : HistoryClickModifier.None;
+
+    private void OnCellDown(HistoryEntry entry, Border cell, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2)
+        {
+            Apply(HistorySelection.Click(_selection, entry.Id, HistoryClickModifier.None, Order));
+            Open(entry);
+            return;
+        }
+        var modifier = CurrentModifier();
+        _pressAt = e.GetPosition(cell);
+        _pressId = entry.Id;
+        if (HistorySelection.AppliesOnMouseUp(_selection, entry.Id, modifier))
+            _pendingPlainClick = entry.Id; // a drag may still start from the whole selection
+        else
+            Apply(HistorySelection.Click(_selection, entry.Id, modifier, Order));
+        Tours.TourEvents.Post(BetterScreenshot.Tours.TourEvent.Action("history.selected"));
+    }
+
+    private void OnCellUp(HistoryEntry entry)
+    {
+        if (_pendingPlainClick == entry.Id)
+            Apply(HistorySelection.Click(_selection, entry.Id, HistoryClickModifier.None, Order));
+        _pendingPlainClick = null;
+        _pressAt = null;
+        _pressId = null;
+    }
+
+    private void OnCellMove(Border cell, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed || _pressAt is not { } at || _pressId is not { } id) return;
+        var now = e.GetPosition(cell);
+        if (Math.Abs(now.X - at.X) < SystemParameters.MinimumHorizontalDragDistance
+            && Math.Abs(now.Y - at.Y) < SystemParameters.MinimumVerticalDragDistance) return;
+        _pressAt = null;
+        _pendingPlainClick = null;
+        var (state, dragged) = HistorySelection.DragStart(_selection, id, Order);
+        Apply(state);
+        var files = dragged.Select(_history.Entry).OfType<HistoryEntry>().Select(_history.FileFor).OfType<string>().ToArray();
+        if (files.Length == 0) return;
+        var data = new DataObject();
+        data.SetData(System.Windows.DataFormats.FileDrop, files);
+        try { System.Windows.DragDrop.DoDragDrop(cell, data, DragDropEffects.Copy); }
+        catch (Exception) { /* a target refused mid-drag: nothing to undo */ }
+    }
+
+    private void Apply(HistorySelectionState state)
+    {
+        _selection = state;
+        foreach (var (id, cell) in _cells)
+            cell.BorderBrush = _selection.IsSelected(id) ? SelectedBorder : Brushes.Transparent;
+        UpdateButtons();
+    }
+
+    // ------------------------------------------------------------------ H2 cell info
+
+    /// <summary>"1920 × 1080" for a screenshot, "0:42 · MP4" for a recording — from file headers only, cached.</summary>
+    private string? Info(HistoryEntry e)
+    {
+        if (_infoCache.TryGetValue(e.Id, out var cached)) return cached;
+        string? text = null;
+        try
+        {
+            if (e.Kind == HistoryKind.Screenshot && _history.ImagePath(e) is { } png && File.Exists(png))
+            {
+                using var fs = File.OpenRead(png);
+                if (MediaInfo.PngSize(fs) is var (w, h)) text = MediaInfoText.PixelSize(w, h);
+            }
+            else if (e.Kind == HistoryKind.Recording && _history.SavedFilePath(e) is { } video && File.Exists(video))
+            {
+                using var fs = File.OpenRead(video);
+                string ext = System.IO.Path.GetExtension(video);
+                var length = ext.Equals(".gif", StringComparison.OrdinalIgnoreCase) ? MediaInfo.GifDuration(fs) : MediaInfo.Mp4Duration(fs);
+                text = MediaInfoText.Recording(length, ext);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        _infoCache[e.Id] = text;
+        return text;
     }
 
     private ImageSource? LoadThumb(HistoryEntry entry)
@@ -202,22 +343,7 @@ public partial class HistoryWindow : Window
         }
     }
 
-    private void Select(Guid id)
-    {
-        _selected = id;
-        RefreshSelectionBorders();
-        UpdateButtons();
-    }
-
-    private void RefreshSelectionBorders()
-    {
-        var entries = _history.Entries;
-        for (int i = 0; i < CellsPanel.Children.Count && i < entries.Count; i++)
-        {
-            if (CellsPanel.Children[i] is Border b)
-                b.BorderBrush = _selected == entries[i].Id ? SelectedBorder : Brushes.Transparent;
-        }
-    }
+    // ------------------------------------------------------------------ actions
 
     private void Open(HistoryEntry entry)
     {
@@ -233,39 +359,66 @@ public partial class HistoryWindow : Window
         }
     }
 
-    private void Copy_Click(object sender, RoutedEventArgs e)
+    private void Copy_Click(object sender, RoutedEventArgs e) => CopySelection();
+
+    private void CopySelection() => _history.CopyToClipboard(SelectedEntries);
+
+    private void EditVideo_Click(object sender, RoutedEventArgs e)
     {
-        if (Selected is { } s) _history.CopyToClipboard(s);
+        if (Single is { } s && EditablePath(s) is { } p) _actions.EditVideo?.Invoke(p);
     }
 
     private void Annotate_Click(object sender, RoutedEventArgs e)
     {
-        if (Selected is { Kind: HistoryKind.Screenshot } s && _history.LoadImage(s) is { } img)
+        if (Single is { Kind: HistoryKind.Screenshot } s && _history.LoadImage(s) is { } img)
             _actions.Annotate(img);
     }
 
     private void Pin_Click(object sender, RoutedEventArgs e)
     {
-        if (Selected is { Kind: HistoryKind.Screenshot } s && _history.LoadImage(s) is { } img)
+        if (Single is { Kind: HistoryKind.Screenshot } s && _history.LoadImage(s) is { } img)
             _actions.Pin(img);
     }
 
-    private void Reveal_Click(object sender, RoutedEventArgs e)
-    {
-        if (Selected is { } s) _history.RevealInExplorer(s);
-    }
+    private void Reveal_Click(object sender, RoutedEventArgs e) => RevealSelection();
 
-    private void Delete_Click(object sender, RoutedEventArgs e)
+    private void RevealSelection() => _history.RevealInExplorer(SelectedEntries);
+
+    private void Delete_Click(object sender, RoutedEventArgs e) => DeleteSelection();
+
+    private void DeleteSelection()
     {
-        if (Selected is { } s)
+        var selected = SelectedEntries;
+        if (selected.Count == 0) return;
+        if (selected.Count > 1)
         {
-            _history.Delete(s.Id);
-            _selected = null;
-            Reload();
+            var confirm = System.Windows.MessageBox.Show(this,
+                "Their stored copies are removed from History. Saved recording files on disk are not deleted.",
+                $"Delete {selected.Count} captures from History?",
+                System.Windows.MessageBoxButton.OKCancel, System.Windows.MessageBoxImage.Warning, System.Windows.MessageBoxResult.Cancel);
+            if (confirm != System.Windows.MessageBoxResult.OK) return;
         }
+        foreach (var s in selected) _history.Delete(s.Id);
+        _selection = HistorySelectionState.Empty;
+        Reload();
     }
 
-    private void ClearAll_Click(object sender, RoutedEventArgs e)
+    private void More_Click(object sender, RoutedEventArgs e)
+    {
+        // H4: the destructive Clear All lives here, out of the action row.
+        var clear = new System.Windows.Controls.MenuItem { Header = "Clear All History…", Foreground = (Brush)FindResource("Theme.DangerBrush") };
+        clear.Click += (_, _) => ClearAll();
+        var menu = new System.Windows.Controls.ContextMenu
+        {
+            PlacementTarget = MoreButton,
+            Placement = System.Windows.Controls.Primitives.PlacementMode.Top,
+            Items = { clear },
+        };
+        clear.IsEnabled = _history.Entries.Count > 0;
+        menu.IsOpen = true;
+    }
+
+    private void ClearAll()
     {
         if (_history.Entries.Count == 0) return;
         var confirm = System.Windows.MessageBox.Show(
@@ -273,12 +426,15 @@ public partial class HistoryWindow : Window
             "Removes every remembered capture and its stored copies. Saved recording files on disk are not deleted.",
             "Clear all capture history?",
             System.Windows.MessageBoxButton.OKCancel,
-            System.Windows.MessageBoxImage.Warning);
+            System.Windows.MessageBoxImage.Warning,
+            System.Windows.MessageBoxResult.Cancel);
         if (confirm == System.Windows.MessageBoxResult.OK)
         {
             _history.ClearAll();
-            _selected = null;
+            _selection = HistorySelectionState.Empty;
             Reload();
         }
     }
+
+    private static Brush Frozen(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
 }

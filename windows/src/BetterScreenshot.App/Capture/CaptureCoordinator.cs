@@ -259,7 +259,10 @@ public sealed class CaptureCoordinator : IAppCommands
     {
         if (_historyWindow is null)
         {
-            _historyWindow = new HistoryWindow(_history, new HistoryWindowActions(Annotate, PinImage) { EditVideo = p => OpenVideoEditor(p, null) });
+            _historyWindow = new HistoryWindow(_history, new HistoryWindowActions(Annotate, PinImage) {
+                EditVideo = p => OpenVideoEditor(p, null),
+                CaptureAreaChord = () => _settings.Hotkeys.Combo(HotkeyAction.CaptureArea)?.DisplayString,
+            });
             _historyWindow.Closed += (_, _) => _historyWindow = null;
             _historyWindow.Show();
         }

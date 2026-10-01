@@ -31,4 +31,15 @@ public static class ClipboardService
         data.SetFileDropList(new StringCollection { path });
         Clipboard.SetDataObject(data, copy: true);
     }
+
+    /// <summary>Puts several existing files on the clipboard as one file-drop (History multi-select Copy).</summary>
+    public static void SetFiles(IEnumerable<string> paths)
+    {
+        var list = new StringCollection();
+        foreach (var p in paths) list.Add(p);
+        if (list.Count == 0) return;
+        var data = new DataObject();
+        data.SetFileDropList(list);
+        Clipboard.SetDataObject(data, copy: true);
+    }
 }

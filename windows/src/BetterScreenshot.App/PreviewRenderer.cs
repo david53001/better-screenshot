@@ -91,7 +91,7 @@ internal static class PreviewRenderer
                 return w;
             });
         yield return ("toast", () => new HudWindow("Copied to clipboard"));
-        yield return ("history-empty", () => new HistoryWindow(PreviewHistory(0), new HistoryWindowActions(_ => { }, _ => { })));
+        yield return ("history-empty", () => new HistoryWindow(PreviewHistory(0), new HistoryWindowActions(_ => { }, _ => { }) { CaptureAreaChord = () => "Ctrl+Shift+4" }));
         yield return ("history-filled", () => new HistoryWindow(PreviewHistory(6), new HistoryWindowActions(_ => { }, _ => { })));
     }
 

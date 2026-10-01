@@ -91,6 +91,14 @@ public sealed class HistoryService
         }
     }
 
+    /// <summary>The file on disk behind an entry — the history-owned PNG for a screenshot, the saved file for a
+    /// recording — or null when it's gone. What drag-out, multi-Copy and Show in Explorer hand to the shell.</summary>
+    public string? FileFor(HistoryEntry e)
+    {
+        var path = e.Kind == HistoryKind.Screenshot ? ImagePath(e) : SavedFilePath(e);
+        return path is not null && File.Exists(path) ? path : null;
+    }
+
     /// <summary>Copies an entry to the clipboard: screenshot → image, recording → its saved file (best-effort).</summary>
     public void CopyToClipboard(HistoryEntry e)
     {
@@ -105,11 +113,18 @@ public sealed class HistoryService
         }
     }
 
+    /// <summary>Copies a selection: one entry as above; several as one file-drop of their files (v3 §4.4).</summary>
+    public void CopyToClipboard(IReadOnlyList<HistoryEntry> entries)
+    {
+        if (entries.Count == 1) { CopyToClipboard(entries[0]); return; }
+        try { ClipboardService.SetFiles(entries.Select(FileFor).OfType<string>()); }
+        catch (System.Runtime.InteropServices.ExternalException) { /* clipboard busy: best-effort */ }
+    }
+
     /// <summary>Opens Explorer with the entry's underlying file selected (screenshot copy or saved recording).</summary>
     public void RevealInExplorer(HistoryEntry e)
     {
-        var path = e.Kind == HistoryKind.Screenshot ? ImagePath(e) : SavedFilePath(e);
-        if (path is null || !File.Exists(path)) return;
+        if (FileFor(e) is not { } path) return;
         try
         {
             Process.Start(new ProcessStartInfo("explorer.exe", ExplorerSelectArgs(path)) { UseShellExecute = true });
@@ -119,6 +134,19 @@ public sealed class HistoryService
             // Best-effort; never crash on a shell failure.
         }
     }
+
+    /// <summary>Show in Explorer for a selection: one Explorer window per folder with all of that folder's files
+    /// selected (<c>SHOpenFolderAndSelectItems</c>); a single entry uses the plain <c>/select</c> path.</summary>
+    public void RevealInExplorer(IReadOnlyList<HistoryEntry> entries)
+    {
+        if (entries.Count == 1) { RevealInExplorer(entries[0]); return; }
+        foreach (var group in RevealGroups(entries.Select(FileFor).OfType<string>()))
+            ShellReveal.SelectInFolder(group.Key, group.ToList());
+    }
+
+    /// <summary>Groups paths by containing folder, case-insensitively, in first-seen order (pure; unit-tested).</summary>
+    public static IEnumerable<IGrouping<string, string>> RevealGroups(IEnumerable<string> paths) =>
+        paths.GroupBy(p => Path.GetDirectoryName(p) ?? "", StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Builds the <c>explorer.exe /select,"path"</c> argument string (pure; unit-tested).</summary>
     public static string ExplorerSelectArgs(string path) => $"/select,\"{path}\"";
