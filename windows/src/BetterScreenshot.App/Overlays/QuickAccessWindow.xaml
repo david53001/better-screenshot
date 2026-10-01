@@ -43,14 +43,14 @@
         <Grid>
             <!-- Root = the full-bleed image + overlays. Clipped to a rounded rect in code-behind so the image,
                  scrim and buttons all sit inside rounded corners (a Border's CornerRadius won't clip children). -->
-            <Grid x:Name="Root">
+            <Grid x:Name="Root" AutomationProperties.AutomationId="quickAccess.card">
                 <Image x:Name="Thumb" Stretch="UniformToFill"
                        RenderOptions.BitmapScalingMode="HighQuality"/>
                 <!-- Transparent drag surface behind the toolbar: drag it to export the file. -->
                 <Border x:Name="DragSurface" Background="Transparent"/>
                 <!-- Adaptive scrim (height + tone set in code) guarantees toolbar legibility over busy images. -->
                 <Rectangle x:Name="Scrim" VerticalAlignment="Bottom" IsHitTestVisible="False"/>
-                <StackPanel x:Name="ButtonRow" Orientation="Horizontal"
+                <StackPanel x:Name="ButtonRow" Orientation="Horizontal" AutomationProperties.AutomationId="quickAccess.actions"
                             HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,9"/>
             </Grid>
             <!-- Crisp hairline on top of everything (subtle; matches the JVoice monochrome border). -->

@@ -3,8 +3,11 @@ using System.Windows;
 using BetterScreenshot.App.Capture;
 using BetterScreenshot.App.Onboarding;
 using BetterScreenshot.App.Settings;
+using BetterScreenshot.App.Tours;
 using BetterScreenshot.App.Tray;
+using BetterScreenshot.Capture;
 using BetterScreenshot.Platform;
+using BetterScreenshot.Tours;
 
 namespace BetterScreenshot.App;
 
@@ -19,6 +22,11 @@ public partial class App : System.Windows.Application
     private TrayIcon _tray = null!;
     private HotkeyController _hotkeys = null!;
     private CaptureCoordinator _commands = null!;
+    private TourCoordinator _tours = null!;
+    private WelcomeWindow? _welcome;
+
+    /// <summary>The id the audience classifier expects (Windows has one real app; §7.1 signal 1 always passes).</summary>
+    public const string AppId = "BetterScreenshot.Windows";
 
     // Single-instance guard: a tray agent must only run once per user session, otherwise a second
     // launch spawns a duplicate tray icon and its global-hotkey registration (RegisterHotKey) fails
@@ -53,7 +61,15 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        // Who gets tours (§7.1 Step 1): classify once, before anything writes settings.json.
+        var signals = SettingsStore.AudienceSignals();
         _settings = SettingsStore.Load();
+        if (_settings.TourAudience is null)
+        {
+            var audience = TourAudience.Classify(new AudienceSignals(AppId, signals.Keys, signals.FolderHasContent, false), AppId);
+            _settings.TourAudience = TourAudience.Store(audience);
+            _settings.Save();
+        }
         // Keep the Windows "run at sign-in" registration honest: refresh the Run key to this exe's current path
         // (repairs a stale entry after the app is moved/republished) or clear it if the flag was turned off.
         StartupRegistration.Reconcile(_settings.LaunchAtLogin);
@@ -68,14 +84,68 @@ public partial class App : System.Windows.Application
         _commands.OnRecordingStateChanged = _tray.SetRecordingState;
         _commands.OnRecordingPauseChanged = _tray.SetPauseState;
 
+        _tours = new TourCoordinator(_settings, ShortcutText)
+        {
+            OpenSurface = OpenTourSurface,
+            Hud = Overlays.HudController.Show,
+            OnFinished = id => { if (id == TourId.Welcome) _welcome?.Close(); },
+            // Settings tour step 3 ("Opacity") runs the live slider demo while its tag shows.
+            OnStepShown = (id, step) => { if (id == TourId.Settings && step == 2) _settingsWindow?.StartOpacityDemo(); },
+            OnStepLeft = () => _settingsWindow?.StopOpacityDemo(),
+        };
+        _tours.Install();
+        _tray.AddHelpMenu(id => TourEvents.Replay(id, null), () => Overlays.HudController.Show(_tours.ResetAll()));
+
         WritePerfReadyLog(e.Args);
 
-        if (!_settings.FirstRunComplete)
+        var stored = TourAudience.Parse(_settings.TourAudience);
+        bool answered = _settings.TourQuestionAnswered == true;
+        if (!_settings.FirstRunComplete || TourRules.ShouldOpenWelcomeOnLaunch(stored, answered, permissionGranted: true))
+            ShowWelcome();
+    }
+
+    /// <summary>The Welcome window: asks the tour question only for a new user who hasn't answered.</summary>
+    private void ShowWelcome()
+    {
+        if (_welcome is not null) { _welcome.Activate(); return; }
+        bool ask = TourRules.ShouldAskQuestion(TourAudience.Parse(_settings.TourAudience), _settings.TourQuestionAnswered == true);
+        _welcome = new WelcomeWindow(_settings.Hotkeys, ask);
+        _welcome.Answered += yes =>
         {
-            new WelcomeWindow().ShowDialog();
-            _settings.FirstRunComplete = true;
+            _settings.FirstUseToursEnabled = yes;
+            _settings.TourQuestionAnswered = true;
             _settings.Save();
+            if (yes) TourEvents.Replay(TourId.Welcome, _welcome);
+        };
+        _welcome.Closed += (_, _) =>
+        {
+            _welcome = null;
+            if (!_settings.FirstRunComplete)
+            {
+                _settings.FirstRunComplete = true;
+                _settings.Save();
+            }
+        };
+        _welcome.Show();
+    }
+
+    private bool OpenTourSurface(TourSurface surface)
+    {
+        switch (surface)
+        {
+            case TourSurface.Welcome: ShowWelcome(); return true;
+            case TourSurface.Settings: ShowSettings(); return true;
+            case TourSurface.History: _commands.OpenHistory(); return true;
+            default: return false;
         }
+    }
+
+    /// <summary>A tour body's <c>{shortcut:…}</c>: the user's current combo, or the action's title when unbound.</summary>
+    private string? ShortcutText(string name)
+    {
+        if (!Enum.TryParse<HotkeyAction>(name, ignoreCase: true, out var action) || !string.Equals(name, char.ToLowerInvariant(action.ToString()[0]) + action.ToString()[1..], StringComparison.Ordinal))
+            return null;
+        return _settings.Hotkeys.Combo(action)?.DisplayString ?? action.Title();
     }
 
     /// <summary><c>--perf-ready-log &lt;file&gt;</c> (perf harness only): once the tray + hotkeys are up, write the

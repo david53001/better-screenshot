@@ -125,6 +125,7 @@ internal sealed class EditorInspectorPanel : Border
             if (built is null) continue;
             if (!first) _sections.Children.Add(Hairline());
             first = false;
+            if (TourAnchor(section) is { } anchor) System.Windows.Automation.AutomationProperties.SetAutomationId(built, anchor);
             _sections.Children.Add(built);
         }
         BuildFooter(_content.Sections.Contains(InspectorSection.Arrange));
@@ -132,6 +133,21 @@ internal sealed class EditorInspectorPanel : Border
     }
 
     // ---------------------------------------------------------------- sections
+
+    /// <summary>The section's tour anchor (Mac v3 §7.5): <c>editor.inspector.&lt;name&gt;</c>.</summary>
+    private static string? TourAnchor(InspectorSection s) => s switch
+    {
+        InspectorSection.Colour => "editor.inspector.colour",
+        InspectorSection.Stroke => "editor.inspector.stroke",
+        InspectorSection.Styles => "editor.inspector.styles",
+        InspectorSection.Background => "editor.inspector.background",
+        InspectorSection.Effects => "editor.inspector.effects",
+        InspectorSection.Strength => "editor.inspector.strength",
+        InspectorSection.Redaction => "editor.inspector.redaction",
+        InspectorSection.HighlighterStroke => "editor.inspector.highlighterStroke",
+        InspectorSection.SpotlightDim => "editor.inspector.spotlightDim",
+        _ => null,
+    };
 
     private FrameworkElement? Build(InspectorSection s)
     {

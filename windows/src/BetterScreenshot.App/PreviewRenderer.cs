@@ -74,6 +74,13 @@ internal static class PreviewRenderer
         foreach (var (label, setup) in EditorStates())
             yield return ("editor-" + label, () => { var w = new EditorWindow(EditorSample(), AnnotationStyle.Default); w.Loaded += (_, _) => setup(w); return w; });
         yield return ("welcome", () => new WelcomeWindow());
+        yield return ("welcome-question", () => new WelcomeWindow(BetterScreenshot.Capture.HotkeyBindings.Defaults(), askQuestion: true));
+        var settingsTour = BetterScreenshot.Tours.TourCatalog.Settings.Steps;
+        var historyTour = BetterScreenshot.Tours.TourCatalog.History.Steps;
+        yield return ("tour-tag-explain", () => Tours.TagOverlay.PreviewTag(settingsTour[0], settingsTour[0].Body, 1, 4, false, false));
+        yield return ("tour-tag-try", () => Tours.TagOverlay.PreviewTag(historyTour[1], historyTour[1].Body, 2, 4, false, false));
+        yield return ("tour-tag-last", () => Tours.TagOverlay.PreviewTag(settingsTour[3], settingsTour[3].Body, 4, 4, true, false));
+        yield return ("tour-tag-done", () => Tours.TagOverlay.PreviewTag(historyTour[1], historyTour[1].Body, 2, 4, false, true));
         yield return ("record-strip", () => new RecordStripWindow(new SettingsStore()));
         yield return ("countdown", () => new CountdownOverlayWindow());
         foreach (var (label, state) in PillStates())

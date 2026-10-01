@@ -101,6 +101,7 @@ public partial class EditorWindow
                 PushUndo();
                 var counter = CounterAnnotation.Centered(p, _document.NextCounterNumber(), _style);
                 _document.Add(counter);
+                PostAdded(EditorTool.Counter);
                 _selection.Clear();
                 _selection.Add(counter.Id); // a Counter click selects the new badge too
                 Redraw();
@@ -330,6 +331,8 @@ public partial class EditorWindow
                     var r = new RedactionAnnotation(Guid.NewGuid(), _style with { RedactionMode = mode }, clipped);
                     _document.Add(r);
                     SelectOnly(r.Id);
+                    PostAdded(_tool);
+                    Tours.TourEvents.Post(BetterScreenshot.Tours.TourEvent.Action("editor.redactionAdded"));
                 }
                 Redraw();
                 break;
@@ -341,6 +344,7 @@ public partial class EditorWindow
                         PushUndo();
                         _document.Add(shape);
                         SelectOnly(shape.Id);
+                        PostAdded(_tool);
                     }
                 }
                 Redraw();
@@ -362,6 +366,7 @@ public partial class EditorWindow
                     var hl = new HighlighterAnnotation(Guid.NewGuid(), _style.WithHighlighterPen(), _hlPoints.ToList());
                     _document.Add(hl);
                     SelectOnly(hl.Id);
+                    PostAdded(EditorTool.Highlighter);
                 }
                 _hlPoints.Clear();
                 Redraw();
@@ -375,6 +380,7 @@ public partial class EditorWindow
                     PushUndo();
                     _document.Add(spot);
                     SelectOnly(spot.Id);
+                    PostAdded(EditorTool.Spotlight);
                 }
                 Redraw();
                 break;
@@ -394,6 +400,7 @@ public partial class EditorWindow
             case DragKind.TextScale:
             case DragKind.TextSide:
                 if (_dragChanged && before != null) _history.Push(before);
+                if (_dragChanged && kind == DragKind.TextScale) Tours.TourEvents.Post(BetterScreenshot.Tours.TourEvent.Action("editor.textScaled"));
                 _handleOriginal = null;
                 Redraw();
                 break;
@@ -777,6 +784,7 @@ public partial class EditorWindow
             var t = new TextAnnotation(Guid.NewGuid(), s.Style, text, s.Origin, wrap);
             _document.Add(t);
             SelectOnly(t.Id);
+            PostAdded(EditorTool.Text);
         }
         Redraw();
         Focus();

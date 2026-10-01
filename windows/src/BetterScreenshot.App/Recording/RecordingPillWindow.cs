@@ -26,7 +26,7 @@ namespace BetterScreenshot.App.Recording;
 /// in a <see cref="HintBubbleWindow"/> (tooltips come late or never while the app is inactive). What each control
 /// does lives in <see cref="RecordingCoordinator"/>; this window only draws <see cref="PillState"/> and reports clicks.
 /// </summary>
-public sealed class RecordingPillWindow : Window
+public sealed class RecordingPillWindow : Window, Tours.ITourHost
 {
     private const double ShadowPad = 14;
     private const double ButtonHeight = 28;
@@ -123,6 +123,7 @@ public sealed class RecordingPillWindow : Window
         };
         SizeChanged += (_, _) => Place();
         Closed += (_, _) => _hint.Close();
+        ContentRendered += (_, _) => Tours.TourEvents.SurfaceShown(BetterScreenshot.Tours.TourSurface.RecordingPill, this);
     }
 
     /// <summary>Redraws every control from <paramref name="state"/> (cheap — called on each timer tick).</summary>
@@ -158,6 +159,34 @@ public sealed class RecordingPillWindow : Window
         Top = frame.Y - ShadowPad;
     }
 
+    /// <summary>Tour anchor ids (Mac v3 §7.6): <c>pill.mic</c>, <c>pill.restart</c>, <c>pill.pause</c>, <c>pill.stop</c>, …</summary>
+    private static string TourAnchor(PillItemId id) => id switch
+    {
+        PillItemId.Mic => "pill.mic",
+        PillItemId.SystemAudio => "pill.systemAudio",
+        PillItemId.Camera => "pill.camera",
+        PillItemId.Switch => "pill.switch",
+        PillItemId.Restart => "pill.restart",
+        PillItemId.Discard => "pill.discard",
+        PillItemId.PauseResume => "pill.pause",
+        PillItemId.Stop => "pill.stop",
+        _ => "pill.chevron",
+    };
+
+    /// <summary>The tour sees the capsule (radius 20), not the window's shadow margin; the hint band above and below
+    /// is kept clear so hovering a control never moves the tag (review T4).</summary>
+    Tours.TourHostShape? Tours.ITourHost.TourShape
+    {
+        get
+        {
+            var f = CapsuleFrame();
+            var frame = new Rect(f.X, f.Y, Math.Max(0, f.Width), f.Height);
+            var keepOut = frame;
+            keepOut.Inflate(0, 30);
+            return new Tours.TourHostShape(frame, 20, keepOut);
+        }
+    }
+
     /// <summary>The capsule's on-screen rectangle (DIPs).</summary>
     private PxRect CapsuleFrame() => new(Left + ShadowPad, Top + ShadowPad, ActualWidth - 2 * ShadowPad, RecordingPillLayout.CapsuleHeight);
 
@@ -183,6 +212,7 @@ public sealed class RecordingPillWindow : Window
         _dot.VerticalAlignment = VerticalAlignment.Center;
         _row.Children.Add(_dot);
         var timerColumn = new StackPanel { Width = 46, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+        Tours.TourAnchors.Set(timerColumn, "pill.timer");
         timerColumn.Children.Add(_pausedLabel);
         timerColumn.Children.Add(_timer);
         _row.Children.Add(timerColumn);
@@ -220,7 +250,7 @@ public sealed class RecordingPillWindow : Window
                 e.Handled = true;
                 if (b.IsMouseOver && RecordingPillModel.Item(_state, id).Enabled) ItemClicked?.Invoke(id);
             };
-            System.Windows.Automation.AutomationProperties.SetAutomationId(b, "pill-" + id);
+            Tours.TourAnchors.Set(b, TourAnchor(id));
             _buttons[id] = b;
             _row.Children.Add(b);
         }

@@ -30,6 +30,18 @@ public sealed class SettingsStore
     /// <summary>Recording pill's bottom-right corner "{x, y}" in DIPs (v3 Part 5 <c>recordingPillAnchor</c>); null = bottom-centre.</summary>
     public string? RecordingPillAnchor { get; set; }
 
+    // Guided tours (Mac v3 §7.2) — exactly these five keys, written only when set.
+    /// <summary><c>tourAudience</c>: "new" / "existing", written once at the first launch with tours; null = not classified yet.</summary>
+    public string? TourAudience { get; set; }
+    /// <summary><c>tourQuestionAnswered</c>: the Welcome question was answered (or closed).</summary>
+    public bool? TourQuestionAnswered { get; set; }
+    /// <summary><c>firstUseToursEnabled</c>: tours start by themselves; absent = off.</summary>
+    public bool? FirstUseToursEnabled { get; set; }
+    /// <summary><c>toursSeen</c>: tour id → catalog version finished or skipped.</summary>
+    public Dictionary<string, int> ToursSeen { get; set; } = new();
+    /// <summary><c>toursPaused</c>: tour id → step index to resume at.</summary>
+    public Dictionary<string, int> ToursPaused { get; set; } = new();
+
     /// <summary>Env var that relocates settings + History (dev/preview/new-user testing only — e.g.
     /// <c>--settings-dir</c>), so a throwaway profile never touches the real <c>%APPDATA%</c> files.</summary>
     public const string DirectoryOverrideVariable = "BETTERSCREENSHOT_SETTINGS_DIR";
@@ -93,6 +105,11 @@ public sealed class SettingsStore
         FirstRunComplete = FirstRunComplete,
         RecordingPillCollapsed = RecordingPillCollapsed,
         RecordingPillAnchor = RecordingPillAnchor,
+        TourAudience = TourAudience,
+        TourQuestionAnswered = TourQuestionAnswered,
+        FirstUseToursEnabled = FirstUseToursEnabled,
+        ToursSeen = ToursSeen.Count == 0 ? null : new Dictionary<string, int>(ToursSeen),
+        ToursPaused = ToursPaused.Count == 0 ? null : new Dictionary<string, int>(ToursPaused),
     };
 
     private static SettingsStore FromDto(Dto dto) => new()
@@ -109,6 +126,11 @@ public sealed class SettingsStore
         FirstRunComplete = dto.FirstRunComplete ?? false,
         RecordingPillCollapsed = dto.RecordingPillCollapsed ?? false,
         RecordingPillAnchor = dto.RecordingPillAnchor,
+        TourAudience = dto.TourAudience,
+        TourQuestionAnswered = dto.TourQuestionAnswered,
+        FirstUseToursEnabled = dto.FirstUseToursEnabled,
+        ToursSeen = dto.ToursSeen ?? new Dictionary<string, int>(),
+        ToursPaused = dto.ToursPaused ?? new Dictionary<string, int>(),
     };
 
     private sealed class Dto
@@ -125,5 +147,44 @@ public sealed class SettingsStore
         public bool? FirstRunComplete { get; set; }
         public bool? RecordingPillCollapsed { get; set; }
         public string? RecordingPillAnchor { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? TourAudience { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? TourQuestionAnswered { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? FirstUseToursEnabled { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, int>? ToursSeen { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, int>? ToursPaused { get; set; }
+    }
+
+    /// <summary>
+    /// The §7.1 audience signals for the settings folder <paramref name="directory"/>: the top-level property names of
+    /// an existing <c>settings.json</c> (an unreadable one counts as a non-tour key — doubt means existing), and
+    /// whether the folder holds anything besides <c>settings.json</c> (e.g. <c>History\</c>). Call before the first Save.
+    /// </summary>
+    public static (List<string> Keys, bool FolderHasContent) AudienceSignals(string? directory = null)
+    {
+        directory ??= DefaultDirectory;
+        var keys = new List<string>();
+        bool content = false;
+        string settings = Path.Combine(directory, "settings.json");
+        try
+        {
+            if (File.Exists(settings))
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(settings));
+                if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                    foreach (var p in doc.RootElement.EnumerateObject()) keys.Add(p.Name);
+                else keys.Add("<not an object>");
+            }
+        }
+        catch (Exception) { keys.Add("<unreadable>"); }
+        try
+        {
+            if (File.Exists(directory)) content = true; // a file where the folder should be = doubt
+            else if (Directory.Exists(directory))
+                content = Directory.EnumerateFileSystemEntries(directory)
+                    .Any(e => !string.Equals(Path.GetFileName(e), "settings.json", StringComparison.OrdinalIgnoreCase)
+                              && !string.Equals(Path.GetFileName(e), "settings.json.tmp", StringComparison.OrdinalIgnoreCase));
+        }
+        catch (Exception) { content = true; }
+        return (keys, content);
     }
 }

@@ -3,6 +3,8 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using BetterScreenshot.App.Controls;
+using BetterScreenshot.App.Tours;
+using BetterScreenshot.Tours;
 using BetterScreenshot.Core;
 using BetterScreenshot.Editor;
 using Brushes = System.Windows.Media.Brushes;
@@ -85,6 +87,7 @@ public partial class EditorWindow : Window
         Scroller.SizeChanged += (_, _) => { if (_fitMode) ApplyFit(); };
         SourceInitialized += (_, _) => SizeToImage();
         Loaded += (_, _) => { ApplyFit(); Focus(); };
+        ContentRendered += (_, _) => TourEvents.SurfaceShown(TourSurface.Editor, this);
         Closed += (_, _) => ReleaseResources();
 
         SelectTool(EditorTool.Select);
@@ -147,6 +150,7 @@ public partial class EditorWindow : Window
         TitleActions.Children.Add(_undoButton);
         TitleActions.Children.Add(_redoButton);
         TitleActions.Children.Add(_panelToggle);
+        TitleActions.Children.Add(new InfoButton(TourId.Editor, EditorShortcuts) { Margin = new Thickness(6, 0, 0, 0) });
         UpdatePanelToggleTip();
     }
 
@@ -197,7 +201,13 @@ public partial class EditorWindow : Window
         if (_textEdit != null) CommitText();
         // Choosing a drawing tool clears the selection; choosing Select keeps it.
         if (tool != EditorTool.Select && tool != _tool) _selection.Clear();
+        bool changed = tool != _tool;
         _tool = tool;
+        if (changed && tool != EditorTool.Select)
+        {
+            TourEvents.Post(TourEvent.ToolSelected(ToolName(tool)));
+            if (tool.RedactionModeOf() is not null) TourEvents.Post(TourEvent.Action("editor.redactionToolChosen"));
+        }
         _openGroup = null;
         foreach (var (t, b) in _toolButtons) b.IsChecked = t == tool;
         InteractionLayer.Cursor = tool == EditorTool.Select ? null : System.Windows.Input.Cursors.Cross;
@@ -264,8 +274,10 @@ public partial class EditorWindow : Window
             _textEdit.Style = edit(_textEdit.Style).Normalized();
             ApplyTextEditLook();
         }
+        var styleBefore = _style;
         _style = StyleEdits.ApplyToDefault(_style, edit, editsPen);
         StyleChanged?.Invoke(_style);
+        PostStyleEvents(styleBefore, edit(styleBefore));
 
         if (_textEdit == null)
         {
@@ -460,6 +472,7 @@ public partial class EditorWindow : Window
         {
             case Key.Escape:
                 if (_drag != DragKind.None) { CancelDrag(); e.Handled = true; return; }
+                if (!((ITourHost)this).ClaimsTourEscape && TourEvents.IsHosting(this)) return; // the tour's tag takes Esc
                 if (_tool != EditorTool.Select) SelectTool(EditorTool.Select);
                 else { _selection.Clear(); RefreshChrome(); }
                 e.Handled = true;
@@ -580,6 +593,42 @@ public partial class EditorWindow : Window
         menu.Items.Add(new Separator());
         foreach (var p in new[] { 50, 200, 400, 800 }) { int pp = p; Add($"{pp}%", "", () => SetZoomPercent(pp, null)); }
         menu.IsOpen = true;
+    }
+}
+
+/// <summary>Tours (Mac v3 §7.5): events, the Esc claim, the ⓘ shortcut list.</summary>
+public partial class EditorWindow : ITourHost
+{
+    /// <summary>Esc goes back to Select / clears the selection first, so the tour only gets it after that.</summary>
+    bool ITourHost.ClaimsTourEscape => _tool != EditorTool.Select || _selection.Count > 0 || _textEdit != null || _drag != DragKind.None;
+
+    internal static string ToolName(EditorTool tool)
+    {
+        var raw = tool.ToString();
+        return char.ToLowerInvariant(raw[0]) + raw[1..];
+    }
+
+    private static void PostAdded(EditorTool tool) => TourEvents.Post(TourEvent.AnnotationAdded(ToolName(tool)));
+
+    private static void PostStyleEvents(AnnotationStyle before, AnnotationStyle after)
+    {
+        if (before.StrokeColor != after.StrokeColor) TourEvents.Post(TourEvent.StyleChanged("strokeColor"));
+        if (before.LineWidth != after.LineWidth) TourEvents.Post(TourEvent.StyleChanged("lineWidth"));
+        if (before.BlurRadius != after.BlurRadius || before.PixelSize != after.PixelSize) TourEvents.Post(TourEvent.StyleChanged("strength"));
+    }
+
+    private static IReadOnlyList<(string Keys, string Action)> EditorShortcuts()
+    {
+        var list = new List<(string, string)>();
+        foreach (var t in Enum.GetValues<EditorTool>())
+            if (t.ShortcutKey() != ' ') list.Add((char.ToUpperInvariant(t.ShortcutKey()).ToString(), t.DisplayName()));
+        list.AddRange(new (string, string)[]
+        {
+            ("Ctrl+Z", "Undo"), ("Ctrl+Shift+Z", "Redo"), ("Ctrl+C", "Copy"), ("Ctrl+S", "Save"), ("Ctrl+W", "Close"),
+            ("Ctrl+A", "Select all"), ("Delete", "Delete the selection"), ("Ctrl+0", "Fit the image"), ("Ctrl+1", "Actual size"),
+            ("Ctrl+Alt+I", "Show or hide the inspector"), ("Esc", "Back to Select / clear the selection"),
+        });
+        return list;
     }
 }
 

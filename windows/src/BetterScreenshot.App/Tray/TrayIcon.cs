@@ -1,6 +1,7 @@
 using System.Drawing;
 using BetterScreenshot.App.Branding;
 using BetterScreenshot.Capture;
+using BetterScreenshot.Tours;
 using WF = System.Windows.Forms;
 
 namespace BetterScreenshot.App.Tray;
@@ -17,6 +18,8 @@ public sealed class TrayIcon : IDisposable
     private readonly WF.ToolStripMenuItem _recordItem;
     private readonly WF.ToolStripMenuItem _pauseResumeItem;
     private readonly Dictionary<HotkeyAction, WF.ToolStripMenuItem> _actionItems = new();
+    private readonly WF.ContextMenuStrip _menu;
+    private readonly WF.ToolStripMenuItem _settingsItem;
 
     public TrayIcon(IAppCommands commands, HotkeyBindings bindings)
     {
@@ -27,7 +30,8 @@ public sealed class TrayIcon : IDisposable
         _pauseResumeItem = Item("Pause Recording", bindings.Combo(HotkeyAction.PauseResumeRecording)?.DisplayString, commands.PauseResumeRecording, HotkeyAction.PauseResumeRecording);
         _pauseResumeItem.Visible = false;
 
-        var menu = new WF.ContextMenuStrip();
+        _settingsItem = Item("Settings…", null, commands.OpenSettings);
+        var menu = _menu = new WF.ContextMenuStrip();
         menu.Renderer = new DarkMenuRenderer();
         menu.ShowImageMargin = false;
         menu.Items.AddRange(new WF.ToolStripItem[]
@@ -45,7 +49,7 @@ public sealed class TrayIcon : IDisposable
             Item("History…", bindings.Combo(HotkeyAction.OpenHistory)?.DisplayString, commands.OpenHistory, HotkeyAction.OpenHistory),
             Item("Restore Recently Closed", bindings.Combo(HotkeyAction.RestoreRecentlyClosed)?.DisplayString, commands.RestoreRecentlyClosed, HotkeyAction.RestoreRecentlyClosed),
             new WF.ToolStripSeparator(),
-            Item("Settings…", null, commands.OpenSettings),
+            _settingsItem,
             Item("Quit", null, commands.Quit),
         });
 
@@ -61,6 +65,27 @@ public sealed class TrayIcon : IDisposable
         {
             if (e.Button == WF.MouseButtons.Left) ShowMenu(menu);
         };
+    }
+
+    /// <summary>
+    /// Help &amp; Tours ▸ (Mac v3 §7.8), right above Settings…: Take the Welcome Tour · each tour · Reset All Tours.
+    /// </summary>
+    public void AddHelpMenu(Action<TourId> replay, Action resetAll)
+    {
+        var help = new WF.ToolStripMenuItem("Help && Tours"); // && = a literal ampersand (WinForms mnemonics)
+        var drop = (WF.ToolStripDropDownMenu)help.DropDown;
+        drop.Renderer = new DarkMenuRenderer();
+        drop.ShowImageMargin = false;
+        help.DropDownItems.Add(Item("Take the Welcome Tour", null, () => replay(TourId.Welcome)));
+        help.DropDownItems.Add(new WF.ToolStripSeparator());
+        foreach (var id in Enum.GetValues<TourId>().Where(t => t != TourId.Welcome))
+        {
+            var tour = id;
+            help.DropDownItems.Add(Item(id.MenuTitle().Replace("&", "&&"), null, () => replay(tour)));
+        }
+        help.DropDownItems.Add(new WF.ToolStripSeparator());
+        help.DropDownItems.Add(Item("Reset All Tours", null, resetAll));
+        _menu.Items.Insert(_menu.Items.IndexOf(_settingsItem), help);
     }
 
     public void SetRecordingState(bool recording, string? elapsed)

@@ -549,6 +549,7 @@ public sealed class RecordingCoordinator
 
     private async Task StopAsync()
     {
+        Tours.TourEvents.Post(BetterScreenshot.Tours.TourEvent.Action("recording.stopped"));
         if (_stopping) return;
         _stopping = true;
         await _gate.WaitAsync();

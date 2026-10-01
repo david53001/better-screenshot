@@ -153,6 +153,7 @@ public sealed class CaptureCoordinator : IAppCommands
 
     private void Handle(BitmapSource image)
     {
+        Tours.TourEvents.Post(BetterScreenshot.Tours.TourEvent.CaptureTaken);
         var (copy, save, overlay) = CaptureRouter.Decide(_settings.Capture.AfterCapture);
         if (copy) Copy(image);
         if (save) Save(image);

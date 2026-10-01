@@ -24,7 +24,7 @@ namespace BetterScreenshot.App.Settings;
 /// Save/Cancel model silently reverted hotkeys on ✕ — the "settings don't save" trap). Hotkey rebinds
 /// re-register live via the <see cref="HotkeyController"/> and raise <see cref="HotkeysChanged"/> so the
 /// tray menu hints stay in sync.</summary>
-public partial class SettingsWindow : Window
+public partial class SettingsWindow : Window, Tours.ITourHost
 {
     private static readonly int[] PinRadii = { 0, 4, 8, 12, 16, 20 };
 
@@ -47,7 +47,11 @@ public partial class SettingsWindow : Window
         LoadGeneral();
         LoadRecording();
         BuildShortcutRows();
+        ToursCheck.IsChecked = _settings.FirstUseToursEnabled == true;
+        InfoSlot.Content = new Tours.InfoButton(BetterScreenshot.Tours.TourId.Settings, SettingsShortcuts);
         _loading = false;
+        ContentRendered += (_, _) => Tours.TourEvents.SurfaceShown(BetterScreenshot.Tours.TourSurface.Settings, this);
+        Closed += (_, _) => StopOpacityDemo();
         Surfaces.UseMica(this); // v3 Part 9: Mica + the Opacity layer (dark title bar included)
         // The card layout sizes to content (SizeToContent=Height); clamp just under the work area so a
         // genuinely oversized window can't run past it (keeps the title-bar ✕ reachable) while leaving the
@@ -100,7 +104,91 @@ public partial class SettingsWindow : Window
         Apply();
     }
 
-    private void OpacityDefault_Click(object sender, RoutedEventArgs e) => OpacitySlider.Value = UiOpacity.Default;
+    private void OpacityDefault_Click(object sender, RoutedEventArgs e)
+    {
+        StopOpacityDemo();
+        OpacitySlider.Value = UiOpacity.Default;
+    }
+
+    // ------------------------------------------------------------------ tours (Mac v3 §7.8)
+
+    /// <summary>Enter/Esc belong to the shortcut recorder while it's listening (Esc cancels it, not the tour).</summary>
+    bool Tours.ITourHost.ClaimsTourKeys => _recordingAction is not null;
+
+    private IReadOnlyList<(string Keys, string Action)> SettingsShortcuts()
+    {
+        var list = new List<(string, string)>();
+        foreach (var a in HotkeyActionInfo.All)
+            if (_settings.Hotkeys.Combo(a) is { } combo) list.Add((combo.DisplayString, a.Title()));
+        list.Add(("Esc", "Cancel changing a shortcut"));
+        return list;
+    }
+
+    private void Tours_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        _settings.FirstUseToursEnabled = ToursCheck.IsChecked == true;
+        _settings.Save();
+        if (ResetToursNote.Visibility == Visibility.Visible)
+            ResetToursNote.Text = BetterScreenshot.Tours.TourRules.ResetConfirmation(_settings.FirstUseToursEnabled == true);
+    }
+
+    /// <summary>Reset All Tours: clears seen + paused only (never the audience, the answer or the switch).</summary>
+    private void ResetTours_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.ToursSeen.Clear();
+        _settings.ToursPaused.Clear();
+        _settings.Save();
+        ResetToursNote.Text = BetterScreenshot.Tours.TourRules.ResetConfirmation(_settings.FirstUseToursEnabled == true);
+        ResetToursNote.Visibility = Visibility.Visible;
+    }
+
+    private System.Windows.Threading.DispatcherTimer? _opacityDemo;
+    private DateTime _opacityDemoStart;
+    private double _opacityDemoUser;
+
+    /// <summary>The Settings tour's step 3: the Opacity slider moves by itself (a preview, never saved).</summary>
+    public void StartOpacityDemo()
+    {
+        if (_opacityDemo is not null) return;
+        _opacityDemoUser = OpacitySlider.Value;
+        _opacityDemoStart = DateTime.UtcNow;
+        _opacityDemo = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
+        _opacityDemo.Tick += (_, _) =>
+        {
+            double v = OpacityDemoPath.Value((DateTime.UtcNow - _opacityDemoStart).TotalSeconds, _opacityDemoUser);
+            bool was = _loading;
+            _loading = true; // a preview: move the slider and every surface, never save
+            OpacitySlider.Value = v;
+            _loading = was;
+            Surfaces.Set(v);
+        };
+        OpacitySlider.PreviewMouseLeftButtonDown += EndDemoKeepChoice;
+        _opacityDemo.Start();
+    }
+
+    /// <summary>The step left: put the saved value back.</summary>
+    public void StopOpacityDemo()
+    {
+        if (_opacityDemo is null) return;
+        _opacityDemo.Stop();
+        _opacityDemo = null;
+        OpacitySlider.PreviewMouseLeftButtonDown -= EndDemoKeepChoice;
+        bool was = _loading;
+        _loading = true;
+        OpacitySlider.Value = _opacityDemoUser;
+        _loading = was;
+        Surfaces.Set(_opacityDemoUser);
+    }
+
+    /// <summary>A drag on the slider ends the demo and keeps the user's choice.</summary>
+    private void EndDemoKeepChoice(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (_opacityDemo is null) return;
+        _opacityDemo.Stop();
+        _opacityDemo = null;
+        OpacitySlider.PreviewMouseLeftButtonDown -= EndDemoKeepChoice;
+    }
 
     private void LoadRecording()
     {

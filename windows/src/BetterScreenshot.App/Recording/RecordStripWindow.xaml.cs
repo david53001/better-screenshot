@@ -71,6 +71,7 @@ public partial class RecordStripWindow : Window
         InitializeComponent();
         _settings = settings;
         Build();
+        ContentRendered += (_, _) => Tours.TourEvents.SurfaceShown(BetterScreenshot.Tours.TourSurface.RecordStrip, this);
         Loaded += async (_, _) =>
         {
             Reposition();
@@ -78,7 +79,7 @@ public partial class RecordStripWindow : Window
             WatchDevices();
         };
         Closed += (_, _) => { StopMeter(); StopWatching(); };
-        PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) { e.Handled = true; OnCancel?.Invoke(); } };
+        PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape && !Tours.TourEvents.IsHosting(this)) { e.Handled = true; OnCancel?.Invoke(); } };
         MouseLeftButtonDown += (_, e) => { if (e.OriginalSource is Border or StackPanel or Grid) { try { DragMove(); } catch { } } };
     }
 
@@ -97,9 +98,11 @@ public partial class RecordStripWindow : Window
         // Top row: targets · flexible space · Format · FPS · close.
         var top = new DockPanel { LastChildFill = false, Height = 28 };
         var targets = new StackPanel { Orientation = Orientation.Horizontal };
-        targets.Children.Add(Area(TargetButton("display", "Full Screen", () => OnFullScreen?.Invoke()), StripArea.FullScreen));
-        targets.Children.Add(Area(TargetButton("rect-dashed", "Area…", () => OnArea?.Invoke(), 8), StripArea.Area));
-        targets.Children.Add(Area(TargetButton("window", "Window…", () => OnWindow?.Invoke(), 8), StripArea.Window));
+        static void Chose() => Tours.TourEvents.Post(BetterScreenshot.Tours.TourEvent.ChoiceMade("strip.targets"));
+        targets.Children.Add(Area(TargetButton("display", "Full Screen", () => { Chose(); OnFullScreen?.Invoke(); }), StripArea.FullScreen));
+        targets.Children.Add(Area(TargetButton("rect-dashed", "Area…", () => { Chose(); OnArea?.Invoke(); }, 8), StripArea.Area));
+        targets.Children.Add(Area(TargetButton("window", "Window…", () => { Chose(); OnWindow?.Invoke(); }, 8), StripArea.Window));
+        Tours.TourAnchors.Set(targets, "strip.targets");
         DockPanel.SetDock(targets, Dock.Left);
         top.Children.Add(targets);
 
@@ -121,17 +124,31 @@ public partial class RecordStripWindow : Window
             i => { Persist(Config with { Format = i == 1 ? RecordingFormat.Gif : RecordingFormat.Mp4 }); ApplyFormat(); }, out _refreshFormat);
         format.Margin = new Thickness(0, 0, 20, 0);
         DockPanel.SetDock(format, Dock.Right);
+        var infoButton = new Tours.InfoButton(BetterScreenshot.Tours.TourId.FirstRecording, () => new (string, string)[] { ("Esc", "Close without recording") })
+        {
+            VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0),
+        };
+        DockPanel.SetDock(infoButton, Dock.Right);
+        var output = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        output.Children.Add(format);
+        output.Children.Add(fps);
+        Tours.TourAnchors.Set(output, "strip.output");
+        DockPanel.SetDock(output, Dock.Right);
         top.Children.Add(close);
-        top.Children.Add(fps);
-        top.Children.Add(format);
+        top.Children.Add(infoButton);
+        top.Children.Add(output);
         Stack.Children.Add(top);
         Stack.Children.Add(Hairline());
 
         // Sources row: four columns, 16 apart.
         var sources = new StackPanel { Orientation = Orientation.Horizontal };
         BuildMeter();
-        sources.Children.Add(SourceColumn("mic", "Microphone", StripArea.Microphone, _mic, SourceColumnWidth, MicAccessory()));
-        sources.Children.Add(SourceColumn("speaker", "System audio", StripArea.SystemAudio, _system, SourceColumnWidth, null, 16));
+        var micColumn = SourceColumn("mic", "Microphone", StripArea.Microphone, _mic, SourceColumnWidth, MicAccessory());
+        Tours.TourAnchors.Set(micColumn, "strip.microphoneColumn");
+        sources.Children.Add(micColumn);
+        var systemColumn = SourceColumn("speaker", "System audio", StripArea.SystemAudio, _system, SourceColumnWidth, null, 16);
+        Tours.TourAnchors.Set(systemColumn, "strip.systemAudio");
+        sources.Children.Add(systemColumn);
         sources.Children.Add(SourceColumn("video", "Camera", StripArea.Camera, _camera, SourceColumnWidth, null, 16));
         sources.Children.Add(SourceColumn("cursor", "Mouse cursor", StripArea.Cursor, _cursor, CursorColumnWidth, null, 16));
         Stack.Children.Add(sources);
@@ -143,7 +160,10 @@ public partial class RecordStripWindow : Window
         DockPanel.SetDock(info, Dock.Left);
         hintRow.Children.Add(info);
         hintRow.Children.Add(_hint);
+        Tours.TourAnchors.Set(hintRow, "strip.hint");
         Stack.Children.Add(hintRow);
+        _mic.DropDownOpened += (_, _) => Tours.TourEvents.Post(BetterScreenshot.Tours.TourEvent.MenuOpened("strip.microphone"));
+        _system.DropDownOpened += (_, _) => Tours.TourEvents.Post(BetterScreenshot.Tours.TourEvent.MenuOpened("strip.systemAudio"));
 
         _mic.SelectionChanged += (_, _) => OnMicChosen();
         _system.SelectionChanged += (_, _) => OnSystemChosen();

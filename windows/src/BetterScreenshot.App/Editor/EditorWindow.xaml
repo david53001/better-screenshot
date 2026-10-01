@@ -22,12 +22,12 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
-                <Border x:Name="ToolPill" HorizontalAlignment="Center" Margin="0,12,0,0" Padding="6"
+                <Border x:Name="ToolPill" AutomationProperties.AutomationId="editor.toolbar" HorizontalAlignment="Center" Margin="0,12,0,0" Padding="6"
                         CornerRadius="15" Background="{DynamicResource Panel.SurfaceBrush}"
                         BorderBrush="{StaticResource Ed.HairlineBrush}" BorderThickness="1">
                     <StackPanel x:Name="Toolbar" Orientation="Horizontal"/>
                 </Border>
-                <ScrollViewer x:Name="Scroller" Grid.Row="1" Margin="0,6,0,0" Focusable="False"
+                <ScrollViewer x:Name="Scroller" AutomationProperties.AutomationId="editor.canvas" Grid.Row="1" Margin="0,6,0,0" Focusable="False"
                               HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
                     <Grid x:Name="StageHost" Margin="24,20,24,24" HorizontalAlignment="Center" VerticalAlignment="Center">
                         <Grid x:Name="Stage" HorizontalAlignment="Left" VerticalAlignment="Top">
@@ -55,18 +55,20 @@
                 </StackPanel>
                 <DockPanel Margin="16,0,16,8" VerticalAlignment="Bottom" LastChildFill="False">
                     <StackPanel x:Name="TitleActions" Orientation="Horizontal" Margin="-6,0,10,0"/>
-                    <Button x:Name="ZoomButton" Style="{StaticResource Ed.SmallButton}" Click="Zoom_Click"
+                    <Button x:Name="ZoomButton" AutomationProperties.AutomationId="editor.zoom" Style="{StaticResource Ed.SmallButton}" Click="Zoom_Click"
                             ToolTip="Zoom — pinch, Ctrl+scroll, Ctrl+plus / Ctrl+minus, Ctrl+0 fits, Ctrl+1 is 100%"/>
                     <TextBlock x:Name="SizeText" Margin="12,0,0,0" FontSize="12" VerticalAlignment="Center"
                                Foreground="{StaticResource Ed.SecondaryBrush}" ToolTip="Image size"/>
-                    <Button DockPanel.Dock="Right" x:Name="CopyButton" Style="{StaticResource Ed.PrimaryButton}" Margin="8,0,0,0"
-                            Click="Copy_Click" ToolTip="Copy to the clipboard (Ctrl+Shift+C)"/>
-                    <Button DockPanel.Dock="Right" x:Name="SaveButton" Style="{StaticResource Ed.SmallButton}" Margin="8,0,0,0"
-                            Click="Save_Click" ToolTip="Save (Ctrl+S)"/>
-                    <Button DockPanel.Dock="Right" x:Name="StackButton" Style="{StaticResource Ed.SmallButton}" Margin="8,0,0,0"
-                            Click="Stack_Click" ToolTip="Keep in the bottom-right stack"/>
-                    <Button DockPanel.Dock="Right" x:Name="DoneButton" Style="{StaticResource Ed.PlainButton}" Content="Done"
-                            Click="Done_Click" ToolTip="Close the editor (Ctrl+W)"/>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" AutomationProperties.AutomationId="editor.actions">
+                        <Button x:Name="DoneButton" Style="{StaticResource Ed.PlainButton}" Content="Done"
+                                Click="Done_Click" ToolTip="Close the editor (Ctrl+W)"/>
+                        <Button x:Name="StackButton" Style="{StaticResource Ed.SmallButton}" Margin="8,0,0,0"
+                                Click="Stack_Click" ToolTip="Keep in the bottom-right stack"/>
+                        <Button x:Name="SaveButton" Style="{StaticResource Ed.SmallButton}" Margin="8,0,0,0"
+                                Click="Save_Click" ToolTip="Save (Ctrl+S)"/>
+                        <Button x:Name="CopyButton" Style="{StaticResource Ed.PrimaryButton}" Margin="8,0,0,0"
+                                Click="Copy_Click" ToolTip="Copy to the clipboard (Ctrl+Shift+C)"/>
+                    </StackPanel>
                 </DockPanel>
             </Grid>
         </Border>

@@ -6,6 +6,7 @@
         WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
         Background="{StaticResource Theme.WindowBrush}" FontFamily="Segoe UI"
         Foreground="{StaticResource Theme.TextBrush}">
+    <Grid>
     <StackPanel Margin="36,32,36,28">
 
         <!-- App icon: charcoal rounded square with a white camera glyph (hand-authored vector) -->
@@ -23,33 +24,31 @@
         <TextBlock TextWrapping="Wrap" TextAlignment="Center" Foreground="{StaticResource Theme.SecondaryTextBrush}" Margin="0,8,0,0"
                    Text="A free, 100% local screenshot &amp; recording tool that lives in your system tray — no cloud, no accounts."/>
 
-        <Border Background="#14FFFFFF" CornerRadius="10" Margin="0,18,0,0" Padding="16,12">
-            <StackPanel>
-                <Grid Margin="0,3">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="Ctrl+Shift+4" FontFamily="Cascadia Mono, Consolas" FontWeight="SemiBold" Foreground="{StaticResource Theme.TextBrush}"/>
-                    <TextBlock Grid.Column="1" Text="Capture an area" Foreground="{StaticResource Theme.SecondaryTextBrush}"/>
-                </Grid>
-                <Grid Margin="0,3">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="Ctrl+Shift+5" FontFamily="Cascadia Mono, Consolas" FontWeight="SemiBold" Foreground="{StaticResource Theme.TextBrush}"/>
-                    <TextBlock Grid.Column="1" Text="Record the screen" Foreground="{StaticResource Theme.SecondaryTextBrush}"/>
-                </Grid>
-                <Grid Margin="0,3">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="Ctrl+Shift+6" FontFamily="Cascadia Mono, Consolas" FontWeight="SemiBold" Foreground="{StaticResource Theme.TextBrush}"/>
-                    <TextBlock Grid.Column="1" Text="Capture the full screen" Foreground="{StaticResource Theme.SecondaryTextBrush}"/>
-                </Grid>
-                <Grid Margin="0,3">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="Ctrl+Shift+8" FontFamily="Cascadia Mono, Consolas" FontWeight="SemiBold" Foreground="{StaticResource Theme.TextBrush}"/>
-                    <TextBlock Grid.Column="1" Text="Capture a window" Foreground="{StaticResource Theme.SecondaryTextBrush}"/>
-                </Grid>
-            </StackPanel>
+        <Border x:Name="ShortcutsCard" AutomationProperties.AutomationId="welcome.shortcuts"
+                Background="#14FFFFFF" CornerRadius="10" Margin="0,18,0,0" Padding="16,12">
+            <StackPanel x:Name="ShortcutRows"/>
         </Border>
 
-        <Button Content="Start Capturing" IsDefault="True" Click="Start_Click"
+        <!-- Tours question (Mac v3 §7.1 Step 2): only for a new user who hasn't answered, in place of Start Capturing. -->
+        <StackPanel x:Name="QuestionBlock" Visibility="Collapsed" Margin="0,20,0,0">
+            <Rectangle Height="1" Width="300" Fill="{StaticResource Theme.BorderBrush}" HorizontalAlignment="Center"/>
+            <TextBlock Text="Want a quick tour?" FontSize="15" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,16,0,0"/>
+            <TextBlock Text="We'll point out each part the first time you use it. You can skip any time."
+                       FontSize="13" Foreground="{StaticResource Theme.SecondaryTextBrush}" TextAlignment="Center"
+                       TextWrapping="Wrap" MaxWidth="360" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+            <Grid Margin="0,16,0,0">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                <Button x:Name="NoThanksButton" Content="No Thanks" IsCancel="True" Click="NoThanks_Click"
+                        Padding="0,9" FontSize="14" Cursor="Hand"/>
+                <Button x:Name="ShowMeButton" Grid.Column="2" Content="Show Me Around" Click="ShowMe_Click"
+                        Style="{StaticResource Theme.AccentButton}" Padding="0,9" FontSize="14" Cursor="Hand"/>
+            </Grid>
+        </StackPanel>
+
+        <Button x:Name="StartButton" Content="Start Capturing" IsDefault="True" Click="Start_Click"
                 Style="{StaticResource Theme.AccentButton}"
                 Margin="0,20,0,0" Padding="0,9" FontSize="14" Cursor="Hand"/>
     </StackPanel>
+    <ContentPresenter x:Name="InfoSlot" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,8,0"/>
+    </Grid>
 </Window>

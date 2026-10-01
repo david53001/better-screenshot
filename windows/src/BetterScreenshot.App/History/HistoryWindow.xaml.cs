@@ -49,7 +49,14 @@ public partial class HistoryWindow : Window
         Controls.Surfaces.UseMica(this); // v3 Part 9 + §4.9: History uses the window material too
         _history = history;
         _actions = actions;
+        InfoSlot.Content = new Tours.InfoButton(BetterScreenshot.Tours.TourId.History, () => new (string, string)[]
+        {
+            ("Click", "Select a capture"),
+            ("Double-click", "Open (screenshots open in the editor)"),
+            ("Right-click", "More actions"),
+        });
         Reload();
+        ContentRendered += (_, _) => Tours.TourEvents.SurfaceShown(BetterScreenshot.Tours.TourSurface.History, this);
     }
 
     private HistoryEntry? Selected => _selected is { } id ? _history.Entry(id) : null;
@@ -62,6 +69,9 @@ public partial class HistoryWindow : Window
 
         foreach (var entry in entries)
             CellsPanel.Children.Add(BuildCell(entry));
+        // Tour anchors: the newest cell, and the action bar only while there's something to act on (review H1).
+        if (CellsPanel.Children.Count > 0) Tours.TourAnchors.Set(CellsPanel.Children[0], "history.item");
+        Tours.TourAnchors.Set(ActionBar, entries.Count == 0 ? "" : "history.actions");
 
         EmptyLabel.Visibility = entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         Scroller.Visibility = entries.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
@@ -167,6 +177,7 @@ public partial class HistoryWindow : Window
         {
             if (e.ClickCount == 2) Open(entry);
             else Select(entry.Id);
+            if (e.ClickCount == 1) Tours.TourEvents.Post(BetterScreenshot.Tours.TourEvent.Action("history.selected"));
         };
         return cell;
     }

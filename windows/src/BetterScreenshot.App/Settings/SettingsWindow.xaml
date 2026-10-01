@@ -40,15 +40,16 @@
             </Grid.RowDefinitions>
 
             <!-- Header -->
-            <StackPanel Grid.Row="0" Margin="2,0,0,14">
+            <DockPanel Grid.Row="0" Margin="2,0,0,14">
+                <ContentPresenter x:Name="InfoSlot" DockPanel.Dock="Right" VerticalAlignment="Top" Margin="12,-4,0,0"/>
                 <TextBlock Text="Capture &amp; recording preferences — hover the &#8505; next to any setting for a plain-language explanation and example."
                            FontSize="11.5" TextWrapping="Wrap"
                            Foreground="{StaticResource Theme.SecondaryTextBrush}" Margin="0,0,0,0"/>
-            </StackPanel>
+            </DockPanel>
 
             <!-- Three-column card body — matches JVoice's 960-wide settings: wider (three columns)
                  so the window is shorter than the old tall two-column stack. -->
-            <Grid Grid.Row="1">
+            <Grid Grid.Row="1" AutomationProperties.AutomationId="settings.cards">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="16"/>
@@ -63,7 +64,7 @@
                     <!-- CAPTURE -->
                     <ctl:DarkSection HeaderText="Capture">
                         <StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6" HorizontalAlignment="Left" AutomationProperties.AutomationId="settings.tip">
                                 <TextBlock Style="{StaticResource FieldLabel}" Text="After a capture" Margin="0" VerticalAlignment="Center"/>
                                 <ctl:InfoTip Margin="6,0,0,0"
                                     Title="After a capture"
@@ -293,6 +294,7 @@
 
                     <!-- STARTUP -->
                     <ctl:DarkSection HeaderText="Startup">
+                        <StackPanel>
                         <Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Margin="0,0,12,0">
@@ -307,6 +309,28 @@
                             </StackPanel>
                             <CheckBox x:Name="LaunchAtLoginCheck" Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource Theme.MonoSwitch}" Checked="Changed" Unchecked="Changed"/>
                         </Grid>
+                        <Rectangle Height="1" Fill="{StaticResource Theme.BorderBrush}" Margin="0,14,0,12"/>
+                        <!-- Tours & tips (Mac v3 §7.8): firstUseToursEnabled (absent = off) + Reset All Tours. -->
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="Tours &amp; tips" Margin="0" VerticalAlignment="Center"/>
+                                    <ctl:InfoTip Margin="6,0,0,0"
+                                        Title="Tours &amp; tips"
+                                        Explanation="Short guided tours point out each part of the app — the editor, recording, History — the first time you use it. Each one runs once, and you can skip it any time. Reset All Tours lets them show again; Help &amp; Tours in the tray menu replays any one of them."
+                                        Example="Turn this on, then open the editor to be walked through its tools."/>
+                                </StackPanel>
+                                <TextBlock Style="{StaticResource RowTitle}" Text="Show me around the first time I use each part" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <CheckBox x:Name="ToursCheck" Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource Theme.MonoSwitch}"
+                                      Checked="Tours_Changed" Unchecked="Tours_Changed" AutomationProperties.Name="Show me around the first time I use each part"/>
+                        </Grid>
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Button x:Name="ResetToursBtn" Content="Reset All Tours" Style="{StaticResource Theme.PillButton}" Click="ResetTours_Click" VerticalAlignment="Top"/>
+                            <TextBlock x:Name="ResetToursNote" Style="{StaticResource RowSub}" Margin="10,0,0,0" TextWrapping="Wrap" MaxWidth="150" VerticalAlignment="Center" Visibility="Collapsed"/>
+                        </StackPanel>
+                        </StackPanel>
                     </ctl:DarkSection>
 
                     <!-- TEMPORARY FILES -->
@@ -445,7 +469,7 @@
 
                     <!-- APPEARANCE (v3 §4.9 Opacity) -->
                     <ctl:DarkSection HeaderText="Appearance">
-                        <StackPanel>
+                        <StackPanel AutomationProperties.AutomationId="settings.opacity">
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
@@ -472,7 +496,7 @@
             </Grid>
 
             <!-- SHORTCUTS (full width) -->
-            <ctl:DarkSection Grid.Row="2" HeaderText="Keyboard Shortcuts">
+            <ctl:DarkSection Grid.Row="2" HeaderText="Keyboard Shortcuts" AutomationProperties.AutomationId="settings.shortcuts">
                 <StackPanel>
                     <TextBlock Style="{StaticResource RowSub}" Text="Click Change, then press the new key combination (Esc cancels). Hover the &#8505; on any row to see what that shortcut does." Margin="0,0,0,10"/>
                     <StackPanel x:Name="ShortcutsPanel"/>

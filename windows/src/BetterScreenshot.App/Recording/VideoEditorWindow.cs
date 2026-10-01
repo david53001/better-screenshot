@@ -92,6 +92,7 @@ public sealed class VideoEditorWindow : Window
         Content = BuildLayout();
         Surfaces.UseMica(this); // dark translucent material + the Opacity layer
         Loaded += async (_, _) => await LoadAsync();
+        ContentRendered += (_, _) => Tours.TourEvents.SurfaceShown(BetterScreenshot.Tours.TourSurface.VideoEditor, this);
         PreviewKeyDown += OnKey;
         Closing += (_, e) => { if (_exporting) e.Cancel = true; };
         Closed += (_, _) => OnClosedOnce();
@@ -114,6 +115,7 @@ public sealed class VideoEditorWindow : Window
         _body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = 200 });
         _body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var preview = new Border { Background = System.Windows.Media.Brushes.Black, Child = _player, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 0, 12) };
+        Tours.TourAnchors.Set(preview, "video.preview");
         preview.MouseLeftButtonUp += (_, _) => TogglePlay();
         _body.Children.Add(preview);
         _card.SetResourceReference(Border.BackgroundProperty, "Panel.SurfaceBrush");
@@ -199,6 +201,7 @@ public sealed class VideoEditorWindow : Window
 
         // 3. selected-segment row
         var seg = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 0), Height = 24 };
+        Tours.TourAnchors.Set(seg, "video.segment");
         _segTitle.FontSize = 11;
         _segTitle.FontWeight = FontWeights.SemiBold;
         _segTitle.Foreground = Frozen(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF));
@@ -300,6 +303,16 @@ public sealed class VideoEditorWindow : Window
         var split = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 0, 0, 0) };
         split.Children.Add(_saveCopy);
         split.Children.Add(_saveMenu);
+        Tours.TourAnchors.Set(split, "video.saveCopy");
+        Tours.TourAnchors.Set(_replace, "video.replace");
+        Tours.TourAnchors.Set(_timelineScroller, "video.timeline");
+        var infoButton = new Tours.InfoButton(BetterScreenshot.Tours.TourId.VideoEditor, () => new (string, string)[]
+        {
+            ("Space", "Play / pause"), ("S", "Split at the playhead"), ("Delete", "Delete the selected part"),
+            ("I", "Trim the start to the playhead"), ("O", "Trim the end to the playhead"), ("← →", "One frame back / forward"),
+            ("Ctrl+Z", "Undo"), ("Ctrl+Shift+Z", "Redo"),
+        }) { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+        Dock(row, infoButton);
         _cancel.Content = "Cancel";
         _cancel.Padding = new Thickness(12, 4, 12, 4);
         _cancel.ToolTip = "Close without saving";
@@ -470,7 +483,11 @@ public sealed class VideoEditorWindow : Window
         int before = Cuts.Segments.Count;
         int index = Cuts.SegmentIndexContainingSource(source) ?? _selected;
         ApplyEdit(c => c.Split(source));
-        if (Cuts.Segments.Count > before) _selected = index; // the left half
+        if (Cuts.Segments.Count > before)
+        {
+            _selected = index; // the left half
+            Tours.TourEvents.Post(BetterScreenshot.Tours.TourEvent.Action("video.split"));
+        }
         Refresh();
     }
 
@@ -479,6 +496,7 @@ public sealed class VideoEditorWindow : Window
         int index = _selected;
         double start = Cuts.OutputStart(index);
         if (!_history.Apply(c => c.Remove(index))) { System.Media.SystemSounds.Beep.Play(); return; }
+        Tours.TourEvents.Post(BetterScreenshot.Tours.TourEvent.Action("video.segmentDeleted"));
         _note = null;
         _selected = Math.Min(index, Cuts.Segments.Count - 1);
         SetPlayhead(Math.Min(start, Cuts.KeptDuration), seekPlayer: true);

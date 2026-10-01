@@ -63,7 +63,12 @@ public partial class QuickAccessWindow : Window
             ? new (string Key, string Tip, Action Click)[]
             {
                 ("copy", "Copy", actions.OnCopy),
-                ("edit", "Edit", () => { actions.OnEdit(); Dismiss(DismissReason.ActionTaken); }),
+                ("edit", "Edit", () =>
+                {
+                    Tours.TourEvents.Post(BetterScreenshot.Tours.TourEvent.Action("quickAccess.edit"));
+                    actions.OnEdit();
+                    Dismiss(DismissReason.ActionTaken);
+                }),
                 ("save", "Save", () => { actions.OnSave(); Dismiss(DismissReason.ActionTaken); }),
                 ("close", "Close", () => Dismiss(DismissReason.Closed)),
             }
@@ -90,12 +95,17 @@ public partial class QuickAccessWindow : Window
         Resources["QA.PressedBrush"] = palette.Pressed;
 
         foreach (var (key, tip, click) in specs)
-            ButtonRow.Children.Add(MakeButton(key, tip, palette.Glyph, click));
+        {
+            var b = MakeButton(key, tip, palette.Glyph, click);
+            if (key == "edit") Tours.TourAnchors.Set(b, "quickAccess.edit");
+            ButtonRow.Children.Add(b);
+        }
 
         DragSurface.MouseLeftButtonDown += (_, e) => _dragStart = e.GetPosition(this);
         DragSurface.MouseMove += DragSurface_MouseMove;
 
         Loaded += (_, _) => StartAutoDismiss();
+        ContentRendered += (_, _) => Tours.TourEvents.SurfaceShown(BetterScreenshot.Tours.TourSurface.QuickAccess, this);
     }
 
     /// <summary>Auto-dismiss the card after the configured number of seconds (0 = never — the card stays until
@@ -110,6 +120,7 @@ public partial class QuickAccessWindow : Window
         _dismissTimer.Tick += (_, _) =>
         {
             _dismissTimer!.Stop();
+            if (Tours.TourEvents.IsHosting(this)) { _dismissTimer.Start(); return; } // never vanish under a tour
             Dismiss(DismissReason.Closed);
         };
 
@@ -141,6 +152,7 @@ public partial class QuickAccessWindow : Window
         var p = e.GetPosition(this);
         if (Math.Abs(p.X - _dragStart.X) < 4 && Math.Abs(p.Y - _dragStart.Y) < 4) return;
 
+        Tours.TourEvents.Post(BetterScreenshot.Tours.TourEvent.Action("quickAccess.dragged"));
         var data = new DataObject();
         data.SetFileDropList(new StringCollection { _dragFile });
         var result = DragDrop.DoDragDrop(DragSurface, data, DragDropEffects.Copy);

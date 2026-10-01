@@ -51,3 +51,37 @@ public static class UiOpacity
         return Srgb.ContrastRatio(text, bg);
     }
 }
+
+/// <summary>
+/// The Settings tour's live Opacity demo (Mac v3 §7.8 step 3, <c>OpacityDemoPath</c>): hold 0.6 s at the user's value,
+/// ease to 0 over 2.4 s, hold 0.8 s, ease to 1 over 3.2 s, hold 0.8 s, ease back over 1.6 s, rest 1 s, repeat
+/// (smoothstep). The value is a preview that is never saved.
+/// </summary>
+public static class OpacityDemoPath
+{
+    private static readonly (double Duration, double? Target)[] Legs =
+    {
+        (0.6, null), (2.4, 0), (0.8, null), (3.2, 1), (0.8, null), (1.6, -1), (1.0, null),
+    };
+
+    public static double Period => Legs.Sum(l => l.Duration);
+
+    /// <summary>The demo value <paramref name="seconds"/> into the loop, starting from (and returning to) <paramref name="user"/>.</summary>
+    public static double Value(double seconds, double user)
+    {
+        double t = double.IsFinite(seconds) && seconds > 0 ? seconds % Period : 0;
+        double from = user;
+        foreach (var (duration, target) in Legs)
+        {
+            double to = target switch { null => from, -1 => user, { } v => v };
+            if (t < duration)
+            {
+                double x = t / duration;
+                return from + (to - from) * (x * x * (3 - 2 * x));
+            }
+            t -= duration;
+            from = to;
+        }
+        return user;
+    }
+}
