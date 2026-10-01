@@ -60,7 +60,7 @@
                     <TextBlock x:Name="SizeText" Margin="12,0,0,0" FontSize="12" VerticalAlignment="Center"
                                Foreground="{StaticResource Ed.SecondaryBrush}" ToolTip="Image size"/>
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" AutomationProperties.AutomationId="editor.actions">
-                        <Button x:Name="DoneButton" Style="{StaticResource Ed.PlainButton}" Content="Done"
+                        <Button x:Name="DoneButton" Style="{StaticResource Ed.SmallButton}" Content="Done"
                                 Click="Done_Click" ToolTip="Close the editor (Ctrl+W)"/>
                         <Button x:Name="StackButton" Style="{StaticResource Ed.SmallButton}" Margin="8,0,0,0"
                                 Click="Stack_Click" ToolTip="Keep in the bottom-right stack"/>

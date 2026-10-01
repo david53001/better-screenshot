@@ -87,4 +87,18 @@ public class SelectionMathTests
     {
         Assert.Null(SelectionMath.ToSnapshotRect(new PxRect(1700, 950, 200, 100), new PxRect(0, 0, 1920, 1080), new PxSize(1600, 900)));
     }
+
+    [Fact]
+    public void Size_chip_sits_outside_the_selection_corner()
+    {
+        var label = new PxSize(80, 20);
+        // Room above: just above the top-left corner.
+        Assert.Equal(new PxPoint(100, 174), SelectionMath.LabelOrigin(new PxRect(100, 200, 300, 100), label, 1920, 1080));
+        // At the top edge: below the selection, still outside it.
+        Assert.Equal(new PxPoint(100, 106), SelectionMath.LabelOrigin(new PxRect(100, 0, 300, 100), label, 1920, 1080));
+        // Full-height selection: inside its top-left corner.
+        Assert.Equal(new PxPoint(0, 6), SelectionMath.LabelOrigin(new PxRect(0, 0, 1920, 1080), label, 1920, 1080));
+        // Near the right edge: pulled back on screen.
+        Assert.Equal(1840, SelectionMath.LabelOrigin(new PxRect(1900, 500, 20, 20), label, 1920, 1080).X);
+    }
 }

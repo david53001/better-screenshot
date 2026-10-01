@@ -115,10 +115,12 @@ public partial class SelectionOverlayWindow : Window
         long pw = (long)Math.Round(rect.Width * _monitor.DpiScale);
         long ph = (long)Math.Round(rect.Height * _monitor.DpiScale);
         DimLabel.Text = $"{pw} × {ph}";
-        double labelY = rect.Y - 24 >= 0 ? rect.Y - 24 : rect.Y + 4;
-        Canvas.SetLeft(DimLabelHost, rect.X);
-        Canvas.SetTop(DimLabelHost, labelY);
         DimLabelHost.Visibility = Visibility.Visible;
+        DimLabelHost.Measure(new System.Windows.Size(double.PositiveInfinity, double.PositiveInfinity));
+        var at = SelectionMath.LabelOrigin(rect, new PxSize(DimLabelHost.DesiredSize.Width, DimLabelHost.DesiredSize.Height),
+            RootCanvas.ActualWidth, RootCanvas.ActualHeight);
+        Canvas.SetLeft(DimLabelHost, at.X);
+        Canvas.SetTop(DimLabelHost, at.Y);
     }
 
     private void OnMouseUp(object sender, MouseButtonEventArgs e)

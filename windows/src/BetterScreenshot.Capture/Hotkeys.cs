@@ -33,7 +33,7 @@ public static class HotkeyActionInfo
     {
         HotkeyAction.CaptureArea => "Capture Area",
         HotkeyAction.CaptureWindow => "Capture Window",
-        HotkeyAction.CaptureFullscreen => "Capture Fullscreen",
+        HotkeyAction.CaptureFullscreen => "Capture Full Screen",
         HotkeyAction.CaptureText => "Capture Text",
         HotkeyAction.PinFromClipboard => "Pin from Clipboard",
         HotkeyAction.Record => "Record Screen",

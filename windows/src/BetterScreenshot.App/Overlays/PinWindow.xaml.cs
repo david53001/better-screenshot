@@ -29,6 +29,8 @@ public partial class PinWindow : Window
         Frame.CornerRadius = new CornerRadius(style.CornerRadius);
         if (style.Shadow) Frame.Effect = new DropShadowEffect { BlurRadius = 18, ShadowDepth = 2, Opacity = 0.35 };
 
+        MouseEnter += (_, _) => CloseButton.Visibility = Visibility.Visible;
+        MouseLeave += (_, _) => CloseButton.Visibility = Visibility.Collapsed;
         MouseLeftButtonDown += OnLeftDown;
         MouseWheel += OnWheel;
         ContextMenu = BuildMenu();
@@ -39,6 +41,8 @@ public partial class PinWindow : Window
         if (e.ClickCount == 2) { _actions.OnCopy(); return; }
         DragMove();
     }
+
+    private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
 
     private void OnWheel(object sender, MouseWheelEventArgs e)
     {

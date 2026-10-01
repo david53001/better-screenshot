@@ -24,7 +24,7 @@
         <TextBlock TextWrapping="Wrap" TextAlignment="Center" Foreground="{StaticResource Theme.SecondaryTextBrush}" Margin="0,8,0,0"
                    Text="A free, 100% local screenshot &amp; recording tool that lives in your system tray — no cloud, no accounts."/>
 
-        <Border x:Name="ShortcutsCard" AutomationProperties.AutomationId="welcome.shortcuts"
+        <Border x:Name="ShortcutsCard"
                 Background="#14FFFFFF" CornerRadius="10" Margin="0,18,0,0" Padding="16,12">
             <StackPanel x:Name="ShortcutRows"/>
         </Border>

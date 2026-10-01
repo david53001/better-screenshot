@@ -4,7 +4,28 @@
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ShowActivated="False"
         WindowStartupLocation="Manual">
-    <Border x:Name="Frame" CornerRadius="8" ClipToBounds="True">
-        <Image x:Name="Img" Stretch="Fill"/>
-    </Border>
+    <Grid>
+        <Border x:Name="Frame" CornerRadius="8" ClipToBounds="True">
+            <Image x:Name="Img" Stretch="Fill"/>
+        </Border>
+        <!-- Review X3: the close button sits on a dark HUD circle so it shows on light pins; it appears on hover. -->
+        <Button x:Name="CloseButton" Width="22" Height="22" Margin="6" HorizontalAlignment="Left" VerticalAlignment="Top"
+                ToolTip="Close pin" AutomationProperties.Name="Close pin" Cursor="Hand" Focusable="False"
+                Visibility="Collapsed" Click="CloseButton_Click">
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <Ellipse x:Name="Disc" Fill="#B3000000" Stroke="#40FFFFFF" StrokeThickness="1"/>
+                        <Path Data="M 7,7 L 15,15 M 15,7 L 7,15" Stroke="White" StrokeThickness="1.6"
+                              StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Disc" Property="Fill" Value="#E6000000"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Button.Template>
+        </Button>
+    </Grid>
 </Window>

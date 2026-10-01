@@ -118,4 +118,23 @@ public class HotkeyTests
     [Fact]
     public void DisplayString_renders_the_users_alt_period_binding()
         => Assert.Equal("Alt+.", new HotkeyCombo(0xBE, HotkeyModifiers.Alt).DisplayString);
+
+    [Fact]
+    public void Welcome_cheat_sheet_lists_live_bindings_in_menu_order_and_skips_unbound()
+    {
+        var rows = HotkeyCheatSheet.Rows(HotkeyBindings.Defaults());
+        Assert.Equal(new[] { HotkeyAction.CaptureArea, HotkeyAction.CaptureWindow, HotkeyAction.CaptureFullscreen,
+            HotkeyAction.CaptureText, HotkeyAction.Record }, rows.Select(r => r.Action));
+        Assert.Equal(HotkeyAction.CaptureArea.DefaultCombo()!.Value.DisplayString, rows[0].Keys);
+        Assert.Equal(3, rows.Count(r => r.IsScreenshotCapture));
+
+        var map = HotkeyActionInfo.All.ToDictionary(a => a, a => a.DefaultCombo());
+        map[HotkeyAction.CaptureWindow] = null;
+        var rebound = HotkeyCheatSheet.Rows(new HotkeyBindings(map));
+        Assert.DoesNotContain(rebound, r => r.Action == HotkeyAction.CaptureWindow);
+        Assert.Equal(4, rebound.Count);
+    }
+
+    [Fact]
+    public void Full_screen_is_two_words_everywhere() => Assert.Equal("Capture Full Screen", HotkeyAction.CaptureFullscreen.Title());
 }

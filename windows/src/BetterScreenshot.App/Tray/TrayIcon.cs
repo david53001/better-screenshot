@@ -26,31 +26,33 @@ public sealed class TrayIcon : IDisposable
         _normalIcon = AppIconFactory.CreateTrayIcon(recording: false);
         _recordingIcon = AppIconFactory.CreateTrayIcon(recording: true);
 
-        _recordItem = Item("Record Screen…", bindings.Combo(HotkeyAction.Record)?.DisplayString, commands.ToggleRecording, HotkeyAction.Record);
-        _pauseResumeItem = Item("Pause Recording", bindings.Combo(HotkeyAction.PauseResumeRecording)?.DisplayString, commands.PauseResumeRecording, HotkeyAction.PauseResumeRecording);
+        _recordItem = Item("Record Screen…", bindings.Combo(HotkeyAction.Record)?.DisplayString, commands.ToggleRecording, HotkeyAction.Record, "record-circle");
+        _pauseResumeItem = Item("Pause Recording", bindings.Combo(HotkeyAction.PauseResumeRecording)?.DisplayString, commands.PauseResumeRecording, HotkeyAction.PauseResumeRecording, "pause");
         _pauseResumeItem.Visible = false;
 
-        _settingsItem = Item("Settings…", null, commands.OpenSettings);
+        _settingsItem = Item("Settings…", null, commands.OpenSettings, icon: "gear");
         var menu = _menu = new WF.ContextMenuStrip();
         menu.Renderer = new DarkMenuRenderer();
-        menu.ShowImageMargin = false;
+        // Review X6: an icon on every item, so the titles line up (Record/Stop and Pause/Resume swap theirs).
+        int side = MenuIcons.SidePx;
+        menu.ImageScalingSize = new Size(side, side);
         menu.Items.AddRange(new WF.ToolStripItem[]
         {
-            Item("Capture Area", bindings.Combo(HotkeyAction.CaptureArea)?.DisplayString, commands.CaptureArea, HotkeyAction.CaptureArea),
-            Item("Capture Window", bindings.Combo(HotkeyAction.CaptureWindow)?.DisplayString, commands.CaptureWindow, HotkeyAction.CaptureWindow),
-            Item("Capture Fullscreen", bindings.Combo(HotkeyAction.CaptureFullscreen)?.DisplayString, commands.CaptureFullscreen, HotkeyAction.CaptureFullscreen),
-            Item("Capture Text", bindings.Combo(HotkeyAction.CaptureText)?.DisplayString, commands.CaptureText, HotkeyAction.CaptureText),
+            Item("Capture Area", bindings.Combo(HotkeyAction.CaptureArea)?.DisplayString, commands.CaptureArea, HotkeyAction.CaptureArea, "rect-dashed"),
+            Item("Capture Window", bindings.Combo(HotkeyAction.CaptureWindow)?.DisplayString, commands.CaptureWindow, HotkeyAction.CaptureWindow, "window"),
+            Item("Capture Full Screen", bindings.Combo(HotkeyAction.CaptureFullscreen)?.DisplayString, commands.CaptureFullscreen, HotkeyAction.CaptureFullscreen, "display"),
+            Item("Capture Text", bindings.Combo(HotkeyAction.CaptureText)?.DisplayString, commands.CaptureText, HotkeyAction.CaptureText, "text"),
             new WF.ToolStripSeparator(),
             _recordItem,
             _pauseResumeItem,
             new WF.ToolStripSeparator(),
-            Item("Pin from Clipboard", bindings.Combo(HotkeyAction.PinFromClipboard)?.DisplayString, commands.PinFromClipboard, HotkeyAction.PinFromClipboard),
+            Item("Pin from Clipboard", bindings.Combo(HotkeyAction.PinFromClipboard)?.DisplayString, commands.PinFromClipboard, HotkeyAction.PinFromClipboard, "pin"),
             new WF.ToolStripSeparator(),
-            Item("History…", bindings.Combo(HotkeyAction.OpenHistory)?.DisplayString, commands.OpenHistory, HotkeyAction.OpenHistory),
-            Item("Restore Recently Closed", bindings.Combo(HotkeyAction.RestoreRecentlyClosed)?.DisplayString, commands.RestoreRecentlyClosed, HotkeyAction.RestoreRecentlyClosed),
+            Item("History…", bindings.Combo(HotkeyAction.OpenHistory)?.DisplayString, commands.OpenHistory, HotkeyAction.OpenHistory, "photo"),
+            Item("Restore Recently Closed", bindings.Combo(HotkeyAction.RestoreRecentlyClosed)?.DisplayString, commands.RestoreRecentlyClosed, HotkeyAction.RestoreRecentlyClosed, "undo"),
             new WF.ToolStripSeparator(),
             _settingsItem,
-            Item("Quit", null, commands.Quit),
+            Item("Quit", null, commands.Quit, icon: "close"),
         });
 
         _notify = new WF.NotifyIcon
@@ -72,7 +74,7 @@ public sealed class TrayIcon : IDisposable
     /// </summary>
     public void AddHelpMenu(Action<TourId> replay, Action resetAll)
     {
-        var help = new WF.ToolStripMenuItem("Help && Tours"); // && = a literal ampersand (WinForms mnemonics)
+        var help = new WF.ToolStripMenuItem("Help && Tours") { Image = MenuIcons.Get("info") }; // && = a literal ampersand (WinForms mnemonics)
         var drop = (WF.ToolStripDropDownMenu)help.DropDown;
         drop.Renderer = new DarkMenuRenderer();
         drop.ShowImageMargin = false;
@@ -93,6 +95,7 @@ public sealed class TrayIcon : IDisposable
         _notify.Icon = recording ? _recordingIcon : _normalIcon;
         _notify.Text = recording ? Trim($"BetterScreenshot — {elapsed}") : "BetterScreenshot";
         _recordItem.Text = recording ? "Stop Recording" : "Record Screen…";
+        _recordItem.Image = MenuIcons.Get(recording ? "stop-circle" : "record-circle");
         _pauseResumeItem.Visible = recording;
     }
 
@@ -101,6 +104,7 @@ public sealed class TrayIcon : IDisposable
     {
         _pauseResumeItem.Visible = active;
         _pauseResumeItem.Text = paused ? "Resume Recording" : "Pause Recording";
+        _pauseResumeItem.Image = MenuIcons.Get(paused ? "play" : "pause");
     }
 
     /// <summary>Refreshes the shortcut hints after a rebind in Settings (the menu is long-lived).</summary>
@@ -115,9 +119,9 @@ public sealed class TrayIcon : IDisposable
         menu.Show(WF.Cursor.Position);
     }
 
-    private WF.ToolStripMenuItem Item(string text, string? shortcut, Action onClick, HotkeyAction? action = null)
+    private WF.ToolStripMenuItem Item(string text, string? shortcut, Action onClick, HotkeyAction? action = null, string? icon = null)
     {
-        var item = new WF.ToolStripMenuItem(text);
+        var item = new WF.ToolStripMenuItem(text) { Image = icon is null ? null : MenuIcons.Get(icon) };
         if (!string.IsNullOrEmpty(shortcut)) item.ShortcutKeyDisplayString = shortcut;
         item.Click += (_, _) => onClick();
         if (action is { } a) _actionItems[a] = item;

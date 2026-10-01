@@ -105,11 +105,6 @@
         <Setter Property="FontWeight" Value="SemiBold"/>
     </Style>
 
-    <!-- Plain text button: Done -->
-    <Style x:Key="Ed.PlainButton" TargetType="Button" BasedOn="{StaticResource Ed.SmallButton}">
-        <Setter Property="Background" Value="Transparent"/>
-    </Style>
-
     <!-- One segment of a segmented control (equal widths come from the hosting UniformGrid) -->
     <Style x:Key="Ed.Segment" TargetType="ToggleButton">
         <Setter Property="Foreground" Value="{StaticResource Ed.LabelBrush}"/>

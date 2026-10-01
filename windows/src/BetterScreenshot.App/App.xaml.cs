@@ -89,7 +89,7 @@ public partial class App : System.Windows.Application
         _tours = new TourCoordinator(_settings, ShortcutText)
         {
             OpenSurface = OpenTourSurface,
-            Hud = Overlays.HudController.Show,
+            Hud = message => Overlays.HudController.Show(message),
             OnFinished = id => { if (id == TourId.Welcome) _welcome?.Close(); },
             // Settings tour step 3 ("Opacity") runs the live slider demo while its tag shows.
             OnStepShown = (id, step) => { if (id == TourId.Settings && step == 2) _settingsWindow?.StartOpacityDemo(); },

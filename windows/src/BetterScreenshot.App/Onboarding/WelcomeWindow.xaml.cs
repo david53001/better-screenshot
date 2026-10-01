@@ -32,33 +32,53 @@ public partial class WelcomeWindow : Window
         ContentRendered += (_, _) => TourEvents.SurfaceShown(TourSurface.Welcome, this);
     }
 
+    /// <summary>
+    /// The shortcut grid (review O1–O2): the live bindings in tray-menu order (<see cref="HotkeyCheatSheet"/>), keys
+    /// right-aligned against left-aligned descriptions. Tour anchors (v3 §7.6): <c>welcome.shortcuts</c> is a
+    /// transparent border spanning just the bound screenshot-capture rows; <c>welcome.captureArea</c> is Capture
+    /// Area's keys label.
+    /// </summary>
     private void BuildShortcuts(HotkeyBindings bindings)
     {
-        var rows = new (HotkeyAction Action, string Label, string? Anchor)[]
+        var rows = HotkeyCheatSheet.Rows(bindings);
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (int r = 0; r < rows.Count; r++)
         {
-            (HotkeyAction.CaptureArea, "Capture an area", "welcome.captureArea"),
-            (HotkeyAction.Record, "Record the screen", null),
-            (HotkeyAction.CaptureFullscreen, "Capture the full screen", null),
-            (HotkeyAction.CaptureWindow, "Capture a window", null),
-        };
-        foreach (var (action, label, anchor) in rows)
-        {
-            var grid = new Grid { Margin = new Thickness(0, 3, 0, 3) };
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition());
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var keys = new TextBlock
             {
-                Text = bindings.Combo(action)?.DisplayString ?? "—",
+                Text = rows[r].Keys,
                 FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontWeight = FontWeights.SemiBold,
                 Foreground = (System.Windows.Media.Brush)FindResource("Theme.TextBrush"),
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Right, Margin = new Thickness(0, 3, 0, 3),
             };
-            var text = new TextBlock { Text = label, Foreground = (System.Windows.Media.Brush)FindResource("Theme.SecondaryTextBrush") };
-            Grid.SetColumn(text, 1);
+            var text = new TextBlock
+            {
+                Text = rows[r].Description, Margin = new Thickness(0, 3, 0, 3),
+                Foreground = (System.Windows.Media.Brush)FindResource("Theme.SecondaryTextBrush"),
+            };
+            Grid.SetRow(keys, r);
+            Grid.SetRow(text, r);
+            Grid.SetColumn(text, 2);
             grid.Children.Add(keys);
             grid.Children.Add(text);
-            if (anchor is not null) TourAnchors.Set(grid, anchor);
-            ShortcutRows.Children.Add(grid);
+            if (rows[r].Action == HotkeyAction.CaptureArea) TourAnchors.Set(keys, "welcome.captureArea");
         }
+        int first = rows.ToList().FindIndex(x => x.IsScreenshotCapture), last = rows.ToList().FindLastIndex(x => x.IsScreenshotCapture);
+        if (first >= 0)
+        {
+            var outline = new Border { Background = System.Windows.Media.Brushes.Transparent, IsHitTestVisible = false };
+            Grid.SetRow(outline, first);
+            Grid.SetRowSpan(outline, last - first + 1);
+            Grid.SetColumnSpan(outline, 3);
+            grid.Children.Add(outline);
+            TourAnchors.Set(outline, "welcome.shortcuts");
+        }
+        grid.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+        ShortcutRows.Children.Add(grid);
     }
 
     private void SetAsking(bool asking)

@@ -724,7 +724,7 @@ public sealed class VideoEditorWindow : Window
         _timeline.Frames = Array.Empty<BitmapSource?>();
         _ = LoadFramesAsync();
         SetPlayhead(0, seekPlayer: true);
-        HudController.Show("Recording edited");
+        HudController.Show("Recording edited", HudIcon.Done);
         Refresh();
     }
 
@@ -762,7 +762,7 @@ public sealed class VideoEditorWindow : Window
     private void Fail(string message)
     {
         _note = message;
-        HudController.Show(message);
+        HudController.Show(message, HudIcon.Warning);
         Refresh();
     }
 

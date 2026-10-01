@@ -99,6 +99,8 @@ public partial class WindowPickerWindow : Window
             Highlight.Visibility = Visibility.Visible;
 
             TitleText.Text = p.Title ?? string.Empty;
+            // Review X4: the chip never runs past the highlighted window — the title truncates with an ellipsis.
+            TitleHost.MaxWidth = Math.Max(0, p.Frame.Width / dip - 16);
             Canvas.SetLeft(TitleHost, x + 8);
             Canvas.SetTop(TitleHost, y + 8);
             TitleHost.Visibility = string.IsNullOrEmpty(p.Title) ? Visibility.Collapsed : Visibility.Visible;

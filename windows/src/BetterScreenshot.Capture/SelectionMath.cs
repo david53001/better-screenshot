@@ -50,4 +50,23 @@ public static class SelectionMath
         var clamped = ClampToBounds(local, snapshotSize.Width, snapshotSize.Height);
         return clamped.IsEmpty ? null : clamped;
     }
+
+    /// <summary>Gap between the selection and its size chip.</summary>
+    public const double LabelGap = 6;
+
+    /// <summary>
+    /// Where the area-selection size chip goes (review X2, Mac <c>OverlayLabelLayout</c>): outside the selection's
+    /// top-left corner, above it; near the screen's top edge, below the selection instead; only when neither fits,
+    /// inside its top-left corner. Always kept on screen horizontally.
+    /// </summary>
+    public static PxPoint LabelOrigin(PxRect selection, PxSize label, double screenWidth, double screenHeight)
+    {
+        double x = Math.Clamp(selection.X, 0, Math.Max(0, screenWidth - label.Width));
+        double above = selection.Y - LabelGap - label.Height;
+        double below = selection.Bottom + LabelGap;
+        double y = above >= 0 ? above
+            : below + label.Height <= screenHeight ? below
+            : selection.Y + LabelGap;
+        return new PxPoint(x, y);
+    }
 }

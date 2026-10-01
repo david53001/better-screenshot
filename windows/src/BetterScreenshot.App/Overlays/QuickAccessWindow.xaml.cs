@@ -38,6 +38,28 @@ public partial class QuickAccessWindow : Window
 
     public event Action<DismissReason>? Dismissed;
 
+    /// <summary>"0:42 · MP4" for a saved recording — its length from the file header only (no decode); null when the
+    /// file isn't there.</summary>
+    internal static string? RecordingBadge(string? path)
+    {
+        if (path is null || !System.IO.File.Exists(path)) return null;
+        try
+        {
+            using var fs = System.IO.File.OpenRead(path);
+            string ext = System.IO.Path.GetExtension(path);
+            var length = ext.Equals(".gif", StringComparison.OrdinalIgnoreCase)
+                ? BetterScreenshot.History.MediaInfo.GifDuration(fs) : BetterScreenshot.History.MediaInfo.Mp4Duration(fs);
+            return BetterScreenshot.History.MediaInfoText.Recording(length, ext);
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException) { return null; }
+    }
+
+    internal void ShowBadge(string? text)
+    {
+        BadgeText.Text = text ?? "";
+        Badge.Visibility = string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
+    }
+
     public QuickAccessWindow(BitmapSource image, QuickAccessKind kind, QuickAccessActions actions, string? dragFile,
         int autoDismissSeconds = 0)
     {
@@ -100,6 +122,8 @@ public partial class QuickAccessWindow : Window
             if (key == "edit") Tours.TourAnchors.Set(b, "quickAccess.edit");
             ButtonRow.Children.Add(b);
         }
+
+        if (kind == QuickAccessKind.Recording) ShowBadge(RecordingBadge(dragFile));
 
         DragSurface.MouseLeftButtonDown += (_, e) => _dragStart = e.GetPosition(this);
         DragSurface.MouseMove += DragSurface_MouseMove;

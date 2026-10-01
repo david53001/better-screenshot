@@ -142,12 +142,17 @@ public sealed class CaptureCoordinator : IAppCommands
             RestoreFrontmostApp();
             var result = await TextRecognizerService.RecognizeAsync(image);
             if (result.ClipboardString is { } text) ClipboardService.SetText(text);
-            HudController.Show(result.HudMessage);
+            HudController.Show(result.HudMessage, result.Kind switch
+            {
+                RecognitionKind.None => HudIcon.Warning,
+                RecognitionKind.Qr => HudIcon.Copy,
+                _ => HudIcon.Text,
+            });
         }
         catch
         {
             // Never crash the app on a failed recognition.
-            HudController.Show("Capture Text failed");
+            HudController.Show("Capture Text failed", HudIcon.Warning);
         }
     }
 

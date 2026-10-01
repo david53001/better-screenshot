@@ -58,10 +58,30 @@ internal static class PreviewRenderer
             try { await Render(make(), Path.Combine(_outDir, name + ".png")); log.Add("ok   " + name); }
             catch (Exception ex) { log.Add($"FAIL {name}: {ex.GetType().Name} {ex.Message}"); }
         }
+        try { RenderTrayIcons(Path.Combine(_outDir, "tray-icons.png")); log.Add("ok   tray-icons"); }
+        catch (Exception ex) { log.Add($"FAIL tray-icons: {ex.GetType().Name} {ex.Message}"); }
         try { await RenderVideoEditor(Path.Combine(_outDir, "video-editor.png")); log.Add("ok   video-editor"); }
         catch (Exception ex) { log.Add($"FAIL video-editor: {ex.GetType().Name} {ex.Message}"); }
         File.WriteAllLines(Path.Combine(_outDir, "_preview-log.txt"), log);
         app.Shutdown(log.Any(l => l.StartsWith("FAIL")) ? 1 : 0);
+    }
+
+    /// <summary>The tray menu's glyphs (review X6) as the menu gets them, on the menu's dark surface, in menu order.</summary>
+    private static void RenderTrayIcons(string path)
+    {
+        string[] keys = { "rect-dashed", "window", "display", "text", "record-circle", "stop-circle", "pause", "play", "pin", "photo", "undo", "info", "gear", "close" };
+        int side = Tray.MenuIcons.SidePx, pad = 6;
+        using var sheet = new System.Drawing.Bitmap(keys.Length * (side + pad) + pad, side + 2 * pad);
+        using (var g = System.Drawing.Graphics.FromImage(sheet))
+        {
+            g.Clear(System.Drawing.Color.FromArgb(0x14, 0x14, 0x16));
+            for (int i = 0; i < keys.Length; i++)
+            {
+                var icon = Tray.MenuIcons.Get(keys[i]) ?? throw new InvalidOperationException("no icon " + keys[i]);
+                g.DrawImage(icon, pad + i * (side + pad), pad, side, side);
+            }
+        }
+        sheet.Save(path, System.Drawing.Imaging.ImageFormat.Png);
     }
 
     private static IEnumerable<(string Name, Func<Window> Make)> Shots()
@@ -70,7 +90,12 @@ internal static class PreviewRenderer
         yield return ("settings", () => new SettingsWindow(new SettingsStore(), new HotkeyController(commands)));
         foreach (var (label, img) in QuickAccessSamples())
             yield return ("quickaccess-" + label, () => new QuickAccessWindow(img, QuickAccessKind.Screenshot, new QuickAccessActions(), null));
-        yield return ("quickaccess-recording", () => new QuickAccessWindow(UiPreview.SampleImage(640, 360), QuickAccessKind.Recording, new QuickAccessActions(), null));
+        yield return ("quickaccess-recording", () =>
+        {
+            var card = new QuickAccessWindow(UiPreview.SampleImage(640, 360), QuickAccessKind.Recording, new QuickAccessActions(), null);
+            card.ShowBadge(BetterScreenshot.History.MediaInfoText.Recording(TimeSpan.FromSeconds(42), ".mp4"));
+            return card;
+        });
         foreach (var (label, setup) in EditorStates())
             yield return ("editor-" + label, () => { var w = new EditorWindow(EditorSample(), AnnotationStyle.Default); w.Loaded += (_, _) => setup(w); return w; });
         yield return ("welcome", () => new WelcomeWindow());
@@ -90,7 +115,8 @@ internal static class PreviewRenderer
                 w.Apply(state);
                 return w;
             });
-        yield return ("toast", () => new HudWindow("Copied to clipboard"));
+        yield return ("toast", () => new HudWindow("Text copied — 42 characters", HudIcon.Text));
+        yield return ("toast-warning", () => new HudWindow("No text found", HudIcon.Warning));
         yield return ("history-empty", () => new HistoryWindow(PreviewHistory(0), new HistoryWindowActions(_ => { }, _ => { }) { CaptureAreaChord = () => "Ctrl+Shift+4" }));
         yield return ("history-filled", () => new HistoryWindow(PreviewHistory(6), new HistoryWindowActions(_ => { }, _ => { })));
     }

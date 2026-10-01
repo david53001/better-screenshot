@@ -21,7 +21,7 @@
         </Path>
         <Rectangle x:Name="SelRect" Stroke="White" StrokeThickness="1" Visibility="Collapsed"/>
         <Border x:Name="DimLabelHost" Background="{DynamicResource Hud.SurfaceBrush}" CornerRadius="6" Padding="6,2" Visibility="Collapsed">
-            <TextBlock x:Name="DimLabel" Foreground="White" FontSize="12" FontWeight="Medium"/>
+            <TextBlock x:Name="DimLabel" Foreground="White" FontSize="12" FontWeight="Medium" Typography.NumeralAlignment="Tabular"/>
         </Border>
     </Canvas>
 </Window>

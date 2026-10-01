@@ -3,13 +3,21 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ShowActivated="False"
-        Width="200" Height="200" WindowStartupLocation="Manual">
+        Width="200" Height="200" WindowStartupLocation="Manual" Cursor="Hand">
     <Border CornerRadius="24" Background="{DynamicResource Hud.SurfaceBrush}" BorderBrush="#1AFFFFFF" BorderThickness="1">
         <Border.Effect>
             <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.5"/>
         </Border.Effect>
-        <TextBlock x:Name="Digit" Text="0" Foreground="White" FontFamily="Consolas"
-                   FontSize="120" FontWeight="SemiBold"
-                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        <Grid>
+            <!-- Review X1: the digit is optically centred — a fixed line box whose baseline sits so the figure's cap
+                 height (≈0.7 em in Segoe UI) is centred in the 200-pt card — and a second line says a click skips it. -->
+            <TextBlock x:Name="Digit" Text="3" Foreground="White" FontFamily="Segoe UI Variable Display, Segoe UI"
+                       FontSize="112" FontWeight="SemiBold" TextAlignment="Center"
+                       LineStackingStrategy="BlockLineHeight" LineHeight="112"
+                       Typography.NumeralAlignment="Tabular"
+                       VerticalAlignment="Top" Margin="0,30,0,0"/>
+            <TextBlock Text="Click to start now" Foreground="#B3FFFFFF" FontSize="12" FontWeight="Medium"
+                       HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,18"/>
+        </Grid>
     </Border>
 </Window>

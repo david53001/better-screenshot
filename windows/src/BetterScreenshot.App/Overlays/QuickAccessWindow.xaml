@@ -52,6 +52,12 @@
                 <Rectangle x:Name="Scrim" VerticalAlignment="Bottom" IsHitTestVisible="False"/>
                 <StackPanel x:Name="ButtonRow" Orientation="Horizontal" AutomationProperties.AutomationId="quickAccess.actions"
                             HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,9"/>
+                <!-- Review Q2: a recording card says what it is — "0:42 · MP4" on a dark HUD chip, top-left. -->
+                <Border x:Name="Badge" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8,8,0,0" Padding="7,2,7,3"
+                        CornerRadius="8" Background="#B3000000" Visibility="Collapsed" IsHitTestVisible="False">
+                    <TextBlock x:Name="BadgeText" Foreground="White" FontSize="11" FontWeight="SemiBold"
+                               Typography.NumeralAlignment="Tabular"/>
+                </Border>
             </Grid>
             <!-- Crisp hairline on top of everything (subtle; matches the JVoice monochrome border). -->
             <Border x:Name="Hairline" CornerRadius="14" BorderThickness="1"

@@ -131,7 +131,7 @@ public sealed class RecordingCoordinator
     {
         if (!FfmpegRunner.IsAvailable())
         {
-            HudController.Show("ffmpeg not found — recording unavailable");
+            HudController.Show("ffmpeg not found — recording unavailable", HudIcon.Warning);
             return;
         }
         if (!_state.Transition(RecorderEvent.Arm)) return;
@@ -244,7 +244,7 @@ public sealed class RecordingCoordinator
         {
             _state = RecorderState.Idle;
             TearDownOverlays();
-            HudController.Show("Could not start recording");
+            HudController.Show("Could not start recording", HudIcon.Warning);
             _onStateChange(false, null);
             return;
         }
@@ -461,7 +461,7 @@ public sealed class RecordingCoordinator
                         _region = previous;
                         HudController.Show(_target == PillTarget.Window
                             ? "Couldn't switch — still recording the previous window"
-                            : "Couldn't switch — still recording the previous area");
+                            : "Couldn't switch — still recording the previous area", HudIcon.Warning);
                         try { _engine.Resume(); } catch { /* the stop path reports it */ }
                     }
                 }
