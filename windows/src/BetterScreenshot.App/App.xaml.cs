@@ -74,7 +74,9 @@ public partial class App : System.Windows.Application
         // (repairs a stale entry after the app is moved/republished) or clear it if the flag was turned off.
         StartupRegistration.Reconcile(_settings.LaunchAtLogin);
         // How long clipboard/drag temp PNGs survive is a user setting; apply it before the first capture can run.
-        TempFiles.Configure(_settings.Capture.TempRetentionMinutes);
+        TempFiles.Configure(_settings.Capture.TempRetentionSeconds);
+        // v3 §4.2: the launch sweep removes expired payload folders a previous run left (off the UI thread).
+        _ = Task.Run(() => TempFiles.SweepOrphans());
         Controls.Surfaces.Set(_settings.Capture.UiOpacity);
         _commands = new CaptureCoordinator(_settings, Shutdown);
         _tray = new TrayIcon(_commands, _settings.Hotkeys);

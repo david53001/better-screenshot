@@ -3,62 +3,66 @@ using Xunit;
 
 namespace BetterScreenshot.Tests;
 
+/// <summary>v3 §4.2: the Mac's "Keep cached files for" stops — 10 s · 30 s · 5 min · 10 min · 30 min · 1 hour · ∞.</summary>
 public class TempRetentionScaleTests
 {
     [Fact]
-    public void RangeIsFiveToThirtyMinutes()
+    public void TheMacStops()
     {
-        Assert.Equal(5, TempRetentionScale.MinMinutes);
-        Assert.Equal(30, TempRetentionScale.MaxMinutes);
-        Assert.Equal(5, TempRetentionScale.DefaultMinutes); // default preserves the previous fixed 5-minute behavior
+        Assert.Equal(new[] { 10, 30, 300, 600, 1800, 3600, 0 }, TempRetentionScale.StopsSeconds);
+        Assert.Equal(300, TempRetentionScale.DefaultSeconds); // the old fixed 5 minutes
+        Assert.Equal(0, TempRetentionScale.NeverSeconds);
+        Assert.Equal(6, TempRetentionScale.MaxPosition);
     }
 
     [Theory]
-    [InlineData(5, 5)]
-    [InlineData(17, 17)]
-    [InlineData(30, 30)]
-    [InlineData(4, 5)]      // below the bar's floor
-    [InlineData(0, 5)]      // a missing/zero legacy value must never mean "delete immediately"
-    [InlineData(-9, 5)]
-    [InlineData(31, 30)]    // above the bar's ceiling
-    [InlineData(600, 30)]
-    public void ClampKeepsValuesInRange(int minutes, int expected)
+    [InlineData(0, 10, "10 s")]
+    [InlineData(1, 30, "30 s")]
+    [InlineData(2, 300, "5 min")]
+    [InlineData(3, 600, "10 min")]
+    [InlineData(4, 1800, "30 min")]
+    [InlineData(5, 3600, "1 hour")]
+    [InlineData(6, 0, "∞")]
+    public void PositionsSecondsAndLabelsRoundTrip(int position, int seconds, string label)
     {
-        Assert.Equal(expected, TempRetentionScale.Clamp(minutes));
+        Assert.Equal(seconds, TempRetentionScale.PositionToSeconds(position));
+        Assert.Equal(position, TempRetentionScale.SecondsToPosition(seconds));
+        Assert.Equal(label, TempRetentionScale.Label(seconds));
     }
 
     [Theory]
-    [InlineData(5.0, 5)]
-    [InlineData(12.0, 12)]
-    [InlineData(30.0, 30)]
-    [InlineData(12.4, 12)]  // slider positions are doubles; round to the nearest whole minute
-    [InlineData(12.5, 13)]
-    [InlineData(29.6, 30)]
-    [InlineData(3.2, 5)]    // and clamp, so a coerced slider value can't escape the range
-    [InlineData(44.0, 30)]
-    public void PositionToMinutesRoundsAndClamps(double position, int expected)
-    {
-        Assert.Equal(expected, TempRetentionScale.PositionToMinutes(position));
-    }
+    [InlineData(-1.2, 10)]  // off the ends clamps
+    [InlineData(9, 0)]
+    [InlineData(2.4, 300)]  // a dragged thumb snaps to the nearest stop
+    [InlineData(2.6, 600)]
+    public void PositionsClampAndRound(double position, int seconds) =>
+        Assert.Equal(seconds, TempRetentionScale.PositionToSeconds(position));
 
     [Theory]
-    [InlineData(5, "5 min")]
-    [InlineData(17, "17 min")]
-    [InlineData(30, "30 min")]
-    [InlineData(99, "30 min")] // the readout can never claim a retention the app won't honor
-    public void LabelReadsAsMinutes(int minutes, string expected)
-    {
-        Assert.Equal(expected, TempRetentionScale.Label(minutes));
-    }
+    [InlineData(0, 0)]       // ∞ stays ∞
+    [InlineData(-5, 300)]    // nonsense → default
+    [InlineData(1, 10)]      // hand-edited values snap to the nearest stop
+    [InlineData(45, 30)]
+    [InlineData(250, 300)]
+    [InlineData(7200, 3600)]
+    public void StoredValuesSnapToAStop(int stored, int expected) =>
+        Assert.Equal(expected, TempRetentionScale.Normalize(stored));
 
     [Theory]
-    [InlineData(5)]
-    [InlineData(6)]
-    [InlineData(19)]
-    [InlineData(30)]
-    public void SliderRoundTripIsLossless(int minutes)
+    [InlineData(5, 300)]     // the old Windows 5–30 minute bar → the nearest stop
+    [InlineData(7, 300)]
+    [InlineData(12, 600)]
+    [InlineData(22, 1800)]
+    [InlineData(30, 1800)]
+    [InlineData(0, 300)]
+    public void LegacyMinutesMapToTheNearestStop(int minutes, int seconds) =>
+        Assert.Equal(seconds, TempRetentionScale.FromLegacyMinutes(minutes));
+
+    [Fact]
+    public void LifetimeIsNullForInfinity()
     {
-        // What the slider shows for a persisted value must persist back to that same value.
-        Assert.Equal(minutes, TempRetentionScale.PositionToMinutes(minutes));
+        Assert.Null(TempRetentionScale.Lifetime(0));
+        Assert.Equal(TimeSpan.FromMinutes(5), TempRetentionScale.Lifetime(300));
+        Assert.Equal(TimeSpan.FromSeconds(10), TempRetentionScale.Lifetime(10));
     }
 }

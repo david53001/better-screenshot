@@ -31,12 +31,12 @@ public sealed record CaptureSettings
     public int HistoryCap { get; init; } = 50;
 
     /// <summary>
-    /// How long (in minutes, <see cref="TempRetentionScale.MinMinutes"/>..<see cref="TempRetentionScale.MaxMinutes"/>)
-    /// the throwaway PNGs under <c>%TEMP%\BetterScreenshot-{guid}\</c> — the files behind clipboard file-drops and
-    /// Quick Access drag-to-export — are kept before they are auto-deleted. Raising it lets you paste or drop a
-    /// capture as a *file* long after you took it; the capture itself is never affected (History keeps its own copy).
+    /// How long (seconds, one of <see cref="TempRetentionScale.StopsSeconds"/>; 0 = ∞) the throwaway PNGs under
+    /// <c>%TEMP%\BetterScreenshot-{guid}\</c> — the files behind clipboard file-drops and Quick Access drag-to-export —
+    /// are kept before they are auto-deleted (v3 §4.2, the Mac's stops). The capture itself is never affected
+    /// (History keeps its own copy).
     /// </summary>
-    public int TempRetentionMinutes { get; init; } = TempRetentionScale.DefaultMinutes;
+    public int TempRetentionSeconds { get; init; } = TempRetentionScale.DefaultSeconds;
 
     /// <summary>"Opacity" (v3 §4.9 <c>uiOpacity</c>): 0 = Transparent … 1 = Opaque, default 0.5 — how much of
     /// what's behind shows through windows, panels and floating controls (see <c>UiOpacity</c>).</summary>
@@ -67,7 +67,7 @@ public sealed record CaptureSettings
         ["historyEnabled"] = HistoryEnabled ? "true" : "false",
         ["historyCap"] = HistoryCap.ToString(CultureInfo.InvariantCulture),
         ["freezeScreen"] = FreezeScreen ? "true" : "false",
-        ["tempRetentionMinutes"] = TempRetentionMinutes.ToString(CultureInfo.InvariantCulture),
+        ["tempRetentionSeconds"] = TempRetentionSeconds.ToString(CultureInfo.InvariantCulture),
         ["uiOpacity"] = UiOpacity.ToString("0.###", CultureInfo.InvariantCulture),
     };
 
@@ -103,9 +103,13 @@ public sealed record CaptureSettings
             HistoryEnabled = ParseBool(d, "historyEnabled", def.HistoryEnabled),
             HistoryCap = ParseInt(d, "historyCap", def.HistoryCap),
             FreezeScreen = ParseBool(d, "freezeScreen", def.FreezeScreen),
-            // Clamped on read: a hand-edited or future-written value can never shorten the lifetime below the
-            // 5 minutes an in-flight drop needs, nor leave temp files lying around past the bar's 30-minute end.
-            TempRetentionMinutes = TempRetentionScale.Clamp(ParseInt(d, "tempRetentionMinutes", def.TempRetentionMinutes)),
+            // Snapped to a stop on read; a settings.json from before v3 §4.2 has only the old 5–30
+            // "tempRetentionMinutes", which maps to the nearest stop (5 → 5 min, 12 → 10 min, 22/30 → 30 min).
+            TempRetentionSeconds = d.ContainsKey("tempRetentionSeconds")
+                ? TempRetentionScale.Normalize(ParseInt(d, "tempRetentionSeconds", def.TempRetentionSeconds))
+                : d.ContainsKey("tempRetentionMinutes")
+                    ? TempRetentionScale.FromLegacyMinutes(ParseInt(d, "tempRetentionMinutes", 5))
+                    : def.TempRetentionSeconds,
             UiOpacity = d.TryGetValue("uiOpacity", out var op)
                         && double.TryParse(op, NumberStyles.Float, CultureInfo.InvariantCulture, out var o) && double.IsFinite(o)
                 ? Math.Clamp(o, 0, 1)

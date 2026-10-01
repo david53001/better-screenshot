@@ -1,5 +1,14 @@
 # Keep temp copies for — implementation note
 
+> **2026-10-02 (v3 §4.2, parity row 3): superseded by the Mac's stops.** The 5–30 minute bar below became the
+> Mac's **10 s · 30 s · 5 min · 10 min · 30 min · 1 hour · ∞** (`Capture/TempRetentionScale`, slider = stop index),
+> persisted as `tempRetentionSeconds` (default 300; 0 = ∞; an old `tempRetentionMinutes` maps to the nearest stop).
+> The per-file `Task.Delay` deletions are gone: `Platform/TempFiles.Track` starts a payload's clock (when it goes on
+> the clipboard, or when its Quick Access card is dismissed), a 5 s sweep deletes expired tracked payloads and runs
+> only while something is tracked (idle = no timer), and `SweepOrphans` at launch removes expired
+> `BetterScreenshot-{32 hex}` folders a previous run left behind (never `BetterScreenshot-preview-*`). The history
+> below is kept for context.
+
 Copying a capture, or dragging one out of the Quick Access card, writes a throwaway PNG into
 `%TEMP%\BetterScreenshot-{guid}\` so other apps can take the capture *as a file* (clipboard file-drop /
 drag-and-drop). That file was deleted on a hardcoded 5-minute timer (`TempFiles.PayloadLifetime`), which is too

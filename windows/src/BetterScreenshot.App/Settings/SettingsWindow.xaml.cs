@@ -80,7 +80,7 @@ public partial class SettingsWindow : Window, Tours.ITourHost
         }).IsChecked = true;
         DismissSlider.Value = OverlayDismissScale.SecondsToPosition(c.OverlayAutoDismissSeconds);
         UpdateDismissLabel();
-        TempRetentionSlider.Value = TempRetentionScale.Clamp(c.TempRetentionMinutes);
+        TempRetentionSlider.Value = TempRetentionScale.SecondsToPosition(c.TempRetentionSeconds);
         UpdateTempRetentionLabel();
         SaveDirBox.Text = _settings.SaveDirectory;
         PinRadiusCombo.SelectedIndex = Math.Max(0, Array.IndexOf(PinRadii, c.PinCornerRadius));
@@ -482,7 +482,7 @@ public partial class SettingsWindow : Window, Tours.ITourHost
     private void UpdateTempRetentionLabel()
     {
         if (TempRetentionValueLabel is null) return;
-        TempRetentionValueLabel.Text = TempRetentionScale.Label(TempRetentionScale.PositionToMinutes(TempRetentionSlider.Value));
+        TempRetentionValueLabel.Text = TempRetentionScale.Label(TempRetentionScale.PositionToSeconds(TempRetentionSlider.Value));
     }
 
     private void Apply()
@@ -504,7 +504,7 @@ public partial class SettingsWindow : Window, Tours.ITourHost
             HistoryEnabled = HistoryEnabledCheck.IsChecked == true,
             HistoryCap = Cap10.IsChecked == true ? 10 : Cap100.IsChecked == true ? 100 : 50,
             FreezeScreen = FreezeScreenCheck.IsChecked == true,
-            TempRetentionMinutes = TempRetentionScale.PositionToMinutes(TempRetentionSlider.Value),
+            TempRetentionSeconds = TempRetentionScale.PositionToSeconds(TempRetentionSlider.Value),
             UiOpacity = Math.Round(OpacitySlider.Value, 3),
         };
 
@@ -532,7 +532,7 @@ public partial class SettingsWindow : Window, Tours.ITourHost
         // per-control instant-apply firing this on every settings change stays a cheap no-op unless it changed.
         StartupRegistration.Reconcile(_settings.LaunchAtLogin);
         // Temp-file retention takes effect from the next capture on (already-scheduled deletions keep their delay).
-        TempFiles.Configure(_settings.Capture.TempRetentionMinutes);
+        TempFiles.Configure(_settings.Capture.TempRetentionSeconds);
         _settings.Save();
     }
 

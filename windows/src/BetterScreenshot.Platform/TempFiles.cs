@@ -1,51 +1,130 @@
 using System.IO;
+using System.Text.RegularExpressions;
 using BetterScreenshot.Capture;
 
 namespace BetterScreenshot.Platform;
 
 /// <summary>
-/// Best-effort lifetime management for the temp PNGs that back clipboard/drag-export payloads. Each such file
-/// lives in its own unique <c>%TEMP%\BetterScreenshot-{guid}\</c> subdirectory (see <see cref="ImageIo.WriteTempPng"/>),
-/// completely separate from capture history (<c>%APPDATA%\BetterScreenshot\History\</c>) — so auto-deleting one of
-/// these temp files never removes the capture itself, which history keeps as its own copy.
+/// Lifetime of the temp PNGs that back clipboard/drag-export payloads (v3 §4.2, Mac v2.7.0 <c>TempFileService</c>). Each
+/// lives in its own <c>%TEMP%\BetterScreenshot-{guid}\</c> directory (<see cref="ImageIo.WriteTempPng"/>), separate from
+/// History, so deleting one never removes the capture itself.
+///
+/// <list type="bullet">
+/// <item>A payload handed to the clipboard or the drag card is <see cref="Track"/>ed; its age counts from then.</item>
+/// <item>A 5 s sweep deletes tracked directories older than the setting — the timer runs only while something is
+/// tracked and the setting is finite, so an idle app does no work.</item>
+/// <item>At launch, <see cref="SweepOrphans"/> removes expired <c>BetterScreenshot-{32 hex}</c> directories a previous
+/// run left behind (the per-file timers it replaced died with the process). Only that exact name shape is touched —
+/// never <c>BetterScreenshot-preview-*</c> or anything else in %TEMP%.</item>
+/// </list>
+/// ∞ (0) keeps payloads; changing the setting applies to tracked payloads on the next sweep.
 /// </summary>
 public static class TempFiles
 {
-    /// <summary>Current retention in minutes — the user's <see cref="CaptureSettings.TempRetentionMinutes"/>
-    /// setting, applied through <see cref="Configure"/>.</summary>
-    public static int RetentionMinutes { get; private set; } = TempRetentionScale.DefaultMinutes;
+    private static readonly object Gate = new();
+    private static readonly Dictionary<string, DateTime> Tracked = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Regex PayloadDirName = new(@"^BetterScreenshot-[0-9a-fA-F]{32}$", RegexOptions.Compiled);
+    private static Timer? _timer;
 
-    /// <summary>How long a drag/clipboard temp PNG is kept alive before it is auto-deleted. Long enough that an
-    /// app receiving a drop can still read the file, short enough that temp does not accumulate images — the
-    /// user picks where in that range they sit (Settings → Temporary Files → "Keep temp copies for").</summary>
-    public static TimeSpan PayloadLifetime => TimeSpan.FromMinutes(RetentionMinutes);
+    /// <summary>How often the sweep runs while payloads are tracked (the Mac's 5 s).</summary>
+    public static readonly TimeSpan SweepInterval = TimeSpan.FromSeconds(5);
 
-    /// <summary>Applies the user's retention setting (clamped to the 5..30-minute range). Called at startup and
-    /// again whenever settings change, so the next capture's temp file uses the newly chosen lifetime. Already
-    /// scheduled deletions keep the lifetime they were scheduled with.</summary>
-    public static void Configure(int minutes) => RetentionMinutes = TempRetentionScale.Clamp(minutes);
+    /// <summary>Current retention in seconds (a stop; 0 = ∞) — set through <see cref="Configure"/>.</summary>
+    public static int RetentionSeconds { get; private set; } = TempRetentionScale.DefaultSeconds;
 
-    /// <summary>
-    /// Deletes the unique temp subdirectory that contains <paramref name="filePath"/> after <paramref name="delay"/>.
-    /// Best-effort: a null/empty path is a no-op, and a locked/already-gone directory is ignored. Because each
-    /// payload PNG owns its own guid subdirectory, deleting the containing directory removes only that one file.
-    /// </summary>
-    public static void ScheduleDeleteContainingDir(string? filePath, TimeSpan delay)
+    /// <summary>The payload lifetime, or null for ∞.</summary>
+    public static TimeSpan? PayloadLifetime => TempRetentionScale.Lifetime(RetentionSeconds);
+
+    /// <summary>Applies the user's setting (snapped to a stop). Called at startup and whenever settings change.</summary>
+    public static void Configure(int seconds)
     {
-        if (string.IsNullOrEmpty(filePath)) return;
-        var dir = Path.GetDirectoryName(filePath);
-        if (string.IsNullOrEmpty(dir)) return;
+        RetentionSeconds = TempRetentionScale.Normalize(seconds);
+        lock (Gate) UpdateTimerLocked();
+    }
 
-        _ = Task.Delay(delay).ContinueWith(_ =>
+    /// <summary>The payload directory name shape the sweeps may delete.</summary>
+    public static bool IsPayloadDirectory(string name) => PayloadDirName.IsMatch(name);
+
+    /// <summary>True when something tracked/written at <paramref name="since"/> has outlived the setting at <paramref name="now"/>.</summary>
+    public static bool IsExpired(DateTime since, DateTime now, int retentionSeconds) =>
+        TempRetentionScale.Lifetime(retentionSeconds) is { } life && now - since >= life;
+
+    /// <summary>Starts the clock on the payload directory that contains <paramref name="filePath"/>. Null/empty is a no-op.</summary>
+    public static void Track(string? filePath)
+    {
+        if (string.IsNullOrEmpty(filePath) || Path.GetDirectoryName(filePath) is not { Length: > 0 } dir) return;
+        var now = DateTime.UtcNow;
+        try { if (Directory.Exists(dir)) Directory.SetLastWriteTimeUtc(dir, now); } catch { /* best-effort */ }
+        lock (Gate)
         {
-            try
+            Tracked[dir] = now;
+            UpdateTimerLocked();
+        }
+    }
+
+    /// <summary>Deletes tracked payloads that have expired at <paramref name="now"/>; returns how many were removed.</summary>
+    public static int Sweep(DateTime now)
+    {
+        List<string> expired;
+        lock (Gate)
+        {
+            expired = Tracked.Where(p => IsExpired(p.Value, now, RetentionSeconds)).Select(p => p.Key).ToList();
+            foreach (var dir in expired) Tracked.Remove(dir);
+            UpdateTimerLocked();
+        }
+        foreach (var dir in expired) TryDelete(dir);
+        return expired.Count;
+    }
+
+    /// <summary>The launch sweep: expired payload directories left in <paramref name="tempRoot"/> (default %TEMP%) by a
+    /// previous run. Uses each directory's last-write time (Track stamps it). Returns how many were removed.</summary>
+    public static int SweepOrphans(string? tempRoot = null, DateTime? now = null)
+    {
+        if (PayloadLifetime is null) return 0;
+        var root = tempRoot ?? Path.GetTempPath();
+        var at = now ?? DateTime.UtcNow;
+        int removed = 0;
+        try
+        {
+            foreach (var dir in Directory.EnumerateDirectories(root, "BetterScreenshot-*"))
             {
-                if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+                if (!IsPayloadDirectory(Path.GetFileName(dir))) continue;
+                lock (Gate) if (Tracked.ContainsKey(dir)) continue;
+                DateTime written;
+                try { written = Directory.GetLastWriteTimeUtc(dir); } catch { continue; }
+                if (!IsExpired(written, at, RetentionSeconds)) continue;
+                if (TryDelete(dir)) removed++;
             }
-            catch
-            {
-                // Best-effort cleanup; ignore if the file is locked or already gone.
-            }
-        });
+        }
+        catch { /* temp unreadable: nothing to do */ }
+        return removed;
+    }
+
+    /// <summary>Tracked payload directories right now (tests, diagnostics).</summary>
+    public static int TrackedCount { get { lock (Gate) return Tracked.Count; } }
+
+    /// <summary>Whether the 5 s sweep timer is running (tests: an idle app must have it off).</summary>
+    public static bool SweepRunning { get { lock (Gate) return _timer is not null; } }
+
+    private static void UpdateTimerLocked()
+    {
+        bool want = Tracked.Count > 0 && PayloadLifetime is not null;
+        if (want && _timer is null)
+            _timer = new Timer(_ => Sweep(DateTime.UtcNow), null, SweepInterval, SweepInterval);
+        else if (!want && _timer is not null)
+        {
+            _timer.Dispose();
+            _timer = null;
+        }
+    }
+
+    private static bool TryDelete(string dir)
+    {
+        try
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            return true;
+        }
+        catch { return false; } // locked or already gone: best-effort
     }
 }

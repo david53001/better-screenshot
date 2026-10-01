@@ -1,33 +1,70 @@
 namespace BetterScreenshot.Capture;
 
 /// <summary>
-/// Maps between the Settings "Keep temp copies for" slider position and the persisted
-/// <see cref="CaptureSettings.TempRetentionMinutes"/> value.
-///
-/// The bar runs from <see cref="MinMinutes"/> to <see cref="MaxMinutes"/> whole minutes — the lifetime of the
-/// throwaway PNGs written to <c>%TEMP%\BetterScreenshot-{guid}\</c> that back clipboard file-drops and
-/// drag-to-export (see <c>BetterScreenshot.Platform.TempFiles</c>). There is deliberately no "forever" stop:
-/// these are disposable copies, the capture itself lives in History. Keeping the mapping in one pure, testable
-/// place means the slider and the persisted int can never drift apart.
+/// Settings → "Keep temp copies for" (v3 §4.2, Mac v2.7.0 <c>TempFileRetentionScale</c>): how long the throwaway PNGs
+/// in <c>%TEMP%\BetterScreenshot-{guid}\</c> that back clipboard file-drops and drag-to-export survive. The Mac's stops,
+/// <b>10 s · 30 s · 5 min · 10 min · 30 min · 1 hour · ∞</b>, persisted as <see cref="CaptureSettings.TempRetentionSeconds"/>
+/// (default 300 = the old fixed behaviour; 0 = ∞, never deleted). The slider position is the stop's index. Replaces
+/// the Windows-only 5–30 minute bar (eb16ae0); a stored minutes value maps to the nearest stop. The capture itself is
+/// never affected — History keeps its own copy.
 /// </summary>
 public static class TempRetentionScale
 {
-    /// <summary>Shortest retention the bar allows, in minutes (also the default — today's fixed behavior).</summary>
-    public const int MinMinutes = 5;
+    /// <summary>Persisted value that means "keep forever" (the ∞ stop).</summary>
+    public const int NeverSeconds = 0;
 
-    /// <summary>Longest retention the bar allows, in minutes.</summary>
-    public const int MaxMinutes = 30;
+    /// <summary>Retention used until the user moves the slider (the old fixed 5 minutes).</summary>
+    public const int DefaultSeconds = 300;
 
-    /// <summary>Retention used until the user moves the slider.</summary>
-    public const int DefaultMinutes = MinMinutes;
+    /// <summary>The stops in slider order; the last (0) is ∞.</summary>
+    public static readonly IReadOnlyList<int> StopsSeconds = new[] { 10, 30, 300, 600, 1800, 3600, NeverSeconds };
 
-    /// <summary>Brings any value — a hand-edited settings.json, an out-of-range legacy value — into 5..30.</summary>
-    public static int Clamp(int minutes) => Math.Clamp(minutes, MinMinutes, MaxMinutes);
+    /// <summary>The "never expire" stop's label (both scales show it as ∞, Mac v2.6.1).</summary>
+    public const string NeverLabel = "∞";
 
-    /// <summary>Persisted minutes for a slider position: rounded to the nearest whole minute, clamped to 5..30.</summary>
-    public static int PositionToMinutes(double position) =>
-        Clamp((int)Math.Round(position, MidpointRounding.AwayFromZero));
+    public static int MaxPosition => StopsSeconds.Count - 1;
 
-    /// <summary>Human-readable label for a retention value, e.g. "5 min".</summary>
-    public static string Label(int minutes) => $"{Clamp(minutes)} min";
+    /// <summary>Any stored seconds value onto a stop: 0 stays ∞; a negative value reads as the default; anything
+    /// else snaps to the nearest finite stop (a hand-edited 45 → 30 s, 2 h → 1 hour).</summary>
+    public static int Normalize(int seconds)
+    {
+        if (seconds == NeverSeconds) return NeverSeconds;
+        if (seconds < 0) return DefaultSeconds;
+        return Nearest(seconds);
+    }
+
+    /// <summary>The Windows-only setting this replaced stored whole minutes (5..30); map it to the nearest stop.</summary>
+    public static int FromLegacyMinutes(int minutes) => minutes <= 0 ? DefaultSeconds : Nearest((long)minutes * 60);
+
+    public static int PositionToSeconds(double position) =>
+        StopsSeconds[Math.Clamp((int)Math.Round(position, MidpointRounding.AwayFromZero), 0, MaxPosition)];
+
+    public static int SecondsToPosition(int seconds)
+    {
+        int normalized = Normalize(seconds);
+        for (int i = 0; i < StopsSeconds.Count; i++)
+            if (StopsSeconds[i] == normalized) return i;
+        return 2;
+    }
+
+    /// <summary>"10 s", "5 min", "1 hour", "∞".</summary>
+    public static string Label(int seconds) => Normalize(seconds) switch
+    {
+        NeverSeconds => NeverLabel,
+        < 60 and var s => $"{s} s",
+        3600 => "1 hour",
+        var s => $"{s / 60} min",
+    };
+
+    /// <summary>The lifetime as a span, or null for ∞.</summary>
+    public static TimeSpan? Lifetime(int seconds) =>
+        Normalize(seconds) is var s && s == NeverSeconds ? null : TimeSpan.FromSeconds(s);
+
+    private static int Nearest(long seconds)
+    {
+        int best = StopsSeconds[0];
+        foreach (var stop in StopsSeconds)
+            if (stop != NeverSeconds && Math.Abs(stop - seconds) < Math.Abs(best - seconds)) best = stop;
+        return best;
+    }
 }

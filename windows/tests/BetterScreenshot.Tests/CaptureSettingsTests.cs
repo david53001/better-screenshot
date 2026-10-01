@@ -18,7 +18,7 @@ public class CaptureSettingsTests
         Assert.True(d.HistoryEnabled);
         Assert.Equal(50, d.HistoryCap);
         Assert.True(d.FreezeScreen);
-        Assert.Equal(5, d.TempRetentionMinutes);
+        Assert.Equal(300, d.TempRetentionSeconds);
     }
 
     [Fact]
@@ -35,21 +35,34 @@ public class CaptureSettingsTests
             HistoryEnabled = false,
             HistoryCap = 200,
             FreezeScreen = false,
-            TempRetentionMinutes = 22,
+            TempRetentionSeconds = 1800,
         };
         var round = CaptureSettings.FromDictionary(s.ToDictionary());
         Assert.Equal(s, round);
     }
 
     [Theory]
-    [InlineData("0", 5)]     // a zero/blank legacy value must not mean "delete the temp copy instantly"
-    [InlineData("1", 5)]
-    [InlineData("45", 30)]   // nor can a hand-edited settings.json leave temp files around past the 30-min end
-    [InlineData("oops", 5)]  // unparseable → the default
-    public void TempRetentionMinutesIsClampedOnRead(string persisted, int expected)
+    [InlineData("tempRetentionSeconds", "0", 0)]        // ∞
+    [InlineData("tempRetentionSeconds", "45", 30)]      // a hand-edited value snaps to a stop
+    [InlineData("tempRetentionSeconds", "oops", 300)]   // unparseable → the default
+    [InlineData("tempRetentionMinutes", "5", 300)]      // a settings.json from the old 5–30 minute bar
+    [InlineData("tempRetentionMinutes", "12", 600)]
+    [InlineData("tempRetentionMinutes", "30", 1800)]
+    public void TempRetentionIsReadOntoAStop(string key, string persisted, int expected)
     {
-        var round = CaptureSettings.FromDictionary(new Dictionary<string, string> { ["tempRetentionMinutes"] = persisted });
-        Assert.Equal(expected, round.TempRetentionMinutes);
+        var round = CaptureSettings.FromDictionary(new Dictionary<string, string> { [key] = persisted });
+        Assert.Equal(expected, round.TempRetentionSeconds);
+    }
+
+    [Fact]
+    public void TheNewKeyWinsOverTheLegacyOne()
+    {
+        var round = CaptureSettings.FromDictionary(new Dictionary<string, string>
+        {
+            ["tempRetentionMinutes"] = "30", ["tempRetentionSeconds"] = "10",
+        });
+        Assert.Equal(10, round.TempRetentionSeconds);
+        Assert.DoesNotContain("tempRetentionMinutes", round.ToDictionary().Keys);
     }
 
     [Fact]
