@@ -105,8 +105,8 @@ Priority P1 (do first) / P2 / P3.
 | 22 | Video editor v2 (cut/split, per-segment speed + mute, GIF export) | DONE 8f29067 | P1 | v3 Part 6 |
 | 23 | UI-review fixes for editor / recording / overlays (E1–E12, V1–V5, X1–X6, Q1–Q2, O1–O3, T1–T6, C1–C5) | **MISSING** | P2 | v3 Parts 1–6 + §4.7 |
 | 24 | Windows open centred on the screen in use, reopen as last closed | **MISSING** | P2 | v3 "Window placement" |
-| 25 | Guided tours + ⓘ on every window + Help & Tours + Welcome question | **MISSING** | P1 | v3 Part 7 |
-| 26 | Tours review fixes (colours #C62D22, counter, placement, shorter tours) | **MISSING** (part of 25) | — | v3 §7.3–§7.8 |
+| 25 | Guided tours + ⓘ on every window + Help & Tours + Welcome question | **DONE** 6cf5ae8 (+5594d33 engine) | P1 | v3 Part 7 |
+| 26 | Tours review fixes (colours #C62D22, counter, placement, shorter tours) | **DONE** 6cf5ae8 (leader obstacle routing simplified) | — | v3 §7.3–§7.8 |
 | 27 | Native look (MacStats design language) v3.1.0 | DONE b91c187 | P1 | v3 Part 9 |
 | 28 | **Opacity setting** (2026-09-30) | DONE b91c187 | P1 | §4.9 |
 | 29 | Tour outline follows each control's shape; Settings tour **Opacity** step with live demo | **MISSING** | P2 | §4.10 |
