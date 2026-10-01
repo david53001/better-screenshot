@@ -43,7 +43,7 @@ public class DocumentRendererTests
         return (one[2], one[1], one[0], one[3]);
     }
 
-    private static readonly AnnotationStyle OpaqueRed = AnnotationStyle.Default with { FillColor = new RGBAColor(1, 0, 0, 1) };
+    private static readonly AnnotationStyle OpaqueRed = AnnotationStyle.Default with { StrokeColor = new RGBAColor(1, 0, 0, 1), FillColor = new RGBAColor(1, 0, 0, 1) };
 
     [Fact]
     public void RendersFilledRectInRed()
@@ -91,11 +91,11 @@ public class DocumentRendererTests
     public void TextWithBackgroundPaintsChipBehindGlyphs()
     {
         // Opaque black chip behind white text on a white base: the chip's left padding (no glyph there) must be dark.
-        var style = AnnotationStyle.Default with { StrokeColor = new RGBAColor(1, 1, 1, 1), TextBackground = new RGBAColor(0, 0, 0, 1) };
+        var style = AnnotationStyle.Default with { StrokeColor = new RGBAColor(1, 1, 1, 1), TextBackgroundMode = TextBackgroundMode.Solid, TextBackgroundColor = new RGBAColor(0, 0, 0, 1) };
         var doc = new EditorDocument(new PxSize(200, 80));
         doc.Add(new TextAnnotation(Guid.NewGuid(), style, "Hi", new PxPoint(40, 30)));
         var outImg = DocumentRenderer.Render(doc, SolidBase(200, 80, 255, 255, 255));
-        var pad = Pixel(outImg, 36, 36); // inside the chip, left of the first glyph (origin.X = 40, chip starts at 34)
+        var pad = Pixel(outImg, 37, 36); // inside the box, left of the first glyph (origin.X = 40, box starts at 34)
         Assert.True(pad.R < 60 && pad.G < 60 && pad.B < 60, $"expected dark chip, got {pad.R},{pad.G},{pad.B}");
     }
 
@@ -103,7 +103,7 @@ public class DocumentRendererTests
     public void TextWithoutBackgroundLeavesBaseVisible()
     {
         // Same geometry, no chip: the spot where a chip would be must stay the base color (the default = no box).
-        var style = AnnotationStyle.Default with { StrokeColor = new RGBAColor(1, 0, 0, 1), TextBackground = null };
+        var style = AnnotationStyle.Default with { StrokeColor = new RGBAColor(1, 0, 0, 1), TextBackgroundMode = TextBackgroundMode.None };
         var doc = new EditorDocument(new PxSize(200, 80));
         doc.Add(new TextAnnotation(Guid.NewGuid(), style, "Hi", new PxPoint(40, 30)));
         var outImg = DocumentRenderer.Render(doc, SolidBase(200, 80, 255, 255, 255));

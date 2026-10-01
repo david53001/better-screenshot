@@ -226,12 +226,13 @@ public sealed class CaptureCoordinator : IAppCommands
     /// <summary>Opens the annotation editor on the image, wiring copy/save/stack and sticky-style persistence.</summary>
     private void Annotate(BitmapSource image)
     {
-        var editor = new EditorWindow(image, _settings.EditorStyle)
+        var editor = new EditorWindow(image, _settings.EditorStyle, _settings.EditorRecentColors)
         {
             OnCopy = Copy,
             OnSave = Save,
             OnAddToStack = KeepInStack,
             StyleChanged = style => { _settings.EditorStyle = style; _settings.Save(); },
+            RecentColorsChanged = colors => { _settings.EditorRecentColors = colors.ToList(); _settings.Save(); },
         };
         editor.Show();
     }

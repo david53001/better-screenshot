@@ -1,33 +1,32 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using BetterScreenshot.App.Controls;
-using BetterScreenshot.Capture;
 using BetterScreenshot.Core;
 using BetterScreenshot.Editor;
 using Brushes = System.Windows.Media.Brushes;
-using Canvas = System.Windows.Controls.Canvas;
+using Button = System.Windows.Controls.Button;
 using Color = System.Windows.Media.Color;
-using Cursors = System.Windows.Input.Cursors;
+using ContextMenu = System.Windows.Controls.ContextMenu;
 using Key = System.Windows.Input.Key;
 using Keyboard = System.Windows.Input.Keyboard;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
+using MenuItem = System.Windows.Controls.MenuItem;
 using ModifierKeys = System.Windows.Input.ModifierKeys;
-using MouseButtonEventArgs = System.Windows.Input.MouseButtonEventArgs;
-using MouseButtonState = System.Windows.Input.MouseButtonState;
-using MouseEventArgs = System.Windows.Input.MouseEventArgs;
-using Point = System.Windows.Point;
-using Rectangle = System.Windows.Shapes.Rectangle;
+using MouseWheelEventArgs = System.Windows.Input.MouseWheelEventArgs;
+using Orientation = System.Windows.Controls.Orientation;
 using Separator = System.Windows.Controls.Separator;
 using TextBlock = System.Windows.Controls.TextBlock;
-using TextBox = System.Windows.Controls.TextBox;
 using ToggleButton = System.Windows.Controls.Primitives.ToggleButton;
 
 namespace BetterScreenshot.App.Editor;
 
 /// <summary>
-/// Annotation editor with drawing tools, a color/size inspector, snapshot undo/redo (Ctrl+Z / Ctrl+Shift+Z /
-/// Ctrl+Y), and sticky style (the last-used style is reported via <see cref="StyleChanged"/> for persistence).
+/// The annotation editor (v3 Parts 1–3 + A.1): a tool pill centred over a zoomable canvas, a 264-px inspector
+/// panel on the right, and a bottom bar with the hint line and the action row. Snapshot undo/redo; every style
+/// edit applies to the default style and to the selection as one undo step; the sticky default style and the
+/// Recent colours are reported to the host for persistence.
 /// </summary>
 public partial class EditorWindow : Window
 {
@@ -38,91 +37,357 @@ public partial class EditorWindow : Window
     private AnnotationStyle _style;
     private EditorTool _tool = EditorTool.Select;
     private readonly UndoHistory<EditorState> _history = new();
+    private readonly List<Guid> _selection = new();
+    private readonly RecentColors _recent;
+    private string? _openGroup;
+    private readonly EditorInspectorPanel _panel = new();
+    private readonly Dictionary<EditorTool, ToggleButton> _toolButtons = new();
+    private Button? _undoButton, _redoButton;
+    private ToggleButton? _panelToggle;
 
-    private PxPoint? _dragStart;
-    private bool _dragging;
-    private Guid? _selectedId;
-    private Rectangle? _marquee;
-    private TextBox? _textBox;
-
-    // Select-tool move state: the annotation being dragged, its start pointer position, and a one-time flattened
-    // render of the rest of the document (base image + all *other* annotations). During a move we redraw only that
-    // cached background + the single moved annotation, instead of re-flattening the whole document every frame.
-    private IAnnotation? _moveOriginal;
-    private PxPoint _moveDownPos;
-    private BitmapSource? _moveBackground;
-
-    // Live vector preview for shape tools (arrow/line/rect/ellipse): drawn as lightweight WPF shapes on the
-    // interaction canvas while dragging, so we never rasterize a full-resolution frame per mouse-move.
-    private readonly List<UIElement> _previewElements = new();
+    // Zoom (v3 §1.4): magnification = DIPs per image pixel; Fit by default (never above 100%).
+    private double _magnification = 1;
+    private bool _fitMode = true;
 
     public Action<BitmapSource>? OnCopy { get; set; }
     public Action<BitmapSource>? OnSave { get; set; }
     public Action<BitmapSource>? OnAddToStack { get; set; }
     public Action<AnnotationStyle>? StyleChanged { get; set; }
+    public Action<IReadOnlyList<RGBAColor>>? RecentColorsChanged { get; set; }
 
-    public EditorWindow(BitmapSource image, AnnotationStyle? defaultStyle = null)
+    public EditorWindow(BitmapSource image, AnnotationStyle? defaultStyle = null, IEnumerable<RGBAColor>? recentColors = null)
     {
+        TextRendering.Install();
         InitializeComponent();
+        Resources["Ed.AccentBrush"] = SystemAccent.Brush;
         WindowThemer.ApplyDark(this);
         _baseImage = image;
-        _style = defaultStyle ?? AnnotationStyle.Default;
+        _style = (defaultStyle ?? AnnotationStyle.Default).Normalized();
+        _recent = new RecentColors(recentColors);
         _document = new EditorDocument(new PxSize(image.PixelWidth, image.PixelHeight));
-        ResizeStage();
-        BuildToolbar();
-        BuildInspector();
 
+        BuildToolbar();
+        BuildTitleActions();
+        PanelHost.Child = _panel;
+        WirePanel();
+        HintIcon.Content = new IconPresenter { IconKey = "info", Brush = new SolidColorBrush(Color.FromArgb(0x73, 255, 255, 255)), Width = 13, Height = 13 };
+        CopyButton.Content = IconText("copy", "Copy");
+        SaveButton.Content = IconText("save", "Save");
+        StackButton.Content = IconText("stack", "Stack");
+
+        ResizeStage();
         InteractionLayer.MouseLeftButtonDown += OnDown;
         InteractionLayer.MouseMove += OnMove;
         InteractionLayer.MouseLeftButtonUp += OnUp;
-        KeyDown += OnKeyDown;
-        Loaded += (_, _) => FitToImage();
+        InteractionLayer.MouseLeave += (_, _) => { if (_drag == DragKind.None) InteractionLayer.Cursor = null; };
+        PreviewKeyDown += OnKeyDown;
+        Scroller.PreviewMouseWheel += OnWheel;
+        Scroller.SizeChanged += (_, _) => { if (_fitMode) ApplyFit(); };
+        SourceInitialized += (_, _) => SizeToImage();
+        Loaded += (_, _) => { ApplyFit(); Focus(); };
+        Closed += (_, _) => ReleaseResources();
 
+        SelectTool(EditorTool.Select);
         Redraw();
     }
 
-    private bool _fitted;
+    // ------------------------------------------------------------------ window size + chrome
 
-    /// <summary>
-    /// Sizes the window (once, after the first layout pass) so its canvas area matches the base image's
-    /// aspect ratio. This makes the image fill the canvas edge-to-edge instead of leaving wide gray
-    /// pillar/letterbox gaps where drags land on nothing. Clamped to the work area and the window minimums.
-    /// </summary>
-    private void FitToImage()
+    private double DpiScale => VisualTreeHelper.GetDpi(this).DpiScaleX;
+
+    /// <summary>Initial size (v3 §1.1): the capture's real on-screen size (≤ 1200 DIPs wide) + chrome, clamped to
+    /// the work area; centred on the screen in use.</summary>
+    private void SizeToImage()
     {
-        if (_fitted || CanvasArea.ActualWidth <= 0 || CanvasArea.ActualHeight <= 0) return;
-        _fitted = true;
-
-        const double frame = 32;       // Viewbox Margin=16 on each side
-        const double maxUpscale = 2.0; // don't blow a tiny capture up into a blurry wall
-
-        double imgW = _baseImage.PixelWidth;
-        double imgH = _baseImage.PixelHeight;
-        if (imgW <= 0 || imgH <= 0) return;
-
-        // Everything that isn't the canvas (title bar, window borders, tool + bottom bars) is fixed;
-        // measuring it as (window − canvas) lets us resize the canvas exactly without non-client math.
-        double chromeW = ActualWidth - CanvasArea.ActualWidth;
-        double chromeH = ActualHeight - CanvasArea.ActualHeight;
-
-        var work = SystemParameters.WorkArea;
-        double maxDrawW = work.Width * 0.94 - chromeW - frame;
-        double maxDrawH = work.Height * 0.94 - chromeH - frame;
-        if (maxDrawW <= 0 || maxDrawH <= 0) return;
-
-        double scale = Math.Min(Math.Min(maxDrawW / imgW, maxDrawH / imgH), maxUpscale);
-
-        double winW = imgW * scale + frame + chromeW;
-        double winH = imgH * scale + frame + chromeH;
-
-        Width = Math.Max(winW, MinWidth);
-        Height = Math.Max(winH, MinHeight);
+        var size = ZoomMath.PointSize(new PxSize(_baseImage.PixelWidth, _baseImage.PixelHeight), DpiScale);
+        double imgW = Math.Min(size.Width, 1200);
+        double imgH = size.Width > 0 ? imgW * size.Height / size.Width : size.Height;
+        var work = WindowPlacement.WorkAreaUnderCursor(this);
+        Width = Math.Min(Math.Max(imgW + 48, 600) + 284 + 16, work.Width - 40);
+        Height = Math.Min(Math.Max(imgH + 112 + 64 + 40, 660), work.Height - 60);
         Left = work.Left + (work.Width - Width) / 2;
         Top = work.Top + (work.Height - Height) / 2;
     }
 
+    private void BuildToolbar()
+    {
+        bool firstGroup = true;
+        foreach (var group in ToolInfo.ToolbarGroups)
+        {
+            if (!firstGroup)
+                Toolbar.Children.Add(new Border { Width = 1, Height = 22, Margin = new Thickness(4, 0, 4, 0), Background = new SolidColorBrush(Color.FromArgb(0x21, 255, 255, 255)) });
+            firstGroup = false;
+            foreach (var tool in group)
+            {
+                var t = tool;
+                var button = new ToggleButton
+                {
+                    Content = new IconPresenter { IconKey = tool.IconKey(), Brush = Brushes.White, Width = 18, Height = 18 },
+                    Style = (Style)FindResource("Ed.ToolButton"),
+                    ToolTip = tool.Tooltip(),
+                };
+                System.Windows.Automation.AutomationProperties.SetName(button, tool.DisplayName());
+                button.Click += (_, _) => SelectTool(t);
+                _toolButtons[tool] = button;
+                Toolbar.Children.Add(button);
+            }
+        }
+    }
+
+    private void BuildTitleActions()
+    {
+        _undoButton = IconButton("undo", "Undo (Ctrl+Z)", Undo);
+        _redoButton = IconButton("redo", "Redo (Ctrl+Shift+Z)", Redo);
+        _panelToggle = new ToggleButton
+        {
+            Content = new IconPresenter { IconKey = "sidebar", Brush = Brushes.White, Width = 16, Height = 16 },
+            Style = (Style)FindResource("Ed.IconButton"), IsChecked = true, Margin = new Thickness(10, 0, 0, 0),
+        };
+        _panelToggle.Click += (_, _) => TogglePanel();
+        TitleActions.Children.Add(_undoButton);
+        TitleActions.Children.Add(_redoButton);
+        TitleActions.Children.Add(_panelToggle);
+        UpdatePanelToggleTip();
+    }
+
+    private Button IconButton(string icon, string tip, Action click)
+    {
+        var b = new Button
+        {
+            Content = new IconPresenter { IconKey = icon, Brush = Brushes.White, Width = 16, Height = 16 },
+            Style = (Style)FindResource("Ed.IconButton"), ToolTip = tip,
+        };
+        System.Windows.Automation.AutomationProperties.SetName(b, tip);
+        b.Click += (_, _) => click();
+        return b;
+    }
+
+    private static StackPanel IconText(string icon, string text)
+    {
+        var sp = new StackPanel { Orientation = Orientation.Horizontal };
+        sp.Children.Add(new IconPresenter { IconKey = icon, Brush = Brushes.White, Width = 14, Height = 14, Margin = new Thickness(0, 0, 5, 0) });
+        sp.Children.Add(new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center });
+        return sp;
+    }
+
+    private bool PanelShown => _panelToggle?.IsChecked != false;
+
+    private void TogglePanel()
+    {
+        bool show = PanelHost.Visibility != Visibility.Visible;
+        PanelHost.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        PanelColumn.Width = new GridLength(show ? 284 : 0);
+        MinWidth = show ? 884 : 600;
+        if (show && Width < 884) Width = 884;
+        if (_panelToggle != null) _panelToggle.IsChecked = show;
+        UpdatePanelToggleTip();
+        if (_fitMode) Dispatcher.BeginInvoke(new Action(ApplyFit), System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private void UpdatePanelToggleTip()
+    {
+        if (_panelToggle != null)
+            _panelToggle.ToolTip = PanelHost.Visibility == Visibility.Visible ? "Hide Inspector (Ctrl+Alt+I)" : "Show Inspector (Ctrl+Alt+I)";
+    }
+
+    // ------------------------------------------------------------------ tools
+
+    private void SelectTool(EditorTool tool)
+    {
+        if (_textEdit != null) CommitText();
+        // Choosing a drawing tool clears the selection; choosing Select keeps it.
+        if (tool != EditorTool.Select && tool != _tool) _selection.Clear();
+        _tool = tool;
+        _openGroup = null;
+        foreach (var (t, b) in _toolButtons) b.IsChecked = t == tool;
+        InteractionLayer.Cursor = tool == EditorTool.Select ? null : System.Windows.Input.Cursors.Cross;
+        RefreshChrome();
+    }
+
+    /// <summary>The selection described by the tools that draw it, in stacking order.</summary>
+    private List<EditorTool> SelectionMakers() =>
+        _document.Annotations.Where(a => _selection.Contains(a.Id)).Select(a => ToolInfo.MakerOf(a)).OfType<EditorTool>().ToList();
+
+    private IAnnotation? BackMostSelected() => _document.Annotations.FirstOrDefault(a => _selection.Contains(a.Id));
+
+    /// <summary>Panel + hint + selection chrome + undo buttons, after any state change.</summary>
+    private void RefreshChrome()
+    {
+        var makers = SelectionMakers();
+        var content = _textEdit != null
+            ? InspectorModel.Content(EditorTool.Text, Array.Empty<EditorTool>())
+            : InspectorModel.Content(_tool, makers);
+        bool editsPen = StyleEdits.EditsPen(_tool, makers);
+        var shown = _textEdit?.Style ?? StyleEdits.Shown(_style, _tool == EditorTool.Select || _selection.Count > 0 ? BackMostSelected() : null, editsPen);
+        // Under a redaction tool the panel reflects the tool's mode (B / P / X), not the default style's.
+        if (_tool.RedactionModeOf() is { } mode && _selection.Count == 0) shown = shown with { RedactionMode = mode };
+        _panel.Show(content, shown, _recent.Colors);
+        HintText.Text = InspectorModel.Hint(_tool, makers, _textEdit != null);
+        HintText.ToolTip = HintText.Text;
+        if (_undoButton != null) _undoButton.IsEnabled = _history.CanUndo;
+        if (_redoButton != null) _redoButton.IsEnabled = _history.CanRedo;
+        SizeText.Text = $"{_baseImage.PixelWidth} × {_baseImage.PixelHeight} px";
+        RefreshOverlay();
+    }
+
+    // ------------------------------------------------------------------ style edits (v3 §1.4)
+
+    private void WirePanel()
+    {
+        _panel.Edit += (edit, group) => ApplyEdit(edit, group);
+        _panel.EndGroup += () => _openGroup = null;
+        _panel.Preset += p => ApplyEdit(st => p.Apply(st), null);
+        _panel.DimEdit += v => ApplyEdit(st => st with { SpotlightDim = v }, "dim", dimEdit: true);
+        _panel.RedactionSwitch += SwitchRedaction;
+        _panel.BringToFront += () => Arrange(front: true);
+        _panel.SendToBack += () => Arrange(front: false);
+        _panel.DeleteSelection += DeleteSelected;
+        _panel.OpenColorWell += OpenColorWell;
+        _panel.Eyedropper += PickFromScreen;
+        _panel.RecentPicked += c => { _recent.Add(c); RecentColorsChanged?.Invoke(_recent.Colors); ApplyEdit(st => WithStroke(st, c), null); };
+    }
+
+    private static AnnotationStyle WithStroke(AnnotationStyle st, RGBAColor c)
+    {
+        var s = st with { StrokeColor = c, FillColor = c.WithAlpha(0.25) };
+        return s.TextOutline ? s with { TextOutlineColor = TextChip.OutlineColor(s.TextOutlineColor, c) } : s;
+    }
+
+    /// <summary>Applies one edit to the default style and every selected object as ONE undo step (edits with the
+    /// same open <paramref name="group"/> merge). While a text is being typed it restyles the live text.</summary>
+    private void ApplyEdit(Func<AnnotationStyle, AnnotationStyle> edit, string? group, bool dimEdit = false)
+    {
+        var makers = SelectionMakers();
+        bool editsPen = StyleEdits.EditsPen(_tool, makers);
+        if (_textEdit != null)
+        {
+            _textEdit.Style = edit(_textEdit.Style).Normalized();
+            ApplyTextEditLook();
+        }
+        _style = StyleEdits.ApplyToDefault(_style, edit, editsPen);
+        StyleChanged?.Invoke(_style);
+
+        if (_textEdit == null)
+        {
+            double? newDim = dimEdit ? edit(_style).SpotlightDim : null;
+            var next = StyleEdits.ApplyToDocument(_document, _selection, edit, dimEdit, newDim);
+            if (next != null)
+            {
+                if (group == null || group != _openGroup) PushUndo();
+                _document = next;
+                Redraw(keepGroup: true);
+            }
+        }
+        _openGroup = group;
+        RefreshChrome();
+    }
+
+    private void SwitchRedaction(RedactionMode mode)
+    {
+        ApplyEdit(st => st with { RedactionMode = mode }, null);
+        // A redaction tool switches to that mode WITHOUT clearing the selection (the just-drawn box stays selected).
+        if (_tool.RedactionModeOf() != null)
+        {
+            _tool = ToolInfo.ToolOf(mode);
+            foreach (var (t, b) in _toolButtons) b.IsChecked = t == _tool;
+            RefreshChrome();
+        }
+    }
+
+    private void OpenColorWell(ColorTarget target)
+    {
+        var current = target switch
+        {
+            ColorTarget.Box => (_textEdit?.Style ?? _style).TextBackgroundColor,
+            ColorTarget.Outline => (_textEdit?.Style ?? _style).TextOutlineColor,
+            _ => (_textEdit?.Style ?? StyleEdits.Shown(_style, BackMostSelected(), StyleEdits.EditsPen(_tool, SelectionMakers()))).StrokeColor,
+        };
+        using var dialog = new System.Windows.Forms.ColorDialog
+        {
+            FullOpen = true, AnyColor = true,
+            Color = System.Drawing.Color.FromArgb((int)Math.Round(current.R * 255), (int)Math.Round(current.G * 255), (int)Math.Round(current.B * 255)),
+        };
+        if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+        var c = RGBAColor.FromBytes(dialog.Color.R, dialog.Color.G, dialog.Color.B, (byte)Math.Round(current.A * 255));
+        ApplyPickedColor(target, c);
+    }
+
+    private void PickFromScreen(ColorTarget target)
+    {
+        Eyedropper.Pick(c =>
+        {
+            Activate();
+            if (c is { } color) ApplyPickedColor(target, color);
+        });
+    }
+
+    /// <summary>One picker session = one Recent entry + one undo step.</summary>
+    private void ApplyPickedColor(ColorTarget target, RGBAColor c)
+    {
+        _recent.Add(c);
+        RecentColorsChanged?.Invoke(_recent.Colors);
+        switch (target)
+        {
+            case ColorTarget.Box: ApplyEdit(st => st with { TextBackgroundColor = c }, null); break;
+            case ColorTarget.Outline: ApplyEdit(st => st with { TextOutlineColor = c, TextOutline = true }, null); break;
+            default: ApplyEdit(st => WithStroke(st, c), null); break;
+        }
+    }
+
+    // ------------------------------------------------------------------ document ops
+
     private EditorState Snapshot() => new(new EditorDocument(_document.Size, _document.Annotations), _baseImage);
-    private void PushUndo() => _history.Push(Snapshot());
+
+    private void PushUndo()
+    {
+        _history.Push(Snapshot());
+        _openGroup = null;
+    }
+
+    private void Arrange(bool front)
+    {
+        if (_selection.Count == 0) return;
+        PushUndo();
+        var ordered = _document.Annotations.Where(a => _selection.Contains(a.Id)).Select(a => a.Id).ToList();
+        if (front) foreach (var id in ordered) _document.BringToFront(id);
+        else foreach (var id in Enumerable.Reverse(ordered)) _document.SendToBack(id);
+        Redraw();
+    }
+
+    private void DeleteSelected()
+    {
+        if (_selection.Count == 0) return;
+        PushUndo();
+        foreach (var id in _selection) _document.Remove(id);
+        _selection.Clear();
+        Redraw();
+    }
+
+    private void Undo()
+    {
+        if (_textEdit != null) { CommitText(); }
+        if (!_history.TryUndo(Snapshot(), out var prev)) return;
+        Restore(prev);
+    }
+
+    private void Redo()
+    {
+        if (_textEdit != null) CommitText();
+        if (!_history.TryRedo(Snapshot(), out var next)) return;
+        Restore(next);
+    }
+
+    private void Restore(EditorState state)
+    {
+        bool sizeChanged = state.BaseImage.PixelWidth != _baseImage.PixelWidth || state.BaseImage.PixelHeight != _baseImage.PixelHeight;
+        _document = state.Document;
+        _baseImage = state.BaseImage;
+        _selection.RemoveAll(id => _document.Find(id) is null);
+        _openGroup = null;
+        ResizeStage();
+        if (sizeChanged && _fitMode) ApplyFit();
+        Redraw();
+    }
 
     private void ResizeStage()
     {
@@ -132,556 +397,203 @@ public partial class EditorWindow : Window
         InteractionLayer.Height = _baseImage.PixelHeight;
     }
 
-    private static readonly SolidColorBrush ToolGlyphBrush = new(Color.FromRgb(0xD8, 0xD8, 0xDE));
-
-    private readonly Dictionary<EditorTool, ToggleButton> _toolButtons = new();
-    private readonly List<(RGBAColor Color, ToggleButton Button)> _colorButtons = new();
-    private readonly Dictionary<double, ToggleButton> _weightButtons = new();
-    private readonly Dictionary<double, ToggleButton> _sizeButtons = new();
-    private ToggleButton? _textBgButton;
-
-    private void BuildToolbar()
+    private void Redraw(bool keepGroup = false)
     {
-        (string Icon, string Name, EditorTool Tool)[] tools =
-        {
-            ("cursor", "Select", EditorTool.Select), ("arrow", "Arrow", EditorTool.Arrow),
-            ("line", "Line", EditorTool.Line), ("rect", "Rectangle", EditorTool.Rectangle),
-            ("rect-fill", "Filled rectangle", EditorTool.FilledRectangle),
-            ("ellipse", "Ellipse", EditorTool.Ellipse), ("text", "Text", EditorTool.Text),
-            ("counter", "Counter", EditorTool.Counter), ("blur", "Blur", EditorTool.Blur),
-            ("pixelate", "Pixelate", EditorTool.Pixelate), ("crop", "Crop", EditorTool.Crop),
-        };
-        foreach (var (icon, name, tool) in tools)
-        {
-            var button = new ToggleButton
-            {
-                Content = new IconPresenter { IconKey = icon, Brush = ToolGlyphBrush, Width = 18, Height = 18 },
-                Style = (Style)FindResource("Theme.ToolButton"),
-                Width = 34,
-                Height = 30,
-                Margin = new Thickness(2, 0, 2, 0),
-                ToolTip = name,
-            };
-            System.Windows.Automation.AutomationProperties.SetName(button, name);
-            button.Click += (_, _) => SelectTool(tool);
-            _toolButtons[tool] = button;
-            Toolbar.Children.Add(button);
-        }
-        SelectTool(EditorTool.Select);
+        if (!keepGroup) _openGroup = null;
+        CanvasImage.Source = DocumentRenderer.Render(HiddenWhileEditing(), _baseImage);
+        RefreshChrome();
     }
 
-    private void SelectTool(EditorTool tool)
+    /// <summary>The document minus the text being edited in place (the live box draws it).</summary>
+    private EditorDocument HiddenWhileEditing() =>
+        _textEdit?.ExistingId is { } id ? new EditorDocument(_document.Size, _document.Annotations.Where(a => a.Id != id)) : _document;
+
+    private BitmapSource Export()
     {
-        _tool = tool;
-        foreach (var (t, b) in _toolButtons)
-        {
-            b.IsChecked = t == tool;
-            ((IconPresenter)b.Content).Brush = t == tool ? Brushes.White : ToolGlyphBrush;
-        }
+        if (_textEdit != null) CommitText();
+        return DocumentRenderer.Render(_document, _baseImage);
     }
 
-    private void BuildInspector()
+    private void ReleaseResources()
     {
-        RGBAColor[] presets =
-        {
-            new(1, 0.27, 0.23, 1), new(1, 0.62, 0.04, 1), new(1, 0.84, 0.04, 1), new(0.19, 0.82, 0.35, 1),
-            new(0.04, 0.52, 1, 1), new(0.75, 0.35, 0.95, 1), new(1, 1, 1, 1), new(0, 0, 0, 1),
-        };
-        foreach (var color in presets)
-        {
-            var c = color;
-            var swatch = new ToggleButton
-            {
-                Style = (Style)FindResource("Theme.SwatchButton"),
-                Margin = new Thickness(2, 0, 2, 0),
-                Background = new SolidColorBrush(Color.FromRgb((byte)(c.R * 255), (byte)(c.G * 255), (byte)(c.B * 255))),
-                ToolTip = "Color",
-            };
-            swatch.Click += (_, _) => SetColor(c);
-            _colorButtons.Add((c, swatch));
-            Inspector.Children.Add(swatch);
-        }
-        Inspector.Children.Add(new Separator { Width = 12, Visibility = Visibility.Hidden });
-        foreach (var w in new[] { 2.0, 4.0, 7.0 })
-        {
-            double weight = w;
-            var dot = new System.Windows.Shapes.Ellipse { Width = 3 + weight, Height = 3 + weight, Fill = Brushes.White };
-            _weightButtons[weight] = InspectorToggle(dot, $"Line width {weight:0}", () => SetWeight(weight));
-        }
-        Inspector.Children.Add(new Separator { Width = 12, Visibility = Visibility.Hidden });
-        foreach (var s in new[] { 18.0, 24.0, 36.0 })
-        {
-            double size = s;
-            var a = new TextBlock
-            {
-                Text = "A", Foreground = Brushes.White, FontSize = 9 + size / 3, FontWeight = FontWeights.SemiBold,
-            };
-            _sizeButtons[size] = InspectorToggle(a, $"Text size {size:0}", () => SetSize(size));
-        }
-        Inspector.Children.Add(new Separator { Width = 12, Visibility = Visibility.Hidden });
-        // Text-background toggle: off = text sits directly on the image (default); on = a rounded "label" chip
-        // behind the text, auto-tinted for contrast against the current text color.
-        var bgGlyph = new System.Windows.Controls.Border
-        {
-            Width = 20, Height = 15, CornerRadius = new CornerRadius(3),
-            Background = new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)),
-            Child = new TextBlock
-            {
-                Text = "A", Foreground = Brushes.Black, FontSize = 10, FontWeight = FontWeights.Bold,
-                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-                VerticalAlignment = System.Windows.VerticalAlignment.Center,
-            },
-        };
-        _textBgButton = InspectorToggle(bgGlyph, "Text background", ToggleTextBackground);
-        RefreshInspector();
+        CanvasImage.Source = null;
+        _moveBackground = null;
+        _spotBackground = null;
     }
-
-    private ToggleButton InspectorToggle(UIElement content, string tip, Action onClick)
-    {
-        var button = new ToggleButton
-        {
-            Content = content,
-            Style = (Style)FindResource("Theme.ToolButton"),
-            Width = 30,
-            Height = 28,
-            Margin = new Thickness(2, 0, 2, 0),
-            ToolTip = tip,
-        };
-        System.Windows.Automation.AutomationProperties.SetName(button, tip);
-        button.Click += (_, _) => onClick();
-        Inspector.Children.Add(button);
-        return button;
-    }
-
-    private void RefreshInspector()
-    {
-        foreach (var (color, button) in _colorButtons) button.IsChecked = color == _style.StrokeColor;
-        foreach (var (weight, button) in _weightButtons) button.IsChecked = Math.Abs(weight - _style.LineWidth) < 0.01;
-        foreach (var (size, button) in _sizeButtons) button.IsChecked = Math.Abs(size - _style.FontSize) < 0.01;
-        if (_textBgButton != null) _textBgButton.IsChecked = _style.TextBackground is not null;
-    }
-
-    // Recompute the text-background chip when the stroke color changes so it stays readable against the new color.
-    private void SetColor(RGBAColor c)
-    {
-        var bg = _style.TextBackground is null ? (RGBAColor?)null : AutoChip(c);
-        _style = _style with { StrokeColor = c, FillColor = c.WithAlpha(0.25), TextBackground = bg };
-        StyleChanged?.Invoke(_style);
-        RefreshInspector();
-    }
-
-    private void ToggleTextBackground()
-    {
-        var bg = _style.TextBackground is null ? AutoChip(_style.StrokeColor) : (RGBAColor?)null;
-        _style = _style with { TextBackground = bg };
-        StyleChanged?.Invoke(_style);
-        RefreshInspector();
-    }
-
-    /// <summary>A readable background chip for text of color <paramref name="text"/>: a near-opaque light chip
-    /// behind dark text, a dark chip behind light text (chosen by perceived luminance).</summary>
-    private static RGBAColor AutoChip(RGBAColor text)
-    {
-        double luminance = 0.299 * text.R + 0.587 * text.G + 0.114 * text.B;
-        return luminance < 0.5 ? new RGBAColor(1, 1, 1, 0.92) : new RGBAColor(0, 0, 0, 0.6);
-    }
-    private void SetWeight(double w) { _style = _style with { LineWidth = w }; StyleChanged?.Invoke(_style); RefreshInspector(); }
-    private void SetSize(double s) { _style = _style with { FontSize = s }; StyleChanged?.Invoke(_style); RefreshInspector(); }
-
-    /// <summary>
-    /// Pointer position in base-image pixel space, clamped to the image bounds. Mouse capture keeps delivering
-    /// points outside the canvas during a drag; clamping keeps drawn/placed/moved annotations inside the image
-    /// (the "wall") so nothing gets dragged off the edge and lost when the document is flattened.
-    /// </summary>
-    private PxPoint Pos(MouseEventArgs e)
-    {
-        var p = e.GetPosition(InteractionLayer);
-        return new PxPoint(Math.Clamp(p.X, 0, _baseImage.PixelWidth), Math.Clamp(p.Y, 0, _baseImage.PixelHeight));
-    }
-
-    private void OnDown(object sender, MouseButtonEventArgs e)
-    {
-        // A click while a text box is open just finishes that text and consumes the click — it does NOT also
-        // start a new box at the click point. (Committing then re-placing in the same handler was both clunky
-        // and the source of a re-entrancy crash: a late LostKeyboardFocus from the just-removed box could null
-        // _textBox midway through creating the next one.)
-        if (_textBox is not null) { CommitText(); return; }
-
-        var p = Pos(e);
-
-        switch (_tool)
-        {
-            case EditorTool.Select:
-                _selectedId = _document.TopmostHit(p);
-                _moveOriginal = null;
-                _moveBackground = null;
-                if (_selectedId is { } hitId)
-                {
-                    PushUndo();
-                    _moveOriginal = _document.Annotations.FirstOrDefault(a => a.Id == hitId);
-                    _moveDownPos = p;
-                    // Flatten everything except the annotation being moved, once, so per-frame we only draw
-                    // this cached background + the single moved annotation.
-                    var rest = new EditorDocument(_document.Size, _document.Annotations.Where(a => a.Id != hitId));
-                    _moveBackground = DocumentRenderer.Render(rest, _baseImage);
-                }
-                InteractionLayer.CaptureMouse();
-                return;
-            case EditorTool.Counter:
-                PushUndo();
-                _document.Add(CounterAnnotation.Centered(p, _document.NextCounterNumber(), _style));
-                Redraw();
-                return;
-            case EditorTool.Text:
-                PlaceTextBox(p);
-                return;
-            default:
-                _dragStart = p;
-                _dragging = true;
-                if (_tool is EditorTool.Blur or EditorTool.Pixelate or EditorTool.Crop) BeginMarquee(p);
-                InteractionLayer.CaptureMouse();
-                return;
-        }
-    }
-
-    private void OnMove(object sender, MouseEventArgs e)
-    {
-        if (_tool == EditorTool.Select && _moveOriginal is { } original && _moveBackground is { } background
-            && e.LeftButton == MouseButtonState.Pressed)
-        {
-            var moved = MovedWithinBounds(original, Pos(e));
-            // background is already the base image + every other annotation flattened; draw only the moved one.
-            CanvasImage.Source = DocumentRenderer.Render(new EditorDocument(_document.Size), background, moved);
-            return;
-        }
-
-        if (!_dragging || _dragStart is not { } start) return;
-        var p = Pos(e);
-
-        if (_marquee != null)
-        {
-            var rect = SelectionMath.Normalize(start, p);
-            Canvas.SetLeft(_marquee, rect.X);
-            Canvas.SetTop(_marquee, rect.Y);
-            _marquee.Width = rect.Width;
-            _marquee.Height = rect.Height;
-        }
-        else
-        {
-            ShowVectorPreview(start, p);
-        }
-    }
-
-    /// <summary>The moved annotation, with its drag delta clamped so its bounding box stays inside the image.</summary>
-    private IAnnotation MovedWithinBounds(IAnnotation original, PxPoint pointer)
-    {
-        double dx = pointer.X - _moveDownPos.X, dy = pointer.Y - _moveDownPos.Y;
-        var b = original.BoundingBox();
-        // Keep the box within [0,W] × [0,H]: shift no further left/up than its own origin, no further right/down
-        // than the remaining room. (max<min only if the box is larger than the image — then pin to the edge.)
-        double minDx = -b.X, maxDx = Math.Max(minDx, _baseImage.PixelWidth - b.Right);
-        double minDy = -b.Y, maxDy = Math.Max(minDy, _baseImage.PixelHeight - b.Bottom);
-        return original.MovedBy(Math.Clamp(dx, minDx, maxDx), Math.Clamp(dy, minDy, maxDy));
-    }
-
-    private void OnUp(object sender, MouseButtonEventArgs e)
-    {
-        InteractionLayer.ReleaseMouseCapture();
-
-        // Commit a Select-tool move: write the final (clamped) position back into the document.
-        if (_tool == EditorTool.Select && _selectedId is { } movedId && _moveOriginal is { } original)
-        {
-            _document.Replace(movedId, MovedWithinBounds(original, Pos(e)));
-            _moveOriginal = null;
-            _moveBackground = null;
-            Redraw();
-            return;
-        }
-
-        if (!_dragging || _dragStart is not { } start)
-        {
-            _dragging = false;
-            return;
-        }
-        _dragging = false;
-        ClearVectorPreview();
-        var end = Pos(e);
-        var frame = SelectionMath.Normalize(start, end);
-
-        switch (_tool)
-        {
-            case EditorTool.Crop:
-                EndMarquee();
-                if (frame.Width >= 4 && frame.Height >= 4) { PushUndo(); ApplyCrop(frame); }
-                break;
-            case EditorTool.Blur:
-            case EditorTool.Pixelate:
-                EndMarquee();
-                if (frame.Width >= 2 && frame.Height >= 2) { PushUndo(); ApplyRedaction(frame, _tool == EditorTool.Blur); }
-                break;
-            default:
-                var annotation = AnnotationFactory.CreateDrag(_tool, start, end, _style);
-                if (annotation != null) { PushUndo(); _document.Add(annotation); }
-                break;
-        }
-        _dragStart = null;
-        Redraw();
-    }
-
-    private void OnKeyDown(object sender, KeyEventArgs e)
-    {
-        bool ctrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
-        bool shift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
-        if (ctrl && e.Key == Key.Z && !shift) { Undo(); e.Handled = true; return; }
-        if (ctrl && (e.Key == Key.Y || (e.Key == Key.Z && shift))) { Redo(); e.Handled = true; return; }
-
-        if (_textBox != null) return; // let the text box handle keys
-        if (_selectedId is not { } id) return;
-
-        switch (e.Key)
-        {
-            case Key.Delete:
-            case Key.Back:
-                PushUndo();
-                _document.Remove(id);
-                _selectedId = null;
-                Redraw();
-                break;
-            case Key.OemOpenBrackets:
-                PushUndo();
-                _document.SendToBack(id);
-                Redraw();
-                break;
-            case Key.OemCloseBrackets:
-                PushUndo();
-                _document.BringToFront(id);
-                Redraw();
-                break;
-        }
-    }
-
-    private void Undo()
-    {
-        if (!_history.TryUndo(Snapshot(), out var prev)) return;
-        _document = prev.Document;
-        _baseImage = prev.BaseImage;
-        _selectedId = null;
-        ResizeStage();
-        Redraw();
-    }
-
-    private void Redo()
-    {
-        if (!_history.TryRedo(Snapshot(), out var next)) return;
-        _document = next.Document;
-        _baseImage = next.BaseImage;
-        _selectedId = null;
-        ResizeStage();
-        Redraw();
-    }
-
-    private void BeginMarquee(PxPoint start)
-    {
-        _marquee = new Rectangle
-        {
-            Stroke = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF)), // monochrome marquee (was blue)
-            StrokeThickness = 1,
-            StrokeDashArray = new DoubleCollection { 4, 3 },
-            Fill = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)),
-        };
-        Canvas.SetLeft(_marquee, start.X);
-        Canvas.SetTop(_marquee, start.Y);
-        InteractionLayer.Children.Add(_marquee);
-    }
-
-    private void EndMarquee()
-    {
-        if (_marquee != null) InteractionLayer.Children.Remove(_marquee);
-        _marquee = null;
-    }
-
-    /// <summary>
-    /// Draws the in-progress shape (arrow/line/rect/ellipse) as lightweight WPF vector shapes on the interaction
-    /// canvas. Replaces the old per-frame full-resolution <see cref="RenderTargetBitmap"/> flatten — which stuttered
-    /// on large captures — so the drag stays smooth regardless of image size. The shape is flattened into the
-    /// document only once, on mouse-up.
-    /// </summary>
-    private void ShowVectorPreview(PxPoint start, PxPoint end)
-    {
-        ClearVectorPreview();
-        foreach (var el in BuildPreviewElements(_tool, start, end, _style))
-        {
-            InteractionLayer.Children.Add(el);
-            _previewElements.Add(el);
-        }
-    }
-
-    private void ClearVectorPreview()
-    {
-        foreach (var el in _previewElements) InteractionLayer.Children.Remove(el);
-        _previewElements.Clear();
-    }
-
-    // Coordinates are base-image pixels = InteractionLayer space (it's inside the Uniform Viewbox), so these mirror
-    // what DocumentRenderer will draw on commit.
-    private static IEnumerable<UIElement> BuildPreviewElements(EditorTool tool, PxPoint s, PxPoint e, AnnotationStyle style)
-    {
-        var stroke = PreviewBrush(style.StrokeColor);
-        switch (tool)
-        {
-            case EditorTool.Line:
-                yield return StrokeLine(s, e, stroke, style.LineWidth);
-                break;
-            case EditorTool.Arrow:
-            {
-                double headLen = Math.Max(12, style.LineWidth * 3);
-                var shaftEnd = ArrowGeometry.ShaftEnd(s, e, headLen);
-                yield return StrokeLine(s, shaftEnd, stroke, style.LineWidth);
-                var (left, right) = ArrowGeometry.HeadWings(s, e, headLen);
-                yield return new System.Windows.Shapes.Polygon
-                {
-                    Points = new PointCollection { new Point(e.X, e.Y), new Point(left.X, left.Y), new Point(right.X, right.Y) },
-                    Fill = stroke,
-                };
-                break;
-            }
-            case EditorTool.Rectangle:
-            {
-                var r = SelectionMath.Normalize(s, e);
-                var rect = new Rectangle { Width = r.Width, Height = r.Height, Stroke = stroke, StrokeThickness = style.LineWidth };
-                Canvas.SetLeft(rect, r.X);
-                Canvas.SetTop(rect, r.Y);
-                yield return rect;
-                break;
-            }
-            case EditorTool.FilledRectangle:
-            {
-                var r = SelectionMath.Normalize(s, e);
-                var rect = new Rectangle { Width = r.Width, Height = r.Height, Fill = PreviewBrush(style.FillColor) };
-                Canvas.SetLeft(rect, r.X);
-                Canvas.SetTop(rect, r.Y);
-                yield return rect;
-                break;
-            }
-            case EditorTool.Ellipse:
-            {
-                var r = SelectionMath.Normalize(s, e);
-                var el = new System.Windows.Shapes.Ellipse { Width = r.Width, Height = r.Height, Stroke = stroke, StrokeThickness = style.LineWidth };
-                Canvas.SetLeft(el, r.X);
-                Canvas.SetTop(el, r.Y);
-                yield return el;
-                break;
-            }
-        }
-    }
-
-    private static System.Windows.Shapes.Line StrokeLine(PxPoint a, PxPoint b, System.Windows.Media.Brush stroke, double thickness) => new()
-    {
-        X1 = a.X, Y1 = a.Y, X2 = b.X, Y2 = b.Y,
-        Stroke = stroke, StrokeThickness = thickness,
-        StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
-    };
-
-    private static SolidColorBrush PreviewBrush(RGBAColor c) =>
-        new(Color.FromArgb((byte)(c.A * 255), (byte)(c.R * 255), (byte)(c.G * 255), (byte)(c.B * 255)));
-
-    private void ApplyRedaction(PxRect frame, bool blur)
-    {
-        if (ClampToBase(frame) is not { } r) return;
-        var cropped = new CroppedBitmap(_baseImage, new Int32Rect(r.X, r.Y, r.W, r.H));
-        var argb = ImageConvert.ToArgbImage(cropped);
-        var patch = blur
-            ? Redactor.Blur(argb, new PxRect(0, 0, argb.Width, argb.Height))
-            : Redactor.Pixelate(argb, new PxRect(0, 0, argb.Width, argb.Height));
-        if (patch is null) return;
-        var pxFrame = new PxRect(r.X, r.Y, r.W, r.H);
-        _document.Add(blur
-            ? new BlurAnnotation(Guid.NewGuid(), _style, pxFrame, patch)
-            : new PixelateAnnotation(Guid.NewGuid(), _style, pxFrame, patch));
-    }
-
-    private void ApplyCrop(PxRect frame)
-    {
-        if (ClampToBase(frame) is not { } r) return;
-        _document = _document.Cropped(new PxRect(r.X, r.Y, r.W, r.H));
-        _baseImage = new CroppedBitmap(_baseImage, new Int32Rect(r.X, r.Y, r.W, r.H));
-        ResizeStage();
-    }
-
-    private (int X, int Y, int W, int H)? ClampToBase(PxRect frame)
-    {
-        int x = Math.Clamp((int)Math.Round(frame.X), 0, _baseImage.PixelWidth);
-        int y = Math.Clamp((int)Math.Round(frame.Y), 0, _baseImage.PixelHeight);
-        int w = Math.Min((int)Math.Round(frame.Width), _baseImage.PixelWidth - x);
-        int h = Math.Min((int)Math.Round(frame.Height), _baseImage.PixelHeight - y);
-        return w >= 1 && h >= 1 ? (x, y, w, h) : null;
-    }
-
-    /// <summary>
-    /// Opens the inline text editor at <paramref name="p"/>. The box is WYSIWYG: transparent (or the chosen
-    /// background chip), stroke-colored bold text in the same font the renderer uses — so what you type looks like
-    /// the flattened result, with no stray white box. <paramref name="p"/> is the text's top-left origin; when a
-    /// background chip is on, the box is shifted by the chip padding so the glyphs still land on the origin.
-    /// </summary>
-    private void PlaceTextBox(PxPoint p)
-    {
-        bool hasBg = _style.TextBackground is not null;
-        var box = new TextBox
-        {
-            MinWidth = 24,
-            FontSize = _style.FontSize,
-            FontFamily = DocumentRenderer.TextFont,
-            FontWeight = DocumentRenderer.TextWeight,
-            Foreground = PreviewBrush(_style.StrokeColor),
-            CaretBrush = PreviewBrush(_style.StrokeColor),
-            Background = _style.TextBackground is { } bg ? PreviewBrush(bg) : Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            Padding = hasBg
-                ? new Thickness(DocumentRenderer.TextChipPadX, DocumentRenderer.TextChipPadY, DocumentRenderer.TextChipPadX, DocumentRenderer.TextChipPadY)
-                : new Thickness(0),
-            Tag = p,
-        };
-        _textBox = box;
-        Canvas.SetLeft(box, p.X - (hasBg ? DocumentRenderer.TextChipPadX : 0));
-        Canvas.SetTop(box, p.Y - (hasBg ? DocumentRenderer.TextChipPadY : 0));
-        InteractionLayer.Children.Add(box);
-        // Wire the commit handlers to THIS box (not the shared field) and attach them before focusing, so a
-        // focus change triggered by Focus() can never re-enter with a half-built box.
-        box.LostKeyboardFocus += (_, _) => CommitText(box);
-        box.KeyDown += (_, ke) => { if (ke.Key == Key.Enter) { ke.Handled = true; CommitText(box); } };
-        box.Focus();
-    }
-
-    private void CommitText()
-    {
-        if (_textBox is { } box) CommitText(box);
-    }
-
-    /// <summary>
-    /// Flattens <paramref name="box"/> into a text annotation. Guarded by identity: a stale or late-firing
-    /// LostKeyboardFocus from a box that has already been replaced is ignored, so it can never clobber the box the
-    /// user is currently editing (that re-entrancy was the click-off crash).
-    /// </summary>
-    private void CommitText(TextBox box)
-    {
-        if (!ReferenceEquals(box, _textBox)) return;
-        _textBox = null;
-        var origin = (PxPoint)box.Tag;
-        string text = box.Text;
-        InteractionLayer.Children.Remove(box);
-        if (!string.IsNullOrWhiteSpace(text))
-        {
-            PushUndo();
-            _document.Add(new TextAnnotation(Guid.NewGuid(), _style, text, origin));
-            Redraw();
-        }
-    }
-
-    private void Redraw() => CanvasImage.Source = DocumentRenderer.Render(_document, _baseImage);
-    private BitmapSource Export() => DocumentRenderer.Render(_document, _baseImage);
 
     private void Done_Click(object sender, RoutedEventArgs e) => Close();
     private void Copy_Click(object sender, RoutedEventArgs e) => OnCopy?.Invoke(Export());
     private void Save_Click(object sender, RoutedEventArgs e) { OnSave?.Invoke(Export()); Close(); }
     private void Stack_Click(object sender, RoutedEventArgs e) { OnAddToStack?.Invoke(Export()); Close(); }
+
+    // ------------------------------------------------------------------ keys
+
+    private void OnKeyDown(object sender, KeyEventArgs e)
+    {
+        var mods = Keyboard.Modifiers;
+        bool ctrl = (mods & ModifierKeys.Control) != 0, shift = (mods & ModifierKeys.Shift) != 0, alt = (mods & ModifierKeys.Alt) != 0;
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+
+        if (_textEdit != null) return; // the live text box owns the keyboard (its own Enter/Esc handling)
+
+        if (ctrl && alt && key == Key.I) { TogglePanel(); e.Handled = true; return; }
+        if (ctrl && key == Key.Z && !shift) { Undo(); e.Handled = true; return; }
+        if (ctrl && (key == Key.Y || (key == Key.Z && shift))) { Redo(); e.Handled = true; return; }
+        if (ctrl && (key is Key.OemPlus or Key.Add)) { StepZoom(true); e.Handled = true; return; }
+        if (ctrl && (key is Key.OemMinus or Key.Subtract)) { StepZoom(false); e.Handled = true; return; }
+        if (ctrl && (key is Key.D0 or Key.NumPad0)) { ApplyFit(); e.Handled = true; return; }
+        if (ctrl && (key is Key.D1 or Key.NumPad1)) { SetZoomPercent(100, null); e.Handled = true; return; }
+        if (ctrl && key == Key.S) { Save_Click(this, e); e.Handled = true; return; }
+        if (ctrl && key == Key.W) { Close(); e.Handled = true; return; }
+        if (ctrl && key == Key.C) { Copy_Click(this, e); e.Handled = true; return; }
+        if (ctrl && key == Key.A && _tool == EditorTool.Select)
+        {
+            _selection.Clear();
+            _selection.AddRange(_document.Annotations.Select(a => a.Id));
+            RefreshChrome();
+            e.Handled = true;
+            return;
+        }
+        if (ctrl || alt) return;
+
+        switch (key)
+        {
+            case Key.Escape:
+                if (_drag != DragKind.None) { CancelDrag(); e.Handled = true; return; }
+                if (_tool != EditorTool.Select) SelectTool(EditorTool.Select);
+                else { _selection.Clear(); RefreshChrome(); }
+                e.Handled = true;
+                return;
+            case Key.Delete:
+            case Key.Back:
+                DeleteSelected();
+                e.Handled = true;
+                return;
+            case Key.OemOpenBrackets:
+                Arrange(front: false);
+                e.Handled = true;
+                return;
+            case Key.OemCloseBrackets:
+                Arrange(front: true);
+                e.Handled = true;
+                return;
+        }
+        // Single-key tool shortcuts (case-insensitive, no modifiers).
+        if (key is >= Key.A and <= Key.Z && ToolInfo.ForShortcut(key.ToString()) is { } tool)
+        {
+            SelectTool(tool);
+            e.Handled = true;
+        }
+    }
+
+    // ------------------------------------------------------------------ zoom
+
+    // The scroller's full size, not its viewport: the viewport shrinks while zoomed-in scrollbars show, which made
+    // "fit" drift (90% on open, 97% after a zoom round-trip) and 100% mislabelled as fit.
+    private PxSize AvailableForImage() => new(
+        Math.Max(1, Scroller.ActualWidth - 48),
+        Math.Max(1, Scroller.ActualHeight - 44));
+
+    private double FitMagnification() =>
+        ZoomMath.FitMagnification(new PxSize(_baseImage.PixelWidth, _baseImage.PixelHeight), AvailableForImage(), DpiScale);
+
+    private void ApplyFit()
+    {
+        if (!IsLoaded && Scroller.ActualWidth <= 0) return;
+        _fitMode = true;
+        SetMagnification(FitMagnification(), null);
+    }
+
+    private void StepZoom(bool zoomIn)
+    {
+        double percent = ZoomMath.Percent(_magnification, DpiScale);
+        SetZoomPercent(ZoomMath.SteppedPercent(percent, zoomIn), null);
+    }
+
+    private void SetZoomPercent(double percent, System.Windows.Point? anchorInViewport)
+    {
+        double m = ZoomMath.Clamp(ZoomMath.Magnification(percent, DpiScale), FitMagnification(), DpiScale);
+        _fitMode = ZoomMath.IsFit(m, FitMagnification());
+        SetMagnification(m, anchorInViewport);
+    }
+
+    private void OnWheel(object sender, MouseWheelEventArgs e)
+    {
+        if ((Keyboard.Modifiers & ModifierKeys.Control) == 0)
+        {
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+            {
+                Scroller.ScrollToHorizontalOffset(Scroller.HorizontalOffset - e.Delta);
+                e.Handled = true;
+            }
+            return;
+        }
+        e.Handled = true;
+        // Ctrl+wheel and precision-touchpad pinch: continuous, ×e^(0.001·Δ) ≈ 13% per notch, anchored on the pointer.
+        double fit = FitMagnification();
+        double m = ZoomMath.Clamp(_magnification * Math.Exp(0.001 * e.Delta), fit, DpiScale);
+        _fitMode = ZoomMath.IsFit(m, fit);
+        SetMagnification(m, e.GetPosition(Scroller));
+    }
+
+    /// <summary>Applies <paramref name="m"/>; keeps the image point under <paramref name="anchor"/> (viewport
+    /// coordinates; default = the centre of the visible area) on the same spot of the screen.</summary>
+    private void SetMagnification(double m, System.Windows.Point? anchor)
+    {
+        var viewportAnchor = anchor ?? new System.Windows.Point(Scroller.ViewportWidth / 2, Scroller.ViewportHeight / 2);
+        var imagePoint = Scroller.TranslatePoint(viewportAnchor, InteractionLayer);
+        _magnification = m;
+        StageScale.ScaleX = StageScale.ScaleY = m;
+        double percent = ZoomMath.Percent(m, DpiScale);
+        RenderOptions.SetBitmapScalingMode(CanvasImage, percent >= 300 ? BitmapScalingMode.NearestNeighbor : BitmapScalingMode.HighQuality);
+        ZoomButton.Content = ZoomLabel(ZoomMath.Label(percent, _fitMode));
+        Scroller.UpdateLayout();
+        var now = InteractionLayer.TranslatePoint(imagePoint, Scroller);
+        Scroller.ScrollToHorizontalOffset(Scroller.HorizontalOffset + now.X - viewportAnchor.X);
+        Scroller.ScrollToVerticalOffset(Scroller.VerticalOffset + now.Y - viewportAnchor.Y);
+        RefreshOverlay();
+        if (_textEdit != null) PositionTextEditor();
+    }
+
+    private static StackPanel ZoomLabel(string text)
+    {
+        var sp = new StackPanel { Orientation = Orientation.Horizontal };
+        sp.Children.Add(new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center, Typography = { NumeralAlignment = FontNumeralAlignment.Tabular } });
+        sp.Children.Add(new IconPresenter { IconKey = "chevron-down", Brush = Brushes.White, Width = 12, Height = 12, Margin = new Thickness(6, 0, 0, 0) });
+        return sp;
+    }
+
+    private void Zoom_Click(object sender, RoutedEventArgs e)
+    {
+        var menu = new ContextMenu { PlacementTarget = ZoomButton, Placement = System.Windows.Controls.Primitives.PlacementMode.Top };
+        void Add(string header, string gesture, Action act)
+        {
+            var item = new MenuItem { Header = header, InputGestureText = gesture };
+            item.Click += (_, _) => act();
+            menu.Items.Add(item);
+        }
+        Add("Zoom In", "Ctrl+Plus", () => StepZoom(true));
+        Add("Zoom Out", "Ctrl+Minus", () => StepZoom(false));
+        menu.Items.Add(new Separator());
+        Add("Fit to Window", "Ctrl+0", ApplyFit);
+        Add("Actual Size (100%)", "Ctrl+1", () => SetZoomPercent(100, null));
+        menu.Items.Add(new Separator());
+        foreach (var p in new[] { 50, 200, 400, 800 }) { int pp = p; Add($"{pp}%", "", () => SetZoomPercent(pp, null)); }
+        menu.IsOpen = true;
+    }
+}
+
+public partial class EditorWindow
+{
+    // ---- Preview hooks (--ui-preview): stage a tool + objects without user input.
+    internal void PreviewUseTool(EditorTool tool) => SelectTool(tool);
+
+    internal void PreviewAdd(IAnnotation a, bool select)
+    {
+        _document.Add(a);
+        if (select) _selection.Add(a.Id);
+        Redraw();
+    }
+
+    internal void PreviewEditText(TextAnnotation t) => BeginTextEdit(t.Origin, t.WrapWidth, null);
 }

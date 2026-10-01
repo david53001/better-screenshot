@@ -4,6 +4,8 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using BetterScreenshot.App.Editor;
+using BetterScreenshot.Core;
+using BetterScreenshot.Editor;
 using BetterScreenshot.App.History;
 using BetterScreenshot.App.Onboarding;
 using BetterScreenshot.App.Overlays;
@@ -67,13 +69,79 @@ internal static class PreviewRenderer
         foreach (var (label, img) in QuickAccessSamples())
             yield return ("quickaccess-" + label, () => new QuickAccessWindow(img, QuickAccessKind.Screenshot, new QuickAccessActions(), null));
         yield return ("quickaccess-recording", () => new QuickAccessWindow(UiPreview.SampleImage(640, 360), QuickAccessKind.Recording, new QuickAccessActions(), null));
-        yield return ("editor", () => new EditorWindow(UiPreview.SampleImage(900, 560)));
+        foreach (var (label, setup) in EditorStates())
+            yield return ("editor-" + label, () => { var w = new EditorWindow(EditorSample(), AnnotationStyle.Default); w.Loaded += (_, _) => setup(w); return w; });
         yield return ("welcome", () => new WelcomeWindow());
         yield return ("record-strip", () => new RecordStripWindow(new SettingsStore()));
         yield return ("countdown", () => new CountdownOverlayWindow());
         yield return ("toast", () => new HudWindow("Copied to clipboard"));
         yield return ("history-empty", () => new HistoryWindow(PreviewHistory(0), new HistoryWindowActions(_ => { }, _ => { })));
         yield return ("history-filled", () => new HistoryWindow(PreviewHistory(6), new HistoryWindowActions(_ => { }, _ => { })));
+    }
+
+    /// <summary>A screenshot-like sample for the editor: a light page with rows of text.</summary>
+    private static BitmapSource EditorSample() => Draw(1200, 750, dc =>
+    {
+        dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(0xF5, 0xF5, 0xF5)), null, new Rect(0, 0, 1200, 750));
+        dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(0x3E, 0x63, 0xDD)), null, new Rect(0, 0, 1200, 60));
+        var face = new Typeface("Segoe UI");
+        for (int i = 0; i < 8; i++)
+        {
+            dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(0xDA, 0xDA, 0xDA)), null, new Rect(40, 90 + i * 76, 1000, 46));
+            dc.DrawText(new FormattedText($"Row {i} — some screenshot text to annotate", System.Globalization.CultureInfo.InvariantCulture,
+                System.Windows.FlowDirection.LeftToRight, face, 20, Brushes.Black, 1.0), new Point(56, 100 + i * 76));
+        }
+    });
+
+    private static IEnumerable<(string, Action<EditorWindow>)> EditorStates()
+    {
+        var red = AnnotationStyle.Default;
+        yield return ("arrow-tool", w =>
+        {
+            w.PreviewAdd(new ArrowAnnotation(Guid.NewGuid(), red, new PxPoint(700, 520), new PxPoint(470, 300)), false);
+            w.PreviewUseTool(EditorTool.Arrow);
+        });
+        yield return ("select-text", w =>
+        {
+            w.PreviewUseTool(EditorTool.Select);
+            var label = TextStylePreset.Callout.Apply(red) with { TextOutline = false };
+            w.PreviewAdd(new TextAnnotation(Guid.NewGuid(), label, "Click here to continue", new PxPoint(640, 180)), true);
+        });
+        yield return ("text-tool", w => w.PreviewUseTool(EditorTool.Text));
+        yield return ("text-editing", w =>
+        {
+            w.PreviewUseTool(EditorTool.Text);
+            w.PreviewEditText(new TextAnnotation(Guid.NewGuid(), red, "", new PxPoint(120, 420)));
+        });
+        yield return ("blur-selected", w =>
+        {
+            w.PreviewUseTool(EditorTool.Select);
+            w.PreviewAdd(new RedactionAnnotation(Guid.NewGuid(), red with { BlurRadius = 8 }, new PxRect(50, 165, 420, 46)), true);
+        });
+        yield return ("pixelate-tool", w =>
+        {
+            w.PreviewAdd(new RedactionAnnotation(Guid.NewGuid(), red with { RedactionMode = RedactionMode.Pixelate }, new PxRect(50, 241, 420, 46)), false);
+            w.PreviewUseTool(EditorTool.Pixelate);
+        });
+        yield return ("highlighter", w =>
+        {
+            var pen = red.WithHighlighterPen();
+            w.PreviewAdd(new HighlighterAnnotation(Guid.NewGuid(), pen, new[] { new PxPoint(56, 340), new PxPoint(470, 340) }), false);
+            w.PreviewUseTool(EditorTool.Highlighter);
+        });
+        yield return ("spotlight-selected", w =>
+        {
+            w.PreviewUseTool(EditorTool.Select);
+            w.PreviewAdd(new ArrowAnnotation(Guid.NewGuid(), red, new PxPoint(900, 650), new PxPoint(560, 560)), false);
+            w.PreviewAdd(new SpotlightAnnotation(Guid.NewGuid(), red, new PxRect(40, 540, 520, 70)), true);
+        });
+        yield return ("multi-select", w =>
+        {
+            w.PreviewUseTool(EditorTool.Select);
+            w.PreviewAdd(new RectangleAnnotation(Guid.NewGuid(), red, new PxRect(30, 80, 600, 70), false), true);
+            w.PreviewAdd(new ArrowAnnotation(Guid.NewGuid(), red, new PxPoint(900, 300), new PxPoint(640, 120)), true);
+        });
+        yield return ("crop-tool", w => w.PreviewUseTool(EditorTool.Crop));
     }
 
     /// <summary>A throwaway History with <paramref name="n"/> sample screenshots (in the preview's temp profile).</summary>

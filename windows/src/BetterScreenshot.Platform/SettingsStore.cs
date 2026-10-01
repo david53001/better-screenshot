@@ -18,6 +18,8 @@ public sealed class SettingsStore
     public HotkeyBindings Hotkeys { get; set; } = HotkeyBindings.Defaults();
     public RecordingConfig Recording { get; set; } = RecordingConfig.Default;
     public AnnotationStyle EditorStyle { get; set; } = AnnotationStyle.Default;
+    /// <summary>The editor's Recent custom colours, newest first, at most 6 (v3 §1.5 <c>editorRecentColors</c>).</summary>
+    public List<RGBAColor> EditorRecentColors { get; set; } = new();
     public string SaveDirectory { get; set; } = DefaultSaveDirectory;
     public string RecordingsDirectory { get; set; } = DefaultRecordingsDirectory;
     public bool CaptureSoundEnabled { get; set; }
@@ -79,6 +81,7 @@ public sealed class SettingsStore
         HotkeyBindings = Hotkeys.ToDictionary(),
         RecordingConfig = Recording.ToDictionary(),
         EditorDefaultStyle = EditorStyle,
+        EditorRecentColors = EditorRecentColors.Take(RecentColors.Capacity).ToList(),
         SaveDirectory = SaveDirectory,
         RecordingsDirectory = RecordingsDirectory,
         CaptureSoundEnabled = CaptureSoundEnabled,
@@ -92,6 +95,7 @@ public sealed class SettingsStore
         Hotkeys = dto.HotkeyBindings is { } h ? HotkeyBindings.FromDictionary(h) : HotkeyBindings.Defaults(),
         Recording = dto.RecordingConfig is { } r ? RecordingConfig.FromDictionary(r) : RecordingConfig.Default,
         EditorStyle = dto.EditorDefaultStyle ?? AnnotationStyle.Default,
+        EditorRecentColors = new RecentColors(dto.EditorRecentColors ?? new List<RGBAColor>()).Colors.ToList(),
         SaveDirectory = string.IsNullOrWhiteSpace(dto.SaveDirectory) ? DefaultSaveDirectory : dto.SaveDirectory,
         RecordingsDirectory = string.IsNullOrWhiteSpace(dto.RecordingsDirectory) ? DefaultRecordingsDirectory : dto.RecordingsDirectory,
         CaptureSoundEnabled = dto.CaptureSoundEnabled ?? false,
@@ -105,6 +109,7 @@ public sealed class SettingsStore
         public Dictionary<string, string>? HotkeyBindings { get; set; }
         public Dictionary<string, string>? RecordingConfig { get; set; }
         public AnnotationStyle? EditorDefaultStyle { get; set; }
+        public List<RGBAColor>? EditorRecentColors { get; set; }
         public string? SaveDirectory { get; set; }
         public string? RecordingsDirectory { get; set; }
         public bool? CaptureSoundEnabled { get; set; }

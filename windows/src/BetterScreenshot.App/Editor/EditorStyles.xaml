@@ -1,0 +1,217 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Always-dark editor chrome (v3 Part 1 + Part 9): HUD-style tool pill and inspector on a dark backdrop.
+         Ed.AccentBrush is replaced in code with the user's Windows accent colour. -->
+    <SolidColorBrush x:Key="Ed.AccentBrush" Color="#0A84FF"/>
+    <SolidColorBrush x:Key="Ed.WindowBrush" Color="#1C1C1E"/>
+    <SolidColorBrush x:Key="Ed.SurfaceBrush" Color="#2A2A2D"/>
+    <SolidColorBrush x:Key="Ed.HairlineBrush" Color="#1AFFFFFF"/>
+    <SolidColorBrush x:Key="Ed.BarBrush" Color="#232325"/>
+    <SolidColorBrush x:Key="Ed.TextBrush" Color="#EBFFFFFF"/>
+    <SolidColorBrush x:Key="Ed.LabelBrush" Color="#E0FFFFFF"/>
+    <SolidColorBrush x:Key="Ed.SecondaryBrush" Color="#9EFFFFFF"/>
+    <SolidColorBrush x:Key="Ed.CaptionBrush" Color="#8CFFFFFF"/>
+    <SolidColorBrush x:Key="Ed.HoverBrush" Color="#21FFFFFF"/>
+    <SolidColorBrush x:Key="Ed.ControlBrush" Color="#1AFFFFFF"/>
+    <SolidColorBrush x:Key="Ed.ControlHoverBrush" Color="#2BFFFFFF"/>
+    <SolidColorBrush x:Key="Ed.SegmentOnBrush" Color="#47FFFFFF"/>
+
+    <!-- 38x38 toolbar tool: accent rounded rect (r9, inset 2) when selected, white 13% on hover -->
+    <Style x:Key="Ed.ToolButton" TargetType="ToggleButton">
+        <Setter Property="Width" Value="38"/>
+        <Setter Property="Height" Value="38"/>
+        <Setter Property="Margin" Value="1.5,0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="Bd" Background="Transparent" CornerRadius="9" Margin="2">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource Ed.HoverBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Ed.AccentBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Borderless icon button (title-row undo / redo / panel toggle) -->
+    <Style x:Key="Ed.IconButton" TargetType="ButtonBase">
+        <Setter Property="Width" Value="30"/>
+        <Setter Property="Height" Value="26"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ButtonBase">
+                    <Border x:Name="Bd" Background="Transparent" CornerRadius="6">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource Ed.HoverBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.35"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Small rounded button (panel "Pick from Screen", Arrange, bottom bar) -->
+    <Style x:Key="Ed.SmallButton" TargetType="Button">
+        <Setter Property="Foreground" Value="{StaticResource Ed.LabelBrush}"/>
+        <Setter Property="Background" Value="{StaticResource Ed.ControlBrush}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Height" Value="24"/>
+        <Setter Property="Padding" Value="9,0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource Ed.ControlHoverBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.8"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Primary (accent-filled) button: Copy -->
+    <Style x:Key="Ed.PrimaryButton" TargetType="Button" BasedOn="{StaticResource Ed.SmallButton}">
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="Background" Value="{DynamicResource Ed.AccentBrush}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+
+    <!-- Plain text button: Done -->
+    <Style x:Key="Ed.PlainButton" TargetType="Button" BasedOn="{StaticResource Ed.SmallButton}">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+
+    <!-- One segment of a segmented control (equal widths come from the hosting UniformGrid) -->
+    <Style x:Key="Ed.Segment" TargetType="ToggleButton">
+        <Setter Property="Foreground" Value="{StaticResource Ed.LabelBrush}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Height" Value="22"/>
+        <Setter Property="Margin" Value="1"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="Bd" Background="Transparent" CornerRadius="5" Padding="4,0">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource Ed.HoverBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource Ed.SegmentOnBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Colour swatch: 22x22 hit area, 16 circle with a white-22% outline; current = 2px white ring -->
+    <Style x:Key="Ed.Swatch" TargetType="ToggleButton">
+        <Setter Property="Width" Value="22"/>
+        <Setter Property="Height" Value="22"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Grid Background="Transparent">
+                        <Ellipse x:Name="Ring" Width="21" Height="21" Stroke="Transparent" StrokeThickness="2"/>
+                        <Ellipse Width="16" Height="16" Fill="{TemplateBinding Background}" Stroke="#38FFFFFF" StrokeThickness="1"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Ring" Property="Stroke" Value="#66FFFFFF"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Ring" Property="Stroke" Value="White"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Inspector checkbox: 14pt rounded box (r3.5), white-55% outline + white-6% fill off; accent + tick on -->
+    <Style x:Key="Ed.CheckBox" TargetType="CheckBox">
+        <Setter Property="Foreground" Value="{StaticResource Ed.LabelBrush}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <StackPanel Orientation="Horizontal" Background="Transparent">
+                        <Border x:Name="Box" Width="14" Height="14" CornerRadius="3.5" BorderThickness="1"
+                                BorderBrush="#8CFFFFFF" Background="#0FFFFFFF" VerticalAlignment="Center">
+                            <Path x:Name="Tick" Data="M3,7 L6,10 L11,4" Stroke="White" StrokeThickness="1.6"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Visibility="Collapsed"/>
+                        </Border>
+                        <ContentPresenter Margin="6,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Box" Property="Background" Value="{DynamicResource Ed.AccentBrush}"/>
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Ed.AccentBrush}"/>
+                            <Setter TargetName="Tick" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Colour well: a swatch inside a rounded frame -->
+    <Style x:Key="Ed.ColorWell" TargetType="Button">
+        <Setter Property="Width" Value="40"/>
+        <Setter Property="Height" Value="24"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Frame" CornerRadius="7" Background="{StaticResource Ed.ControlBrush}" Padding="3"
+                            BorderBrush="#26FFFFFF" BorderThickness="1">
+                        <Border CornerRadius="5" Background="{TemplateBinding Background}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Frame" Property="BorderBrush" Value="#73FFFFFF"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>

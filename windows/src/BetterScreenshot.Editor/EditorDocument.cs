@@ -60,13 +60,18 @@ public sealed class EditorDocument
         _annotations.Insert(0, a);
     }
 
-    /// <summary>Topmost (last-drawn) annotation whose lenient hit-test contains the point, or null.</summary>
-    public Guid? TopmostHit(PxPoint p)
+    /// <summary>Topmost (last-drawn) annotation whose lenient hit-test contains the point, or null. Spotlights are
+    /// tried last, so clicking an arrow inside a spotlight picks the arrow (v3 Part 3).</summary>
+    public Guid? TopmostHit(PxPoint p, double slop = AnnotationExtensions.HitSlop)
     {
         for (int i = _annotations.Count - 1; i >= 0; i--)
-            if (_annotations[i].HitTest(p)) return _annotations[i].Id;
+            if (_annotations[i] is not SpotlightAnnotation && _annotations[i].HitTest(p, slop)) return _annotations[i].Id;
+        for (int i = _annotations.Count - 1; i >= 0; i--)
+            if (_annotations[i] is SpotlightAnnotation && _annotations[i].HitTest(p, slop)) return _annotations[i].Id;
         return null;
     }
+
+    public IAnnotation? Find(Guid id) => _annotations.FirstOrDefault(a => a.Id == id);
 
     /// <summary>Ids of annotations whose bounding box intersects <paramref name="rect"/> (marquee selection).</summary>
     public IReadOnlyList<Guid> IdsIntersecting(PxRect rect) =>

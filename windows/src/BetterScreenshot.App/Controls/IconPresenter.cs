@@ -18,7 +18,7 @@ public sealed class IconPresenter : FrameworkElement
     public static readonly IReadOnlySet<string> Filled = new HashSet<string>
     {
         "stop-circle", "record-circle", "check-circle", "close-circle",
-        "play", "counter", "rect-fill", "blur", "pixelate", "bring-front", "send-back",
+        "play", "counter", "rect-fill", "blur", "pixelate", "bring-front", "send-back", "blackout",
     };
 
     public static readonly DependencyProperty IconKeyProperty = DependencyProperty.Register(
