@@ -410,4 +410,14 @@ public class TourTests
         Assert.True(Words("This is a much too long title") > 4);
         Assert.Equal(1, Words("— {shortcut:captureArea} —"));
     }
+
+    [Fact]
+    public void Outline_follows_the_control_shape()
+    {
+        Assert.Equal(19, TagLayout.OutlineRadius(15, 300, 60));   // the editor tool pill: concentric (+4)
+        Assert.Equal(14, TagLayout.OutlineRadius(10, 600, 300));  // Settings' Keyboard Shortcuts card
+        Assert.Equal(6, TagLayout.OutlineRadius(0, 100, 40));     // a square control
+        Assert.Equal(10, TagLayout.OutlineRadius(15, 20, 300));   // never rounder than a capsule (narrow box)
+        Assert.Equal(15, TagLayout.OutlineRadius(30, 400, 30));   // or a short one
+    }
 }

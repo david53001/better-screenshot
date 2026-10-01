@@ -57,6 +57,19 @@ public static class TagLayout
     public const double ScreenInset = 8;
     public const double CornerInset = 16;
     public const double BigFraction = 0.6;
+    /// <summary>The outline's corner radius around a square control.</summary>
+    public const double SquareBoxRadius = 6;
+
+    /// <summary>
+    /// The outline follows the control's shape (§4.10, Mac <c>TagStyle.boxRadius</c>): concentric with a rounded
+    /// control (its radius + <see cref="BoxGrow"/>), <see cref="SquareBoxRadius"/> around a square one, and never
+    /// rounder than a capsule of the box.
+    /// </summary>
+    public static double OutlineRadius(double controlRadius, double boxWidth, double boxHeight)
+    {
+        double r = controlRadius > 0 ? controlRadius + BoxGrow : SquareBoxRadius;
+        return Math.Clamp(r, 0, Math.Max(0, Math.Min(boxWidth, boxHeight) / 2));
+    }
 
     public static TagPlacementResult Place(TagLayoutInput input)
     {

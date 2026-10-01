@@ -153,7 +153,7 @@ public partial class HistoryWindow : Window
             });
             thumbGrid.Children.Add(play);
         }
-        var thumbHost = new Border { Background = ThumbBg, CornerRadius = new CornerRadius(6), Height = 110, Child = thumbGrid };
+        var thumbHost = new Border { Background = ThumbBg, CornerRadius = new CornerRadius(8), Height = 110, Child = thumbGrid };
 
         var badgeRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(2, 4, 0, 0) };
         badgeRow.Children.Add(new IconPresenter
@@ -196,7 +196,7 @@ public partial class HistoryWindow : Window
             Width = 180,
             Margin = new Thickness(6),
             Padding = new Thickness(6),
-            CornerRadius = new CornerRadius(8),
+            CornerRadius = new CornerRadius(12), // §4.10: the tour outline is concentric with it (12 + 4)
             Background = CellBg,
             BorderThickness = new Thickness(2),
             BorderBrush = _selection.IsSelected(entry.Id) ? SelectedBorder : Brushes.Transparent,

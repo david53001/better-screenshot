@@ -193,7 +193,7 @@ public sealed class TagOverlay : ITourTagPresenter
         LastPlacement = placed;
 
         double controlRadius = TourAnchors.CornerRadius(anchor);
-        double boxRadius = controlRadius > 0 ? Math.Min(controlRadius + TagLayout.BoxGrow, placed.Box.Height / 2) : 6;
+        double boxRadius = TagLayout.OutlineRadius(controlRadius, placed.Box.Width, placed.Box.Height);
         double hostRadius = shape?.CornerRadius ?? (titled ? (Environment.OSVersion.Version.Build >= 22000 ? 8 : 0) : 12);
         _decor.Render(hostRect, hostRadius, ToRect(placed.Box), boxRadius, placed, ToRect(placed.Tag));
 
