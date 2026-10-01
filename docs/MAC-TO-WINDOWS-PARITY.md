@@ -107,8 +107,8 @@ Priority P1 (do first) / P2 / P3.
 | 24 | Windows open centred on the screen in use, reopen as last closed | **MISSING** | P2 | v3 "Window placement" |
 | 25 | Guided tours + ⓘ on every window + Help & Tours + Welcome question | **MISSING** | P1 | v3 Part 7 |
 | 26 | Tours review fixes (colours #C62D22, counter, placement, shorter tours) | **MISSING** (part of 25) | — | v3 §7.3–§7.8 |
-| 27 | Native look (MacStats design language) v3.1.0 | **MISSING** (Windows is the black "JVoice" look) | P1 | v3 Part 9 |
-| 28 | **Opacity setting** (2026-09-30) | **MISSING** | P1 | §4.9 |
+| 27 | Native look (MacStats design language) v3.1.0 | DONE b91c187 | P1 | v3 Part 9 |
+| 28 | **Opacity setting** (2026-09-30) | DONE b91c187 | P1 | §4.9 |
 | 29 | Tour outline follows each control's shape; Settings tour **Opacity** step with live demo | **MISSING** | P2 | §4.10 |
 | 30 | Windows open on the current desktop (Spaces → Windows virtual desktops) | **MISSING** | P2 | §4.11 |
 | 31 | Freeze screen while selecting (Mac 2026-09-30) | **WIN-AHEAD** (Windows built it first, with a setting and window mode) | — | §4.12 |

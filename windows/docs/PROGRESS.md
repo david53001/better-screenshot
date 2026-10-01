@@ -19,6 +19,8 @@ The loop (`windows/LOOP-PROMPT.md`) reads this first every firing to avoid redoi
 finished tasks, move the pointer, log assumptions/known-issues. One firing = one durable increment.
 
 ## 2026-10-02 — Overnight parity revamp (docs/MAC-TO-WINDOWS-PARITY.md), newest first
+**#28 Opacity setting (§4.9)** — b91c187. APPEARANCE card slider, uiOpacity key, live re-tint of every surface; HUD alphas re-calibrated for WPF layered windows to keep the contrast contract (unit-tested).
+**#27 Native look (v3 Part 9)** — b91c187. Mica main windows, one HUD + one docked-panel surface, Settings cards/ⓘ/segments restyled, column order per Part 9. Settings stays dark (custom dark control styles; system light theme not followed — see Assumptions).
 **#22 Video editor v2 (v3 Part 6)** — 8f29067. Cut list editor (split/delete/edge trim/in-out, 1-4x speed, per-segment + whole mute, undo/redo, zoomable filmstrip timeline with time ruler), GIF export, re-encode via one ffmpeg filter_complex on NVENC. Verified by real-ffmpeg export tests + off-screen render; not yet driven live.
 **#16 Trim v1 + Cancel restores the card (v3 A.3, Part 0)** — 8f29067. Edit video on MP4 cards + History; export rules/names/strings from A.3 (lossless trim, (trimmed) copies, atomic Replace); the card always comes back on close with a fresh first frame.
 **#20 Record strip v2 (v3 Part 4)** — 72788e3. Labelled strip with device dropdowns, live mic meter (AudioGraph), hint line; Settings Recording + In the video cards; systemAudioMode/device ids/showsCursor keys with legacy rules. All apps except BetterScreenshot isn't offered on Windows (dshow loopback can't exclude a process) — reads as All apps.
