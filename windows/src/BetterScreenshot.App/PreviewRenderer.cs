@@ -74,6 +74,13 @@ internal static class PreviewRenderer
         yield return ("welcome", () => new WelcomeWindow());
         yield return ("record-strip", () => new RecordStripWindow(new SettingsStore()));
         yield return ("countdown", () => new CountdownOverlayWindow());
+        foreach (var (label, state) in PillStates())
+            yield return ("pill-" + label, () =>
+            {
+                var w = new RecordingPillWindow(SystemParameters.WorkArea, null, excludeFromCapture: false);
+                w.Apply(state);
+                return w;
+            });
         yield return ("toast", () => new HudWindow("Copied to clipboard"));
         yield return ("history-empty", () => new HistoryWindow(PreviewHistory(0), new HistoryWindowActions(_ => { }, _ => { })));
         yield return ("history-filled", () => new HistoryWindow(PreviewHistory(6), new HistoryWindowActions(_ => { }, _ => { })));
@@ -199,6 +206,27 @@ internal static class PreviewRenderer
         bmp.Render(visual);
         bmp.Freeze();
         return bmp;
+    }
+
+    /// <summary>The v3 Part 5 snapshot states (expanded / muted / area-no-mic paused / countdown / confirm / collapsed / full screen).</summary>
+    private static IEnumerable<(string, BetterScreenshot.Recording.PillState)> PillStates()
+    {
+        var live = new BetterScreenshot.Recording.PillState
+        {
+            Phase = BetterScreenshot.Recording.PillPhase.Recording, Elapsed = TimeSpan.FromSeconds(83),
+            MicTrack = true, SystemTrack = true, Target = BetterScreenshot.Recording.PillTarget.Window,
+        };
+        yield return ("expanded", live);
+        yield return ("muted", live with { MicMuted = true, SystemMuted = true, Camera = BetterScreenshot.Recording.PillCamera.Showing });
+        yield return ("area-no-mic", live with
+        {
+            Phase = BetterScreenshot.Recording.PillPhase.Paused, MicTrack = false, Target = BetterScreenshot.Recording.PillTarget.Area,
+            Elapsed = TimeSpan.FromSeconds(84),
+        });
+        yield return ("countdown", live with { Phase = BetterScreenshot.Recording.PillPhase.Countdown });
+        yield return ("confirm-restart", live with { Elapsed = TimeSpan.FromSeconds(727), Confirm = BetterScreenshot.Recording.PillConfirm.Restart });
+        yield return ("collapsed", live with { Elapsed = TimeSpan.FromSeconds(727), Collapsed = true });
+        yield return ("fullscreen", live with { Target = BetterScreenshot.Recording.PillTarget.FullScreen });
     }
 
     /// <summary>Shows <paramref name="w"/> far off-screen, lets layout + Loaded handlers settle, renders its

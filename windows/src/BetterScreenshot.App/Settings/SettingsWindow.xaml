@@ -406,6 +406,17 @@
                                 </StackPanel>
                                 <CheckBox x:Name="KeystrokesCheck" Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource Theme.MonoSwitch}" Checked="Changed" Unchecked="Changed"/>
                             </Grid>
+                            <Grid Margin="0,12,0,0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
+                                    <TextBlock Style="{StaticResource RowTitle}" Text="Show recording controls in the video" TextWrapping="Wrap" MaxWidth="190" VerticalAlignment="Center"/>
+                                    <ctl:InfoTip Margin="6,0,0,0"
+                                        Title="Show recording controls in the video"
+                                        Explanation="While recording, a floating pill with the timer, Pause and Stop is always on screen. Off: it's left out of the video itself. On: it's recorded like any other window."
+                                        Example="Leave off for clean tutorials; window recordings never include it either way."/>
+                                </StackPanel>
+                                <CheckBox x:Name="ControlsInVideoCheck" Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource Theme.MonoSwitch}" Checked="Changed" Unchecked="Changed"/>
+                            </Grid>
 
                             <StackPanel Orientation="Horizontal" Margin="0,14,0,6">
                                 <TextBlock Style="{StaticResource FieldLabel}" Text="Countdown before recording" Margin="0" VerticalAlignment="Center"/>

@@ -19,6 +19,7 @@ public sealed class IconPresenter : FrameworkElement
     {
         "stop-circle", "record-circle", "check-circle", "close-circle",
         "play", "counter", "rect-fill", "blur", "pixelate", "bring-front", "send-back", "blackout",
+        "video-fill", "pause", "stop",
     };
 
     public static readonly DependencyProperty IconKeyProperty = DependencyProperty.Register(

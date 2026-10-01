@@ -98,6 +98,7 @@ public partial class SettingsWindow : Window
         (r.CameraSize == CameraSize.Medium ? CamMedium : CamSmall).IsChecked = true;
         ClicksCheck.IsChecked = r.ClickHighlights;
         KeystrokesCheck.IsChecked = r.KeystrokeOverlay;
+        ControlsInVideoCheck.IsChecked = r.ControlsInRecording;
         (r.CountdownSeconds switch { 3 => Cd3, 5 => Cd5, 10 => Cd10, _ => Cd0 }).IsChecked = true;
     }
 
@@ -365,6 +366,7 @@ public partial class SettingsWindow : Window
             CameraSize = CamMedium.IsChecked == true ? CameraSize.Medium : CameraSize.Small,
             ClickHighlights = ClicksCheck.IsChecked == true,
             KeystrokeOverlay = KeystrokesCheck.IsChecked == true,
+            ControlsInRecording = ControlsInVideoCheck.IsChecked == true,
             CountdownSeconds = Cd3.IsChecked == true ? 3 : Cd5.IsChecked == true ? 5 : Cd10.IsChecked == true ? 10 : 0,
         };
 

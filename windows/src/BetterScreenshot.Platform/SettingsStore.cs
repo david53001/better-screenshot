@@ -25,6 +25,10 @@ public sealed class SettingsStore
     public bool CaptureSoundEnabled { get; set; }
     public bool LaunchAtLogin { get; set; }
     public bool FirstRunComplete { get; set; }
+    /// <summary>Recording pill chevron state (v3 Part 5 <c>recordingPillCollapsed</c>), default expanded.</summary>
+    public bool RecordingPillCollapsed { get; set; }
+    /// <summary>Recording pill's bottom-right corner "{x, y}" in DIPs (v3 Part 5 <c>recordingPillAnchor</c>); null = bottom-centre.</summary>
+    public string? RecordingPillAnchor { get; set; }
 
     /// <summary>Env var that relocates settings + History (dev/preview/new-user testing only — e.g.
     /// <c>--settings-dir</c>), so a throwaway profile never touches the real <c>%APPDATA%</c> files.</summary>
@@ -87,6 +91,8 @@ public sealed class SettingsStore
         CaptureSoundEnabled = CaptureSoundEnabled,
         LaunchAtLogin = LaunchAtLogin,
         FirstRunComplete = FirstRunComplete,
+        RecordingPillCollapsed = RecordingPillCollapsed,
+        RecordingPillAnchor = RecordingPillAnchor,
     };
 
     private static SettingsStore FromDto(Dto dto) => new()
@@ -101,6 +107,8 @@ public sealed class SettingsStore
         CaptureSoundEnabled = dto.CaptureSoundEnabled ?? false,
         LaunchAtLogin = dto.LaunchAtLogin ?? false,
         FirstRunComplete = dto.FirstRunComplete ?? false,
+        RecordingPillCollapsed = dto.RecordingPillCollapsed ?? false,
+        RecordingPillAnchor = dto.RecordingPillAnchor,
     };
 
     private sealed class Dto
@@ -115,5 +123,7 @@ public sealed class SettingsStore
         public bool? CaptureSoundEnabled { get; set; }
         public bool? LaunchAtLogin { get; set; }
         public bool? FirstRunComplete { get; set; }
+        public bool? RecordingPillCollapsed { get; set; }
+        public string? RecordingPillAnchor { get; set; }
     }
 }

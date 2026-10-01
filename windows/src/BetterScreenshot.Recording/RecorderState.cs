@@ -66,6 +66,18 @@ public struct RecorderState : IEquatable<RecorderState>
         };
     }
 
+    /// <summary>Recorded time so far, pauses excluded (frozen while paused); zero when not recording.</summary>
+    public TimeSpan Elapsed(DateTime now)
+    {
+        var t = Phase switch
+        {
+            RecorderPhase.Recording => now - Started - AccumulatedPause,
+            RecorderPhase.Paused => PausedSince - Started - AccumulatedPause,
+            _ => TimeSpan.Zero,
+        };
+        return t < TimeSpan.Zero ? TimeSpan.Zero : t;
+    }
+
     private static string Format(TimeSpan t)
     {
         if (t < TimeSpan.Zero) t = TimeSpan.Zero;

@@ -26,6 +26,9 @@ public sealed record RecordingConfig
     public bool ClickHighlights { get; init; } = true;
     public bool KeystrokeOverlay { get; init; } = false;
     public int CountdownSeconds { get; init; } = 0;
+    /// <summary>"Show recording controls in the video" (v3 A.2 <c>controlsInRecording</c>): off keeps the floating
+    /// pill out of the video (<c>WDA_EXCLUDEFROMCAPTURE</c>); on records it like any other window.</summary>
+    public bool ControlsInRecording { get; init; } = false;
 
     public const int GifFps = 10;
     public const int GifMaxWidth = 960;
@@ -50,6 +53,7 @@ public sealed record RecordingConfig
         ["clickHighlights"] = ClickHighlights ? "true" : "false",
         ["keystrokeOverlay"] = KeystrokeOverlay ? "true" : "false",
         ["countdownSeconds"] = CountdownSeconds.ToString(CultureInfo.InvariantCulture),
+        ["controlsInRecording"] = ControlsInRecording ? "true" : "false",
     };
 
     public static RecordingConfig FromDictionary(IReadOnlyDictionary<string, string> d)
@@ -71,6 +75,7 @@ public sealed record RecordingConfig
             ClickHighlights = ParseBool(d, "clickHighlights", def.ClickHighlights),
             KeystrokeOverlay = ParseBool(d, "keystrokeOverlay", def.KeystrokeOverlay),
             CountdownSeconds = countdown,
+            ControlsInRecording = ParseBool(d, "controlsInRecording", def.ControlsInRecording),
         };
     }
 

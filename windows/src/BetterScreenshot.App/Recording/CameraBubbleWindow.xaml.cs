@@ -47,8 +47,12 @@ public partial class CameraBubbleWindow : Window
         Top = Math.Max(work.Top, Math.Min(top, work.Bottom - diameter));
     }
 
-    /// <summary>Initialize the default camera and start previewing. Any failure degrades silently (bubble never shows).</summary>
-    public async Task StartAsync()
+    /// <summary>What the last <see cref="StartAsync"/> found (drives the recording pill's Camera button).</summary>
+    public enum StartResult { Started, NoCamera, Denied }
+
+    /// <summary>Initialize the default camera and start previewing. Any failure degrades silently (bubble never
+    /// shows) and is reported so the pill can grey its Camera button with the reason.</summary>
+    public async Task<StartResult> StartAsync()
     {
         try
         {
@@ -64,18 +68,44 @@ public partial class CameraBubbleWindow : Window
                              s.Info.SourceKind == MediaFrameSourceKind.Color &&
                              s.Info.MediaStreamType == MediaStreamType.VideoPreview)
                          ?? _capture.FrameSources.Values.FirstOrDefault(s => s.Info.SourceKind == MediaFrameSourceKind.Color);
-            if (source is null) { Stop(); return; }
+            if (source is null) { Stop(); return StartResult.NoCamera; }
 
             _reader = await _capture.CreateFrameReaderAsync(source, MediaEncodingSubtypes.Bgra8);
             _reader.FrameArrived += OnFrameArrived;
             await _reader.StartAsync();
             Show();
+            return StartResult.Started;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            Stop(); // Settings › Privacy & security › Camera is off for desktop apps
+            return StartResult.Denied;
         }
         catch
         {
-            Stop(); // no camera, access denied, or device busy — degrade
+            Stop(); // no camera or device busy — degrade
+            return StartResult.NoCamera;
         }
     }
+
+    /// <summary>
+    /// Pill Camera toggle (v3 Part 5): hide the bubble where the user dragged it and stop the camera (its light goes
+    /// off), or bring it back in the same spot. Returns false if the camera can't be restarted.
+    /// </summary>
+    public async Task<bool> SetHiddenAsync(bool hidden)
+    {
+        if (hidden)
+        {
+            StopCamera();
+            Hide();
+            return true;
+        }
+        _keepWindow = true;
+        try { return await StartAsync() == StartResult.Started; }
+        finally { _keepWindow = false; }
+    }
+
+    private bool _keepWindow;
 
     private void OnFrameArrived(MediaFrameReader sender, MediaFrameArrivedEventArgs args)
     {
@@ -106,6 +136,12 @@ public partial class CameraBubbleWindow : Window
 
     public void Stop()
     {
+        StopCamera();
+        if (!_keepWindow) Close();
+    }
+
+    private void StopCamera()
+    {
         if (_reader is not null)
         {
             _reader.FrameArrived -= OnFrameArrived;
@@ -115,6 +151,5 @@ public partial class CameraBubbleWindow : Window
         }
         _capture?.Dispose();
         _capture = null;
-        Close();
     }
 }

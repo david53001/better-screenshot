@@ -28,6 +28,9 @@ public sealed class RecordingEngine
     private AudioInputs _audio = AudioInputs.None;
     private string? _finalPath;
     private string _sessionId = "";
+    private PxSize _outputSize;
+    private bool _muteSystem;
+    private bool _muteMic;
 
     /// <summary>True while a recording session exists (recording or paused), from <see cref="Start"/> to <see cref="StopAsync"/>.</summary>
     public bool IsRecording => _finalPath is not null;
@@ -46,9 +49,50 @@ public sealed class RecordingEngine
         _audio = audio ?? AudioInputs.None;
         _finalPath = outputPath;
         _sessionId = Guid.NewGuid().ToString("N");
+        _outputSize = FfmpegArgs.EvenSize(region);
         _segments.Clear();
         StartSegment();
         return true;
+    }
+
+    /// <summary>The track exists in this session (requested and a device resolved) — only those can be muted.</summary>
+    public bool HasSystemAudioTrack => _config.SystemAudio && _audio.SystemAudioDevice is not null;
+    public bool HasMicrophoneTrack => _config.Microphone && _audio.MicrophoneDevice is not null;
+
+    /// <summary>
+    /// Mute/unmute tracks (v3 Part 5, option A): the track stays, fed from silence. A running segment is ended and a
+    /// new one started with the new inputs (ffmpeg can't swap inputs live); while paused the flags just apply to the
+    /// next segment. Flags survive Stop/Start — the coordinator resets them per session and keeps them over Restart.
+    /// </summary>
+    public async Task SetMutedAsync(bool systemAudio, bool microphone)
+    {
+        if (_muteSystem == systemAudio && _muteMic == microphone) return;
+        _muteSystem = systemAudio;
+        _muteMic = microphone;
+        if (_finalPath is not null && _process is not null)
+        {
+            await StopSegmentAsync();
+            if (_finalPath is not null) StartSegment();
+        }
+    }
+
+    /// <summary>
+    /// Re-point the session at a new region (Switch Window/Area). Call while paused: the next segment records the new
+    /// region letterboxed into the session's first output size, so the <c>-c copy</c> concat still holds.
+    /// </summary>
+    public void Retarget(PxRect region) => _region = region;
+
+    /// <summary>The region the next segment records.</summary>
+    public PxRect Region => _region;
+
+    /// <summary>Stop and delete everything recorded in this session (Restart / Discard) — nothing is concatenated.</summary>
+    public async Task DiscardAsync()
+    {
+        if (_finalPath is null) return;
+        _finalPath = null;
+        await StopSegmentAsync();
+        foreach (var s in _segments) TryDelete(s);
+        _segments.Clear();
     }
 
     /// <summary>Pause: finalize the current active-span segment (kept for concat); no frames are captured until <see cref="Resume"/>.</summary>
@@ -102,7 +146,12 @@ public sealed class RecordingEngine
     {
         string seg = Path.Combine(Path.GetTempPath(), $"bs_rec_{_sessionId}_{_segments.Count}.mp4");
         _segments.Add(seg);
-        var args = FfmpegArgs.BuildRecording(_config, _region, seg, _audio);
+        var args = FfmpegArgs.BuildRecording(_config, _region, seg, _audio, new SegmentOptions
+        {
+            OutputSize = _outputSize,
+            MuteSystemAudio = _muteSystem,
+            MuteMicrophone = _muteMic,
+        });
         var process = FfmpegRunner.StartRecording(args);
         _stderr = process.StandardError.ReadToEndAsync();
         _stdout = process.StandardOutput.ReadToEndAsync();
