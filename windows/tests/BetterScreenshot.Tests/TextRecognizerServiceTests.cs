@@ -6,8 +6,19 @@ using Xunit;
 
 namespace BetterScreenshot.Tests;
 
+[Collection("WordList")]
 public class TextRecognizerServiceTests
 {
+    [Fact]
+    public void Windows_spell_checker_is_an_offline_English_word_list()
+    {
+        if (SpellWordList.Create() is not { } isWord) return; // no English dictionary on this machine
+        Assert.True(isWord("reaction"));
+        Assert.True(isWord("portfolio"));
+        Assert.False(isWord("lightdependent"));
+        Assert.False(isWord("12ab"));
+    }
+
     private static BitmapSource MatrixToBitmap(ZXing.Common.BitMatrix matrix)
     {
         int w = matrix.Width, h = matrix.Height, stride = w * 4;
@@ -75,5 +86,52 @@ public class TextRecognizerServiceTests
         Assert.StartsWith("• The Boston", paragraphs[0]);
         Assert.EndsWith("portfolios.", paragraphs[0]);
         Assert.StartsWith("• It looks", paragraphs[1]);
+    }
+
+    /// <summary>Renders a grid of cells (rows × columns) at fixed column x positions, optionally with grid lines.</summary>
+    internal static BitmapSource RenderTable(string[][] rows, double[] columnX, bool gridLines, double fontSize = 22)
+    {
+        var visual = new DrawingVisual();
+        double pitch = fontSize * 1.9, width = columnX[^1] + 200, height = 30 + pitch * rows.Length;
+        using (var dc = visual.RenderOpen())
+        {
+            dc.DrawRectangle(Brushes.White, null, new System.Windows.Rect(0, 0, width, height));
+            var face = new Typeface("Segoe UI");
+            for (int r = 0; r < rows.Length; r++)
+                for (int c = 0; c < rows[r].Length; c++)
+                    if (rows[r][c].Length > 0)
+                        dc.DrawText(new FormattedText(rows[r][c], System.Globalization.CultureInfo.InvariantCulture,
+                            System.Windows.FlowDirection.LeftToRight, face, fontSize, Brushes.Black, 1.0),
+                            new System.Windows.Point(columnX[c], 20 + r * pitch));
+            if (gridLines)
+            {
+                var pen = new Pen(new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)), 1);
+                foreach (double x in columnX.Skip(1)) dc.DrawLine(pen, new System.Windows.Point(x - 12.5, 8), new System.Windows.Point(x - 12.5, height - 4));
+            }
+        }
+        var bmp = new RenderTargetBitmap((int)width, (int)height, 96, 96, PixelFormats.Pbgra32);
+        bmp.Render(visual);
+        bmp.Freeze();
+        return bmp;
+    }
+
+    [Theory]
+    [Trait("category", "hardware")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_table_pastes_as_tab_separated_rows(bool gridLines)
+    {
+        var image = RenderTable(new[]
+        {
+            new[] { "Country", "Capital", "Population" },
+            new[] { "Romania", "Bucharest", "19.0" },
+            new[] { "France", "Paris", "68.2" },
+            new[] { "Total", "", "87.2" },
+        }, new[] { 20.0, 220, 420 }, gridLines);
+
+        var result = await TextRecognizerService.RecognizeAsync(image);
+
+        Assert.Equal(RecognitionKind.Text, result.Kind);
+        Assert.Equal("Country\tCapital\tPopulation\nRomania\tBucharest\t19.0\nFrance\tParis\t68.2\nTotal\t\t87.2", result.Value);
     }
 }

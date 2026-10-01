@@ -38,6 +38,12 @@ public static class OcrTuning
         return Math.Max(1, Math.Min(factor, (double)maxDimension / longest));
     }
 
+    /// <summary>Romanian letters with a comma below (v3 §8.2): engines return the cedilla forms <c>ş ţ</c>; mapped
+    /// when Romanian is the recognition language.</summary>
+    public static string RomanianCommaBelow(string text, string languageTag) =>
+        !LanguageCode(languageTag).Equals("ro", StringComparison.OrdinalIgnoreCase) ? text
+            : text.Replace('ş', 'ș').Replace('ţ', 'ț').Replace('Ş', 'Ș').Replace('Ţ', 'Ț');
+
     private static string LanguageCode(string tag)
     {
         int i = tag.IndexOfAny(new[] { '-', '_' });

@@ -17,9 +17,9 @@ public static class TextRecognizerService
     public static async Task<RecognitionResult> RecognizeAsync(BitmapSource image)
     {
         byte[] bgra = GetBgra(image, out int width, out int height);
-        var qr = DecodeQr(bgra, width, height);
+        var (qr, coverage) = DecodeQr(bgra, width, height);
         var lines = await OcrLinesAsync(image, UpscaleFor(image));
-        return RecognitionResolver.Resolve(qr, lines);
+        return RecognitionResolver.Resolve(qr, lines, qrDominant: coverage >= RecognitionResolver.DominantQrArea);
     }
 
     /// <summary>Upscale (Mac v2.10.0) to 2× pixel density before OCR. Our captures are device pixels at the
@@ -111,9 +111,11 @@ public static class TextRecognizerService
         return (px, 160, 48);
     }
 
-    private static List<string> DecodeQr(byte[] bgra, int width, int height)
+    /// <summary>The QR payload (if any) and the share of the selection the code covers.</summary>
+    private static (List<string> Payloads, double Coverage) DecodeQr(byte[] bgra, int width, int height)
     {
         var found = new List<string>();
+        double coverage = 0;
         try
         {
             var luminance = new ZXing.RGBLuminanceSource(bgra, width, height, ZXing.RGBLuminanceSource.BitmapFormat.BGRA32);
@@ -121,13 +123,19 @@ public static class TextRecognizerService
             var reader = new ZXing.QrCode.QRCodeReader();
             var hints = new Dictionary<ZXing.DecodeHintType, object> { { ZXing.DecodeHintType.TRY_HARDER, true } };
             var result = reader.decode(bitmap, hints);
-            if (result?.Text is { Length: > 0 } text) found.Add(text);
+            if (result?.Text is { Length: > 0 } text)
+            {
+                found.Add(text);
+                var finders = result.ResultPoints.OfType<ZXing.QrCode.Internal.FinderPattern>().ToList();
+                double module = finders.Count > 0 ? finders.Average(f => f.EstimatedModuleSize) : 0;
+                coverage = RecognitionResolver.QrCoverage(finders.Select(f => ((double)f.X, (double)f.Y)).ToList(), module, width, height);
+            }
         }
         catch
         {
             // No QR code present (or undecodable) — fall through to OCR.
         }
-        return found;
+        return (found, coverage);
     }
 
     internal static async Task<List<string>> OcrLinesAsync(BitmapSource image, double upscale)
@@ -140,21 +148,37 @@ public static class TextRecognizerService
         await Gate.WaitAsync();
         try { result = await engine.RecognizeAsync(software); }
         finally { Gate.Release(); }
-        return TextReflow.Paragraphs(result.Lines.Select(ToReflowLine)).ToList();
+        int w = software.PixelWidth, h = software.PixelHeight;
+        string language = engine.RecognizerLanguage?.LanguageTag ?? "";
+        // Vertical grid lines are measured only when the layout asks (a table with two or more multi-cell rows).
+        var grid = new Lazy<GridLines>(() =>
+        {
+            var px = new byte[w * h * 4];
+            software.CopyToBuffer(px.AsBuffer());
+            return GridLines.FromBgra(px, w, h);
+        });
+        WordList.Lookup ??= SpellWordList.Create();
+        var lines = result.Lines.Select(l => ToReflowLine(l, w, h, language)).Where(l => l.Text.Length > 0).ToList();
+        return TextReflow.Paragraphs(lines, new Core.PxSize(w, h), r => grid.Value.Vertical(r)).ToList();
     }
 
-    /// <summary>An OCR line with its box = the union of its words' boxes (pixels, top-left origin).</summary>
-    internal static TextReflow.Line ToReflowLine(OcrLine line)
+    /// <summary>An OCR line for <see cref="TextReflow"/>: its text, its box = the union of its words' boxes, and each
+    /// word's box — normalised to the <paramref name="width"/>×<paramref name="height"/> bitmap, top-left origin.</summary>
+    internal static TextReflow.Line ToReflowLine(OcrLine line, int width, int height, string language = "")
     {
         double l = double.MaxValue, t = double.MaxValue, r = double.MinValue, b = double.MinValue;
+        var words = new List<Core.PxRect>(line.Words.Count);
         foreach (var w in line.Words)
         {
             var box = w.BoundingRect;
             l = Math.Min(l, box.X); t = Math.Min(t, box.Y);
             r = Math.Max(r, box.X + box.Width); b = Math.Max(b, box.Y + box.Height);
+            words.Add(new Core.PxRect(box.X / width, box.Y / height, box.Width / width, box.Height / height));
         }
-        var rect = line.Words.Count == 0 ? default : Core.PxRect.FromLtrb(l, t, r, b);
-        return new TextReflow.Line(line.Text, rect);
+        var rect = line.Words.Count == 0 ? default : Core.PxRect.FromLtrb(l / width, t / height, r / width, b / height);
+        // Windows.Media.Ocr joins words with spaces for Latin scripts; the word boxes line up with them.
+        string text = OcrTuning.RomanianCommaBelow(line.Text, language);
+        return new TextReflow.Line(text, rect, WordBoxes: words);
     }
 
     private static async Task<SoftwareBitmap> ToSoftwareBitmapAsync(BitmapSource image, double upscale)

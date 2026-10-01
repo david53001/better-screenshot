@@ -40,24 +40,33 @@ public readonly struct RecognitionResult : IEquatable<RecognitionResult>
 }
 
 /// <summary>
-/// Pure decision rule for Capture Text: a QR code (if any) wins over text; otherwise blank lines are dropped
-/// and the remaining lines are joined with newlines; if nothing remains, the result is <see cref="RecognitionResult.None"/>.
+/// Pure decision rule for Capture Text (Mac <c>RecognitionResolver</c>, v3 §8.2). Text lines (one per paragraph, table
+/// row or code block after <see cref="TextReflow"/>) join with newlines; blank ones drop. A QR code that fills the
+/// selection (<see cref="DominantQrArea"/>) is what the user was after, so its payload wins; a small one on a poster
+/// or slide is appended to the text instead of replacing it (unless the text already prints it).
 /// </summary>
 public static class RecognitionResolver
 {
-    public static RecognitionResult Resolve(IReadOnlyList<string> qrPayloads, IReadOnlyList<string> textLines)
+    /// <summary>A QR code covering this share of the selection is what the user was after.</summary>
+    public const double DominantQrArea = 0.2;
+
+    public static RecognitionResult Resolve(IReadOnlyList<string> qrPayloads, IReadOnlyList<string> textLines, bool qrDominant = false)
     {
-        foreach (var qr in qrPayloads)
-        {
-            if (!string.IsNullOrEmpty(qr)) return RecognitionResult.Qr(qr);
-        }
+        var qrs = qrPayloads.Where(q => !string.IsNullOrEmpty(q)).ToList();
+        var kept = textLines.Where(l => !string.IsNullOrEmpty(l)).ToList();
+        if (qrs.Count > 0 && (qrDominant || kept.Count == 0)) return RecognitionResult.Qr(qrs[0]);
+        if (kept.Count == 0) return RecognitionResult.None;
+        string text = string.Join("\n", kept);
+        return RecognitionResult.Text(string.Join("\n", new[] { text }.Concat(qrs.Where(q => !text.Contains(q, StringComparison.Ordinal)))));
+    }
 
-        var kept = new List<string>();
-        foreach (var line in textLines)
-        {
-            if (!string.IsNullOrEmpty(line)) kept.Add(line);
-        }
-
-        return kept.Count == 0 ? RecognitionResult.None : RecognitionResult.Text(string.Join("\n", kept));
+    /// <summary>The share of a <paramref name="width"/>×<paramref name="height"/> selection a QR code covers, from its
+    /// finder-pattern centres (ZXing's result points) and module size: each centre sits 3.5 modules in from its corner.</summary>
+    public static double QrCoverage(IReadOnlyList<(double X, double Y)> finderCentres, double moduleSize, int width, int height)
+    {
+        if (finderCentres.Count < 3 || width <= 0 || height <= 0) return 0;
+        double w = finderCentres.Max(p => p.X) - finderCentres.Min(p => p.X) + 7 * moduleSize;
+        double h = finderCentres.Max(p => p.Y) - finderCentres.Min(p => p.Y) + 7 * moduleSize;
+        return Math.Clamp(w * h / ((double)width * height), 0, 1);
     }
 }
