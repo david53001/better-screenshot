@@ -64,7 +64,7 @@ public static class FfmpegArgs
         {
             "-f", "gdigrab",
             "-framerate", fpsStr,
-            "-draw_mouse", "1",
+            "-draw_mouse", config.ShowsCursor ? "1" : "0",
             "-offset_x", offsetX.ToString(CultureInfo.InvariantCulture),
             "-offset_y", offsetY.ToString(CultureInfo.InvariantCulture),
             "-video_size", $"{width}x{height}",

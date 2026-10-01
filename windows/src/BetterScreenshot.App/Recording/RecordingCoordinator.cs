@@ -385,7 +385,14 @@ public sealed class RecordingCoordinator
     /// <summary>Camera off at start (or first show): create the bubble — same size setting, same corner rule as at start.</summary>
     private async Task ShowNewCameraAsync()
     {
-        var cam = new CameraBubbleWindow(_config.CameraSize.Diameter(), _region);
+        var cameras = await CameraDevices.ListAsync();
+        if (cameras.ResolvedId(_config.CameraDeviceId) is not { } deviceId)
+        {
+            _cameraState = PillCamera.NoCamera;
+            UpdatePill();
+            return;
+        }
+        var cam = new CameraBubbleWindow(_config.CameraSize.Diameter(), _region) { DeviceId = deviceId };
         _camera = cam;
         var result = await cam.StartAsync();
         if (_camera != cam) { cam.Stop(); return; } // torn down meanwhile

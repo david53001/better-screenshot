@@ -79,6 +79,7 @@
     <StreamGeometry x:Key="icon-restart">M6.2,8.5 A7,7 0 1 1 5,12.5 M6.2,4.5 L6.2,8.5 L10.2,8.5</StreamGeometry>
     <StreamGeometry x:Key="icon-pause">M7,5 L10.5,5 L10.5,19 L7,19 Z M13.5,5 L17,5 L17,19 L13.5,19 Z</StreamGeometry>
     <StreamGeometry x:Key="icon-stop">M6.5,5.5 L17.5,5.5 Q18.5,5.5 18.5,6.5 L18.5,17.5 Q18.5,18.5 17.5,18.5 L6.5,18.5 Q5.5,18.5 5.5,17.5 L5.5,6.5 Q5.5,5.5 6.5,5.5 Z</StreamGeometry>
+    <StreamGeometry x:Key="icon-display">M3.5,5 L20.5,5 L20.5,16 L3.5,16 Z M9,20 L15,20 M12,16 L12,20</StreamGeometry>
     <StreamGeometry x:Key="icon-chevron-left">M14.5,6 L8.5,12 L14.5,18</StreamGeometry>
     <StreamGeometry x:Key="icon-chevron-right">M9.5,6 L15.5,12 L9.5,18</StreamGeometry>
 </ResourceDictionary>

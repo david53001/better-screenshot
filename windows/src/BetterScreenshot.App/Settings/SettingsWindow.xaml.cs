@@ -92,14 +92,62 @@ public partial class SettingsWindow : Window
         var r = _settings.Recording;
         (r.Format == RecordingFormat.Gif ? RecGif : RecMp4).IsChecked = true;
         (r.Fps == 60 ? Fps60 : Fps30).IsChecked = true;
-        SysAudioCheck.IsChecked = r.SystemAudio;
-        MicCheck.IsChecked = r.Microphone;
-        CameraCheck.IsChecked = r.Camera;
+        SystemAudioCombo.Items.Clear();
+        foreach (var mode in new[] { SystemAudioMode.Off, SystemAudioMode.All })
+            SystemAudioCombo.Items.Add(new ComboBoxItem { Content = mode.Title(), Tag = mode, ToolTip = RecordStripHints.SystemAudioTooltip(mode) });
+        SystemAudioCombo.SelectedIndex = r.SystemAudioMode == SystemAudioMode.Off ? 0 : 1; // excludeSelf (Mac-only) reads as All apps
+        CursorCombo.SelectedIndex = r.ShowsCursor ? 0 : 1;
+        FillDevices(MicCombo, DeviceList.Empty, r.Microphone, r.MicrophoneDeviceId);
+        FillDevices(CameraCombo, DeviceList.Empty, r.Camera, r.CameraDeviceId);
+        Loaded += async (_, _) => await LoadDevicesAsync();
         (r.CameraSize == CameraSize.Medium ? CamMedium : CamSmall).IsChecked = true;
         ClicksCheck.IsChecked = r.ClickHighlights;
         KeystrokesCheck.IsChecked = r.KeystrokeOverlay;
         ControlsInVideoCheck.IsChecked = r.ControlsInRecording;
         (r.CountdownSeconds switch { 3 => Cd3, 5 => Cd5, 10 => Cd10, _ => Cd0 }).IsChecked = true;
+        UpdateRecordingEnablement();
+    }
+
+    /// <summary>The Microphone / Camera dropdowns list the connected devices (read when the window opens).</summary>
+    private async Task LoadDevicesAsync()
+    {
+        var mics = await DshowAudioDevices.MicrophonesAsync();
+        var cams = await BetterScreenshot.App.Recording.CameraDevices.ListAsync();
+        bool was = _loading;
+        _loading = true;
+        var r = _settings.Recording;
+        FillDevices(MicCombo, mics, r.Microphone, r.MicrophoneDeviceId);
+        FillDevices(CameraCombo, cams, r.Camera, r.CameraDeviceId);
+        _loading = was;
+        UpdateRecordingEnablement();
+    }
+
+    private static void FillDevices(System.Windows.Controls.ComboBox box, DeviceList list, bool enabled, string? saved)
+    {
+        var selected = list.Choice(enabled, saved);
+        box.Items.Clear();
+        foreach (var (choice, title) in list.Options())
+        {
+            var item = new ComboBoxItem { Content = title, Tag = choice };
+            box.Items.Add(item);
+            if (choice == selected) box.SelectedItem = item;
+        }
+        if (box.SelectedItem is null) box.SelectedIndex = 0;
+    }
+
+    /// <summary>GIF dims both audio dropdowns (values kept) and shows why; Camera size needs a camera.</summary>
+    private void UpdateRecordingEnablement()
+    {
+        bool audio = RecGif.IsChecked != true;
+        MicCombo.IsEnabled = SystemAudioCombo.IsEnabled = audio;
+        GifNoSoundNote.Visibility = audio ? Visibility.Collapsed : Visibility.Visible;
+        CamSizeGroup.IsEnabled = CameraCombo.SelectedItem is ComboBoxItem { Tag: DeviceChoice { IsOff: false } };
+    }
+
+    private void DeviceChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading) return;
+        Apply();
     }
 
     private void BuildShortcutRows()
@@ -356,19 +404,22 @@ public partial class SettingsWindow : Window
             TempRetentionMinutes = TempRetentionScale.PositionToMinutes(TempRetentionSlider.Value),
         };
 
-        _settings.Recording = new RecordingConfig
+        var recording = _settings.Recording;
+        if (MicCombo.SelectedItem is ComboBoxItem { Tag: DeviceChoice mic }) recording = recording.WithMicrophone(mic);
+        if (CameraCombo.SelectedItem is ComboBoxItem { Tag: DeviceChoice cam }) recording = recording.WithCamera(cam);
+        _settings.Recording = recording with
         {
             Format = RecGif.IsChecked == true ? RecordingFormat.Gif : RecordingFormat.Mp4,
             Fps = Fps60.IsChecked == true ? 60 : 30,
-            SystemAudio = SysAudioCheck.IsChecked == true,
-            Microphone = MicCheck.IsChecked == true,
-            Camera = CameraCheck.IsChecked == true,
+            SystemAudioMode = SystemAudioCombo.SelectedItem is ComboBoxItem { Tag: SystemAudioMode mode } ? mode : recording.SystemAudioMode,
+            ShowsCursor = CursorCombo.SelectedIndex != 1,
             CameraSize = CamMedium.IsChecked == true ? CameraSize.Medium : CameraSize.Small,
             ClickHighlights = ClicksCheck.IsChecked == true,
             KeystrokeOverlay = KeystrokesCheck.IsChecked == true,
             ControlsInRecording = ControlsInVideoCheck.IsChecked == true,
             CountdownSeconds = Cd3.IsChecked == true ? 3 : Cd5.IsChecked == true ? 5 : Cd10.IsChecked == true ? 10 : 0,
         };
+        UpdateRecordingEnablement();
 
         _settings.SaveDirectory = SaveDirBox.Text;
         _settings.LaunchAtLogin = LaunchAtLoginCheck.IsChecked == true;

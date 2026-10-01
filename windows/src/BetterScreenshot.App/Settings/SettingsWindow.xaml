@@ -303,7 +303,7 @@
                 <!-- ===== COLUMN C ===== -->
                 <StackPanel Grid.Column="4">
 
-                    <!-- RECORDING -->
+                    <!-- RECORDING (v3 Part 4: dropdowns, same stored values as the record strip) -->
                     <ctl:DarkSection HeaderText="Recording">
                         <StackPanel>
                             <Grid>
@@ -335,41 +335,48 @@
                                 </UniformGrid>
                             </Grid>
 
+                            <StackPanel Orientation="Horizontal" Margin="0,14,0,6">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Countdown before recording" Margin="0" VerticalAlignment="Center"/>
+                                <ctl:InfoTip Margin="6,0,0,0"
+                                    Title="Countdown before recording"
+                                    Explanation="Shows a 3&#8211;2&#8211;1 style countdown before recording actually starts, giving you a moment to get ready. The countdown itself is never part of the video."
+                                    Example="At 3s you get three seconds after pressing Record before capture begins; Off starts instantly."/>
+                            </StackPanel>
+                            <UniformGrid Rows="1" HorizontalAlignment="Left" Width="220">
+                                <RadioButton x:Name="Cd0" Content="Off" GroupName="Countdown" Style="{StaticResource Theme.SegmentLeft}" Checked="Changed"/>
+                                <RadioButton x:Name="Cd3" Content="3s" GroupName="Countdown" Style="{StaticResource Theme.SegmentMid}" Checked="Changed"/>
+                                <RadioButton x:Name="Cd5" Content="5s" GroupName="Countdown" Style="{StaticResource Theme.SegmentMid}" Checked="Changed"/>
+                                <RadioButton x:Name="Cd10" Content="10s" GroupName="Countdown" Style="{StaticResource Theme.SegmentRight}" Checked="Changed"/>
+                            </UniformGrid>
+
                             <Rectangle Height="1" Fill="{StaticResource Theme.BorderBrush}" Margin="0,14,0,12"/>
 
-                            <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
-                                    <TextBlock Style="{StaticResource RowTitle}" Text="Record system audio" VerticalAlignment="Center"/>
-                                    <ctl:InfoTip Margin="6,0,0,0"
-                                        Title="Record system audio"
-                                        Explanation="Includes the sound coming out of your computer — apps, videos, music — in the recording. Needs a loopback input such as &#8220;Stereo Mix&#8221; or a virtual audio cable; without one the recording is silent."
-                                        Example="Turn on to capture a video's audio along with the picture."/>
-                                </StackPanel>
-                                <CheckBox x:Name="SysAudioCheck" Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource Theme.MonoSwitch}" Checked="Changed" Unchecked="Changed"/>
-                            </Grid>
-                            <Grid Margin="0,12,0,0">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
-                                    <TextBlock Style="{StaticResource RowTitle}" Text="Record microphone" VerticalAlignment="Center"/>
-                                    <ctl:InfoTip Margin="6,0,0,0"
-                                        Title="Record microphone"
-                                        Explanation="Includes your microphone in the recording — your voice narration, on its own audio track."
-                                        Example="Turn on to talk over a tutorial while you record it."/>
-                                </StackPanel>
-                                <CheckBox x:Name="MicCheck" Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource Theme.MonoSwitch}" Checked="Changed" Unchecked="Changed"/>
-                            </Grid>
-                            <Grid Margin="0,12,0,0">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
-                                    <TextBlock Style="{StaticResource RowTitle}" Text="Show camera bubble" VerticalAlignment="Center"/>
-                                    <ctl:InfoTip Margin="6,0,0,0"
-                                        Title="Show camera bubble"
-                                        Explanation="Overlays a small circular webcam preview on the recording, so your face appears in the corner of the video. Needs a connected webcam."
-                                        Example="Great for reaction videos or a personal walkthrough where viewers see you talking."/>
-                                </StackPanel>
-                                <CheckBox x:Name="CameraCheck" Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource Theme.MonoSwitch}" Checked="Changed" Unchecked="Changed"/>
-                            </Grid>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Microphone" Margin="0" VerticalAlignment="Center"/>
+                                <ctl:InfoTip Margin="6,0,0,0"
+                                    Title="Microphone"
+                                    Explanation="Which microphone records your voice, or Off for none. If the chosen mic is unplugged, your PC's default mic is used instead. The record strip shows a live level meter for it."
+                                    Example="Pick your headset or a USB mic to narrate a tutorial."/>
+                            </StackPanel>
+                            <ComboBox x:Name="MicCombo" SelectionChanged="DeviceChanged"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,12,0,6">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="System audio" Margin="0" VerticalAlignment="Center"/>
+                                <ctl:InfoTip Margin="6,0,0,0"
+                                    Title="System audio"
+                                    Explanation="The sound your PC plays &#8212; videos, calls, music, alerts &#8212; recorded along with the screen. Needs a loopback input such as &#8220;Stereo Mix&#8221; or a virtual audio cable. GIF recordings never have sound."
+                                    Example="All apps to capture a video call's audio along with the screen."/>
+                            </StackPanel>
+                            <ComboBox x:Name="SystemAudioCombo" SelectionChanged="DeviceChanged"/>
+                            <TextBlock x:Name="GifNoSoundNote" Style="{StaticResource RowSub}" Margin="0,6,0,0" TextWrapping="Wrap"
+                                       Text="GIFs have no sound. Switch Format to MP4 to record audio."/>
+                            <StackPanel Orientation="Horizontal" Margin="0,12,0,6">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Camera" Margin="0" VerticalAlignment="Center"/>
+                                <ctl:InfoTip Margin="6,0,0,0"
+                                    Title="Camera"
+                                    Explanation="Shows your webcam in a round bubble on screen while you record, so it ends up in the video. Pick which camera, or Off."
+                                    Example="Turn on for a face-cam picture-in-picture during a walkthrough video."/>
+                            </StackPanel>
+                            <ComboBox x:Name="CameraCombo" SelectionChanged="DeviceChanged"/>
                             <Grid Margin="0,12,0,0">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
@@ -379,11 +386,28 @@
                                         Explanation="How large the webcam bubble is on screen while recording."
                                         Example="Small tucks your face neatly in a corner; Medium makes it more prominent."/>
                                 </StackPanel>
-                                <UniformGrid Grid.Column="1" Rows="1" Width="150">
+                                <UniformGrid x:Name="CamSizeGroup" Grid.Column="1" Rows="1" Width="150">
                                     <RadioButton x:Name="CamSmall" Content="Small" GroupName="CamSize" Style="{StaticResource Theme.SegmentLeft}" Checked="Changed"/>
                                     <RadioButton x:Name="CamMedium" Content="Medium" GroupName="CamSize" Style="{StaticResource Theme.SegmentRight}" Checked="Changed"/>
                                 </UniformGrid>
                             </Grid>
+                        </StackPanel>
+                    </ctl:DarkSection>
+
+                    <!-- IN THE VIDEO -->
+                    <ctl:DarkSection HeaderText="In the video">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Mouse cursor" Margin="0" VerticalAlignment="Center"/>
+                                <ctl:InfoTip Margin="6,0,0,0"
+                                    Title="Mouse cursor"
+                                    Explanation="Shown draws the mouse pointer into the recording as it moves. Hidden gives a clean video without the pointer."
+                                    Example="Choose Hidden when recording a slideshow or video you won't be clicking through."/>
+                            </StackPanel>
+                            <ComboBox x:Name="CursorCombo" SelectionChanged="DeviceChanged">
+                                <ComboBoxItem Content="Shown" ToolTip="The mouse cursor is recorded as it moves."/>
+                                <ComboBoxItem Content="Hidden" ToolTip="The video shows no mouse cursor."/>
+                            </ComboBox>
                             <Grid Margin="0,12,0,0">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
@@ -402,7 +426,7 @@
                                     <ctl:InfoTip Margin="6,0,0,0"
                                         Title="Show keystrokes"
                                         Explanation="Shows the keys you press as an on-screen overlay during a recording, so keyboard actions are visible in the video."
-                                        Example="Viewers see &#8220;Ctrl+C&#8221; pop up when you copy — handy for demoing keyboard shortcuts."/>
+                                        Example="Viewers see &#8220;Ctrl+C&#8221; pop up when you copy &#8212; handy for demoing keyboard shortcuts."/>
                                 </StackPanel>
                                 <CheckBox x:Name="KeystrokesCheck" Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource Theme.MonoSwitch}" Checked="Changed" Unchecked="Changed"/>
                             </Grid>
@@ -417,20 +441,6 @@
                                 </StackPanel>
                                 <CheckBox x:Name="ControlsInVideoCheck" Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource Theme.MonoSwitch}" Checked="Changed" Unchecked="Changed"/>
                             </Grid>
-
-                            <StackPanel Orientation="Horizontal" Margin="0,14,0,6">
-                                <TextBlock Style="{StaticResource FieldLabel}" Text="Countdown before recording" Margin="0" VerticalAlignment="Center"/>
-                                <ctl:InfoTip Margin="6,0,0,0"
-                                    Title="Countdown before recording"
-                                    Explanation="Shows a 3&#8211;2&#8211;1 style countdown before recording actually starts, giving you a moment to get ready. The countdown itself is never part of the video."
-                                    Example="At 3s you get three seconds after pressing Record before capture begins; Off starts instantly."/>
-                            </StackPanel>
-                            <UniformGrid Rows="1" HorizontalAlignment="Left" Width="220">
-                                <RadioButton x:Name="Cd0" Content="Off" GroupName="Countdown" Style="{StaticResource Theme.SegmentLeft}" Checked="Changed"/>
-                                <RadioButton x:Name="Cd3" Content="3s" GroupName="Countdown" Style="{StaticResource Theme.SegmentMid}" Checked="Changed"/>
-                                <RadioButton x:Name="Cd5" Content="5s" GroupName="Countdown" Style="{StaticResource Theme.SegmentMid}" Checked="Changed"/>
-                                <RadioButton x:Name="Cd10" Content="10s" GroupName="Countdown" Style="{StaticResource Theme.SegmentRight}" Checked="Changed"/>
-                            </UniformGrid>
                         </StackPanel>
                     </ctl:DarkSection>
 

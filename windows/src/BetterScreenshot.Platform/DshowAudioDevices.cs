@@ -32,13 +32,52 @@ public static class DshowAudioDevices
         }
     }
 
-    /// <summary>Resolve which loopback/mic devices to feed ffmpeg for <paramref name="config"/> (each may be null → dropped).</summary>
+    /// <summary>
+    /// Resolve which loopback/mic devices to feed ffmpeg for <paramref name="config"/> (each may be null → dropped).
+    /// GIFs have no sound, so a GIF recording resolves no audio at all. The mic is the saved device while it's
+    /// connected, else the Windows default input, else the name heuristic (v3 Part 4 <see cref="DeviceList"/>).
+    /// </summary>
     public static async Task<AudioInputs> ResolveAsync(RecordingConfig config)
     {
+        if (!config.RecordsAudio) return AudioInputs.None;
         var set = await EnumerateAsync().ConfigureAwait(false);
         string? system = config.SystemAudio ? DshowDeviceList.PickSystemLoopback(set.Audio) : null;
-        string? mic = config.Microphone ? DshowDeviceList.PickMicrophone(set.Audio, excluding: system) : null;
+        string? mic = null;
+        if (config.Microphone)
+        {
+            var mics = await MicrophonesAsync().ConfigureAwait(false);
+            mic = mics.ResolvedId(config.MicrophoneDeviceId);
+        }
         return new AudioInputs { SystemAudioDevice = system, MicrophoneDevice = mic };
+    }
+
+    /// <summary>The Microphone menu: every dshow audio input except the system-audio loopback, with the Windows
+    /// default capture device (matched by name) as the default; the name heuristic when the default can't be read.</summary>
+    public static async Task<DeviceList> MicrophonesAsync()
+    {
+        var set = await EnumerateAsync().ConfigureAwait(false);
+        string? loopback = DshowDeviceList.PickSystemLoopback(set.Audio);
+        var devices = set.Audio.Where(a => a != loopback).Select(a => new CaptureDevice(a, a)).ToList();
+        string? defaultName = await DefaultCaptureNameAsync().ConfigureAwait(false);
+        string? defaultId = defaultName is null ? null : DshowDeviceList.MatchName(devices.Select(d => d.Id), defaultName);
+        defaultId ??= DshowDeviceList.PickMicrophone(devices.Select(d => d.Id));
+        return new DeviceList(devices, defaultId);
+    }
+
+    /// <summary>The Windows default recording device's friendly name (Settings › Sound › Input), or null.</summary>
+    private static async Task<string?> DefaultCaptureNameAsync()
+    {
+        try
+        {
+            string id = Windows.Media.Devices.MediaDevice.GetDefaultAudioCaptureId(Windows.Media.Devices.AudioDeviceRole.Default);
+            if (string.IsNullOrEmpty(id)) return null;
+            var info = await Windows.Devices.Enumeration.DeviceInformation.CreateFromIdAsync(id);
+            return info?.Name;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>Drops the cached device list so the next resolve re-enumerates.</summary>

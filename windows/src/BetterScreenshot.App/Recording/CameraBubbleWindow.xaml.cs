@@ -27,6 +27,9 @@ public partial class CameraBubbleWindow : Window
     private MediaFrameReader? _reader;
     private WriteableBitmap? _bitmap;
 
+    /// <summary>The camera to open (WinRT VideoCapture id); null = the first colour camera.</summary>
+    public string? DeviceId { get; init; }
+
     public CameraBubbleWindow(double diameter, PxRect region)
     {
         InitializeComponent();
@@ -57,12 +60,14 @@ public partial class CameraBubbleWindow : Window
         try
         {
             _capture = new MediaCapture();
-            await _capture.InitializeAsync(new MediaCaptureInitializationSettings
+            var settings = new MediaCaptureInitializationSettings
             {
                 StreamingCaptureMode = StreamingCaptureMode.Video,
                 MemoryPreference = MediaCaptureMemoryPreference.Cpu,
                 SharingMode = MediaCaptureSharingMode.ExclusiveControl,
-            });
+            };
+            if (!string.IsNullOrEmpty(DeviceId)) settings.VideoDeviceId = DeviceId; // the Camera menu's choice
+            await _capture.InitializeAsync(settings);
 
             var source = _capture.FrameSources.Values.FirstOrDefault(s =>
                              s.Info.SourceKind == MediaFrameSourceKind.Color &&

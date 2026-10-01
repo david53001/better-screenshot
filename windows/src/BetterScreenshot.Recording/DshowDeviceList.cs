@@ -50,6 +50,18 @@ public static class DshowDeviceList
     }
 
     /// <summary>
+    /// The dshow device that is <paramref name="friendlyName"/> (a Core Audio / WinRT endpoint name): exact match
+    /// first, then a dshow name the friendly name starts with (older dshow truncates names to 31 characters), case-insensitive.
+    /// </summary>
+    public static string? MatchName(IEnumerable<string> dshowNames, string friendlyName)
+    {
+        var list = dshowNames.ToList();
+        return list.FirstOrDefault(n => string.Equals(n, friendlyName, StringComparison.OrdinalIgnoreCase))
+               ?? list.Where(n => n.Length >= 8 && friendlyName.StartsWith(n, StringComparison.OrdinalIgnoreCase))
+                   .OrderByDescending(n => n.Length).FirstOrDefault();
+    }
+
+    /// <summary>
     /// The best microphone: prefer a device whose name contains "microphone" (excluding <paramref name="excluding"/>,
     /// e.g. the chosen loopback); otherwise the first remaining device; null if nothing is left.
     /// </summary>
