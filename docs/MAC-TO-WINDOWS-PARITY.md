@@ -85,8 +85,8 @@ Priority P1 (do first) / P2 / P3.
 | 2 | Quick Access hold duration 30 s…30 m…∞ (v2.5.0) + "∞" label (v2.6.1) | **DONE** (`Capture/OverlayDismissScale.cs`, mirrored in `a15d286`) — verify the ∞ label | P3 | §4.1 |
 | 3 | Temp-file retention 10 s…1 h…∞, default 5 min (v2.7.0) | **DONE 638a152** — the Mac stops | P2 | §4.2 |
 | 4 | Refocus the previous app after a screenshot (v2.8.0) | **DONE `00ea02e`** | P1 | §4.3 |
-| 5 | History multi-select (⇧/⌘-click), multi-file drag-out, batch Copy/Delete/Reveal, confirmed bulk delete (v2.8.0) | **MISSING** (single selection) | P2 | §4.4 |
-| 6 | History UI-review fixes H1–H4 (full labels, size/length details, helpful empty state, Clear All in a ⋯ menu) | **MISSING** | P2 | §4.4 |
+| 5 | History multi-select (⇧/⌘-click), multi-file drag-out, batch Copy/Delete/Reveal, confirmed bulk delete (v2.8.0) | **DONE 924239b** — Ctrl/Shift multi-select, multi-file drag-out, batch Copy/Delete/Show in Explorer, confirmed bulk delete | P2 | §4.4 |
+| 6 | History UI-review fixes H1–H4 (full labels, size/length details, helpful empty state, Clear All in a ⋯ menu) | **DONE 924239b** — H1 min width 660, H2 size/length from headers + play badge, H3 empty state names the live chord, H4 Clear All in ⋯ | P2 | §4.4 |
 | 7 | Guaranteed Quick Access button contrast (v2.9.0) | **DONE `87f528c`** | P1 | §4.5 |
 | 8 | Quick Access card **Pin button removed** (v2.9.0) | **DONE `c0805ee`** | P2 | §4.5 |
 | 9 | Capture Text: warm OCR during the drag, explicit languages, upscale < 2× (v2.10.0) | **DONE `e9f5511`** | P2 | §4.6 |
