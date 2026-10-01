@@ -96,13 +96,13 @@ Priority P1 (do first) / P2 / P3.
 | 13 | Bundle id `com.betterscreenshot.mac`, macOS 26 menu-bar fix | **N/A** | — | — |
 | 14 | Text tool: fonts, text boxes, in-place editing, "line above disappears" fix (2026-09-24) | DONE 5748be5 | P1 | v3 A.1 |
 | 15 | Floating recording pill v1 + "Show recording controls in the video" | DONE e054f98 | P1 | v3 A.2 |
-| 16 | Trim window v1 (lossless trim/mute, copy or replace) + Cancel restores the card | **MISSING** | P1 | v3 A.3, Part 0 |
+| 16 | Trim window v1 (lossless trim/mute, copy or replace) + Cancel restores the card | DONE 8f29067 | P1 | v3 A.3, Part 0 |
 | 17 | Editor right-side inspector, hint line, zoom, single-key tools, per-object opacity, recent colours, eyedropper | DONE 5748be5 | P1 | v3 Part 1 |
 | 18 | Text v2: corner scaling, background, B I U S, outline, shadow, presets | DONE 5748be5 | P1 | v3 Part 2 |
 | 19 | Redaction strength + Blur/Pixelate/Black-out conversion + stale-patch fix; **Highlighter (H)**; **Spotlight (S)** | DONE 5748be5 | P1 | v3 Part 3 |
 | 20 | Record strip v2 (labelled buttons, device menus, level meter, hint line) | DONE 72788e3 | P1 | v3 Part 4 |
 | 21 | Live recording pill v2 (mute mic/system, camera, switch window/area, restart, discard) | DONE e054f98 | P1 | v3 Part 5 |
-| 22 | Video editor v2 (cut/split, per-segment speed + mute, GIF export) | **MISSING** | P1 | v3 Part 6 |
+| 22 | Video editor v2 (cut/split, per-segment speed + mute, GIF export) | DONE 8f29067 | P1 | v3 Part 6 |
 | 23 | UI-review fixes for editor / recording / overlays (E1–E12, V1–V5, X1–X6, Q1–Q2, O1–O3, T1–T6, C1–C5) | **MISSING** | P2 | v3 Parts 1–6 + §4.7 |
 | 24 | Windows open centred on the screen in use, reopen as last closed | **MISSING** | P2 | v3 "Window placement" |
 | 25 | Guided tours + ⓘ on every window + Help & Tours + Welcome question | **MISSING** | P1 | v3 Part 7 |
