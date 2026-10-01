@@ -93,4 +93,12 @@ public class SettingsStoreTests
         new SettingsStore().Save(empty);
         Assert.DoesNotContain("windowPlacement", File.ReadAllText(empty));
     }
+
+    [Fact]
+    public void Tests_never_touch_the_real_profile()
+    {
+        string real = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BetterScreenshot");
+        Assert.NotEqual(real, SettingsStore.DefaultDirectory, StringComparer.OrdinalIgnoreCase);
+        Assert.StartsWith(Path.GetTempPath(), SettingsStore.DefaultDirectory, StringComparison.OrdinalIgnoreCase);
+    }
 }
