@@ -103,7 +103,7 @@ Priority P1 (do first) / P2 / P3.
 | 20 | Record strip v2 (labelled buttons, device menus, level meter, hint line) | DONE 72788e3 | P1 | v3 Part 4 |
 | 21 | Live recording pill v2 (mute mic/system, camera, switch window/area, restart, discard) | DONE e054f98 | P1 | v3 Part 5 |
 | 22 | Video editor v2 (cut/split, per-segment speed + mute, GIF export) | DONE 8f29067 | P1 | v3 Part 6 |
-| 23 | UI-review fixes for editor / recording / overlays (E1–E12, V1–V5, X1–X6, Q1–Q2, O1–O3, T1–T6, C1–C5) | **MISSING** | P2 | v3 Parts 1–6 + §4.7 |
+| 23 | UI-review fixes for editor / recording / overlays (E1–E12, V1–V5, X1–X6, Q1–Q2, O1–O3, T1–T6, C1–C5) | **DONE b38a27a** — E11, X1–X6, Q2, O1–O2, C3 fixed; E1–E10, E12, V1–V5, T1, T6, C1, C5 already held; Mac-only/N/A: Q1 (NSImageView bug), T2/T4 (Windows has a Change button and no Settings Clear History), O3 (one page) | P2 | v3 Parts 1–6 + §4.7 |
 | 24 | Windows open centred on the screen in use, reopen as last closed | **MISSING** | P2 | v3 "Window placement" |
 | 25 | Guided tours + ⓘ on every window + Help & Tours + Welcome question | **DONE** 6cf5ae8 (+5594d33 engine) | P1 | v3 Part 7 |
 | 26 | Tours review fixes (colours #C62D22, counter, placement, shorter tours) | **DONE** 6cf5ae8 (leader obstacle routing simplified) | — | v3 §7.3–§7.8 |
