@@ -30,6 +30,13 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
+        // Headless screenshot mode (see PreviewRenderer): every window off-screen → PNGs → exit.
+        if (PreviewRenderer.IsRenderRequest(e.Args))
+        {
+            PreviewRenderer.Run(this, e.Args);
+            return;
+        }
+
         // Dev-only UI gallery (see UiPreview): no mutex/tray/hotkeys, coexists with a live instance.
         if (e.Args.Length >= 1 && e.Args[0] == "--ui-preview")
         {
@@ -59,12 +66,30 @@ public partial class App : System.Windows.Application
         _commands.OnRecordingStateChanged = _tray.SetRecordingState;
         _commands.OnRecordingPauseChanged = _tray.SetPauseState;
 
+        WritePerfReadyLog(e.Args);
+
         if (!_settings.FirstRunComplete)
         {
             new WelcomeWindow().ShowDialog();
             _settings.FirstRunComplete = true;
             _settings.Save();
         }
+    }
+
+    /// <summary><c>--perf-ready-log &lt;file&gt;</c> (perf harness only): once the tray + hotkeys are up, write the
+    /// milliseconds since process start, at the first idle moment after startup.</summary>
+    private void WritePerfReadyLog(string[] args)
+    {
+        int i = Array.IndexOf(args, "--perf-ready-log");
+        if (i < 0 || i + 1 >= args.Length) return;
+        string path = args[i + 1];
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, () =>
+        {
+            var ms = (DateTime.Now - System.Diagnostics.Process.GetCurrentProcess().StartTime).TotalMilliseconds;
+            try { System.IO.File.WriteAllText(path, ((int)ms).ToString(System.Globalization.CultureInfo.InvariantCulture)); }
+            catch (System.IO.IOException) { }
+            catch (UnauthorizedAccessException) { }
+        });
     }
 
     private SettingsWindow? _settingsWindow;

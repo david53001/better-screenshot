@@ -44,7 +44,7 @@ internal static class UiPreview
 
     /// <summary>Tray-facing command surface for the preview: reopen Settings and Quit cleanly. The
     /// capture/recording/history actions are no-ops — a static preview has no live pipeline behind them.</summary>
-    private sealed class PreviewCommands : IAppCommands
+    internal sealed class PreviewCommands : IAppCommands
     {
         private readonly string _name;
         private SettingsWindow? _settingsWindow;
@@ -100,7 +100,7 @@ internal static class UiPreview
     }
 
     /// <summary>A recognizable sample bitmap (diagonal gradient + a light panel) for thumbnails/canvas.</summary>
-    private static BitmapSource SampleImage(int width, int height)
+    internal static BitmapSource SampleImage(int width, int height)
     {
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())

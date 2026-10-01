@@ -24,8 +24,14 @@ public sealed class SettingsStore
     public bool LaunchAtLogin { get; set; }
     public bool FirstRunComplete { get; set; }
 
+    /// <summary>Env var that relocates settings + History (dev/preview/new-user testing only — e.g.
+    /// <c>--settings-dir</c>), so a throwaway profile never touches the real <c>%APPDATA%</c> files.</summary>
+    public const string DirectoryOverrideVariable = "BETTERSCREENSHOT_SETTINGS_DIR";
+
     public static string DefaultDirectory =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BetterScreenshot");
+        Environment.GetEnvironmentVariable(DirectoryOverrideVariable) is { Length: > 0 } overridden
+            ? overridden
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BetterScreenshot");
 
     public static string DefaultSettingsPath => Path.Combine(DefaultDirectory, "settings.json");
 
