@@ -19,6 +19,10 @@ The loop (`windows/LOOP-PROMPT.md`) reads this first every firing to avoid redoi
 finished tasks, move the pointer, log assumptions/known-issues. One firing = one durable increment.
 
 ## 2026-10-02 — Overnight parity revamp (docs/MAC-TO-WINDOWS-PARITY.md), newest first
+**#19 Redaction / Highlighter / Spotlight (v3 Part 3)** — 5748be5. One redaction tool with Blur/Pixelate/Black-out modes + strength, centred pixel grid, 3σ blur margin, cached patches; multiply highlighter (H) with pen memory; spotlight (S) with shared dim and Alt ellipse.
+**#18 Text v2 (v3 Part 2)** — 5748be5. Corner scale + side width handles, Auto/None/Colour box with WCAG auto-contrast, B I U S, outline (≥3:1), shadow, style presets; legacy settings decode to Auto.
+**#14 Text tool (v3 A.1)** — 5748be5. Click-to-type in place, Shift+Enter newline, drag sets wrap width, same-id edits are one undo step; Windows font presets (Segoe UI Variable Text/Display, Georgia, Cascadia Mono).
+**#17 Editor inspector (v3 Part 1)** — 5748be5. 264-px right panel (colour presets/recents/custom/eyedropper, stroke presets, opacity, arrange), floating tool pill, single-key tools, hint line, zoom menu (Fit/steps/Ctrl+wheel). Undo/redo/panel toggle sit in the bottom bar (no Mac title-bar accessories on Windows).
 - **#9 OCR warm-up / language / upscale** (`e9f5511`): engine cached + explicit language (`OcrTuning.RecognitionLanguages`),
   warm-up on overlay open, 2× WIC-cubic upscale below 2× density. Bench (`OcrUpscaleBenchTests`): 9pt 3→1 errors,
   10–14pt unchanged, +5–11 ms. Recognitions serialised (concurrent RecognizeAsync on one engine returned empty).

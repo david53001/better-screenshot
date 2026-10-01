@@ -94,12 +94,12 @@ Priority P1 (do first) / P2 / P3.
 | 11 | Capture Text structure + maths rework, "Recognize math" setting (unmerged Mac WIP) | **MISSING** | P2 | v3 Part 8 + §4.13 |
 | 12 | Universal build + one-line installer; installer reports old → new version (v2.10, v3.1.0) | **N/A** for the Mac script; Windows analogue optional | P3 | §4.8 |
 | 13 | Bundle id `com.betterscreenshot.mac`, macOS 26 menu-bar fix | **N/A** | — | — |
-| 14 | Text tool: fonts, text boxes, in-place editing, "line above disappears" fix (2026-09-24) | **MISSING** | P1 | v3 A.1 |
+| 14 | Text tool: fonts, text boxes, in-place editing, "line above disappears" fix (2026-09-24) | DONE 5748be5 | P1 | v3 A.1 |
 | 15 | Floating recording pill v1 + "Show recording controls in the video" | **MISSING** | P1 | v3 A.2 |
 | 16 | Trim window v1 (lossless trim/mute, copy or replace) + Cancel restores the card | **MISSING** | P1 | v3 A.3, Part 0 |
-| 17 | Editor right-side inspector, hint line, zoom, single-key tools, per-object opacity, recent colours, eyedropper | **MISSING** (Windows has a small horizontal "Inspector" strip) | P1 | v3 Part 1 |
-| 18 | Text v2: corner scaling, background, B I U S, outline, shadow, presets | **MISSING** | P1 | v3 Part 2 |
-| 19 | Redaction strength + Blur/Pixelate/Black-out conversion + stale-patch fix; **Highlighter (H)**; **Spotlight (S)** | **MISSING** | P1 | v3 Part 3 |
+| 17 | Editor right-side inspector, hint line, zoom, single-key tools, per-object opacity, recent colours, eyedropper | DONE 5748be5 | P1 | v3 Part 1 |
+| 18 | Text v2: corner scaling, background, B I U S, outline, shadow, presets | DONE 5748be5 | P1 | v3 Part 2 |
+| 19 | Redaction strength + Blur/Pixelate/Black-out conversion + stale-patch fix; **Highlighter (H)**; **Spotlight (S)** | DONE 5748be5 | P1 | v3 Part 3 |
 | 20 | Record strip v2 (labelled buttons, device menus, level meter, hint line) | **MISSING** | P1 | v3 Part 4 |
 | 21 | Live recording pill v2 (mute mic/system, camera, switch window/area, restart, discard) | **MISSING** | P1 | v3 Part 5 |
 | 22 | Video editor v2 (cut/split, per-segment speed + mute, GIF export) | **MISSING** | P1 | v3 Part 6 |
