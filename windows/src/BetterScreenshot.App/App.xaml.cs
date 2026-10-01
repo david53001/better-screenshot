@@ -39,6 +39,13 @@ public partial class App : System.Windows.Application
         base.OnStartup(e);
         Controls.Surfaces.Set(Core.UiOpacity.Default); // surface brushes exist before any window loads
 
+        // Perf harness workload (REVAMP section 6.1): 20 off-screen capture/card/editor cycles, then exit.
+        if (PerfProbe.IsRequest(e.Args))
+        {
+            PerfProbe.Run(this, e.Args);
+            return;
+        }
+
         // Headless screenshot mode (see PreviewRenderer): every window off-screen → PNGs → exit.
         if (PreviewRenderer.IsRenderRequest(e.Args))
         {
