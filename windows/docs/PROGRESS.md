@@ -19,6 +19,11 @@ The loop (`windows/LOOP-PROMPT.md`) reads this first every firing to avoid redoi
 finished tasks, move the pointer, log assumptions/known-issues. One firing = one durable increment.
 
 ## 2026-10-02 — Overnight parity revamp (docs/MAC-TO-WINDOWS-PARITY.md), newest first
+- **#9 OCR warm-up / language / upscale** (`e9f5511`): engine cached + explicit language (`OcrTuning.RecognitionLanguages`),
+  warm-up on overlay open, 2× WIC-cubic upscale below 2× density. Bench (`OcrUpscaleBenchTests`): 9pt 3→1 errors,
+  10–14pt unchanged, +5–11 ms. Recognitions serialised (concurrent RecognizeAsync on one engine returned empty).
+- **#10 Paragraph reflow** (`b82e20a`): pure `Capture/TextReflow.cs` (Mac rules + 15 tests); OCR line boxes = union of word
+  rects; real-OCR test: two wrapped bullets paste as two lines.
 - **#4 Refocus the previous app** (`00ea02e`): pure `Capture/FocusRestore.cs` (`FocusMemory` rules) + `Platform/ForegroundWindow.cs`
   (SetForegroundWindow, AttachThreadInput fallback); restore after pixels are grabbed or on cancel. Live-tested with
   `REVAMP-2026-10\bs-focus-test.ps1` (single / double press / Esc → focus back on the target).

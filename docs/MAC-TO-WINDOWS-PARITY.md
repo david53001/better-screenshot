@@ -89,8 +89,8 @@ Priority P1 (do first) / P2 / P3.
 | 6 | History UI-review fixes H1–H4 (full labels, size/length details, helpful empty state, Clear All in a ⋯ menu) | **MISSING** | P2 | §4.4 |
 | 7 | Guaranteed Quick Access button contrast (v2.9.0) | **DONE `87f528c`** | P1 | §4.5 |
 | 8 | Quick Access card **Pin button removed** (v2.9.0) | **DONE `c0805ee`** | P2 | §4.5 |
-| 9 | Capture Text: warm OCR during the drag, explicit languages, upscale < 2× (v2.10.0) | **PARTIAL** | P2 | §4.6 |
-| 10 | Capture Text paragraph reflow `TextReflow` (v2.11.0) | **MISSING** (Windows joins OCR lines with newlines) | P1 | §4.6 |
+| 9 | Capture Text: warm OCR during the drag, explicit languages, upscale < 2× (v2.10.0) | **DONE `e9f5511`** | P2 | §4.6 |
+| 10 | Capture Text paragraph reflow `TextReflow` (v2.11.0) | **DONE `b82e20a`** | P1 | §4.6 |
 | 11 | Capture Text structure + maths rework, "Recognize math" setting (unmerged Mac WIP) | **MISSING** | P2 | v3 Part 8 + §4.13 |
 | 12 | Universal build + one-line installer; installer reports old → new version (v2.10, v3.1.0) | **N/A** for the Mac script; Windows analogue optional | P3 | §4.8 |
 | 13 | Bundle id `com.betterscreenshot.mac`, macOS 26 menu-bar fix | **N/A** | — | — |
