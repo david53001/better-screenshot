@@ -492,8 +492,8 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="RadioButton">
-                    <Border x:Name="Seg" Background="{StaticResource Theme.ChromeBrush}"
-                            BorderBrush="{StaticResource Theme.BorderBrush}" BorderThickness="1"
+                    <Border x:Name="Seg" Background="#0FFFFFFF"
+                            BorderBrush="#14FFFFFF" BorderThickness="1"
                             CornerRadius="{TemplateBinding Tag}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="8,5"/>
                     </Border>
@@ -502,8 +502,9 @@
                             <Setter TargetName="Seg" Property="Background" Value="#12FFFFFF"/>
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="Seg" Property="Background" Value="#29FFFFFF"/>
+                            <Setter TargetName="Seg" Property="Background" Value="#38FFFFFF"/>
                             <Setter Property="Foreground" Value="White"/>
+                            <Setter Property="FontWeight" Value="SemiBold"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -727,31 +728,20 @@
         </Setter>
     </Style>
 
-    <!-- ===== DarkSection — titled dark card (glowing dot + UPPERCASE header + divider + content) ===== -->
+    <!-- ===== DarkSection — the native-look card (v3 Part 9): text colour at 3–5 % (live with Opacity), 8 % hairline,
+         radius 10, padding 12, UPPERCASE caption header in the secondary colour; no dot, no divider rule. ===== -->
     <Style TargetType="ctl:DarkSection">
         <Setter Property="Margin" Value="0,0,0,12"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ctl:DarkSection">
-                    <Border CornerRadius="10" Background="{StaticResource Theme.CardBrush}"
-                            BorderBrush="{StaticResource Theme.BorderBrush}" BorderThickness="1">
+                    <Border CornerRadius="10" Background="{DynamicResource Card.FillBrush}"
+                            BorderBrush="#14FFFFFF" BorderThickness="1" Padding="12">
                         <StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="14,10,14,8">
-                                <Ellipse Width="5" Height="5" VerticalAlignment="Center"
-                                         Fill="{TemplateBinding AccentBrush}">
-                                    <Ellipse.Effect>
-                                        <DropShadowEffect BlurRadius="7" ShadowDepth="0"
-                                                          Color="{Binding AccentGlowColor, RelativeSource={RelativeSource TemplatedParent}}"
-                                                          Opacity="0.6"/>
-                                    </Ellipse.Effect>
-                                </Ellipse>
-                                <TextBlock Margin="8,0,0,0" VerticalAlignment="Center"
-                                           Text="{TemplateBinding HeaderText}"
-                                           FontSize="10" FontWeight="Bold"
-                                           Foreground="{StaticResource Theme.SecondaryTextBrush}"/>
-                            </StackPanel>
-                            <Rectangle Height="1" Fill="{StaticResource Theme.BorderBrush}"/>
-                            <ContentPresenter Margin="14,12,14,14"/>
+                            <TextBlock Margin="0,0,0,10" Text="{TemplateBinding HeaderText}"
+                                       FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{StaticResource Theme.SecondaryTextBrush}"/>
+                            <ContentPresenter/>
                         </StackPanel>
                     </Border>
                 </ControlTemplate>

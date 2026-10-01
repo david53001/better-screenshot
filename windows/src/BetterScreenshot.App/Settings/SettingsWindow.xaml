@@ -31,7 +31,7 @@
     </Window.Resources>
 
     <ScrollViewer x:Name="OuterScroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-        <Grid Margin="18">
+        <Grid Margin="20">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
@@ -41,10 +41,9 @@
 
             <!-- Header -->
             <StackPanel Grid.Row="0" Margin="2,0,0,14">
-                <TextBlock Text="BetterScreenshot" FontSize="18" FontWeight="Bold" Foreground="White"/>
                 <TextBlock Text="Capture &amp; recording preferences — hover the &#8505; next to any setting for a plain-language explanation and example."
                            FontSize="11.5" TextWrapping="Wrap"
-                           Foreground="{StaticResource Theme.SubtleTextBrush}" Margin="0,3,0,0"/>
+                           Foreground="{StaticResource Theme.SecondaryTextBrush}" Margin="0,0,0,0"/>
             </StackPanel>
 
             <!-- Three-column card body — matches JVoice's 960-wide settings: wider (three columns)
@@ -198,110 +197,8 @@
 
                 </StackPanel>
 
-                <!-- ===== COLUMN B ===== -->
+                <!-- ===== COLUMN B (v3 Part 4/9 order: Recording · Startup) ===== -->
                 <StackPanel Grid.Column="2">
-
-                    <!-- HISTORY -->
-                    <ctl:DarkSection HeaderText="History">
-                        <StackPanel>
-                            <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Style="{StaticResource RowTitle}" Text="Remember capture history" VerticalAlignment="Center"/>
-                                        <ctl:InfoTip Margin="6,0,0,0"
-                                            Title="Remember capture history"
-                                            Explanation="Keeps a local, browsable list of your recent captures so you can re-open, copy, annotate or pin them later. Everything stays on this PC — nothing is uploaded."
-                                            Example="With this on, open the tray's &#8220;History&#8230;&#8221; to grab a screenshot you took an hour ago."/>
-                                    </StackPanel>
-                                    <TextBlock Style="{StaticResource RowSub}" Text="Keep a local index of recent captures"/>
-                                </StackPanel>
-                                <CheckBox x:Name="HistoryEnabledCheck" Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource Theme.MonoSwitch}" Checked="Changed" Unchecked="Changed"/>
-                            </Grid>
-                            <StackPanel Orientation="Horizontal" Margin="0,14,0,6">
-                                <TextBlock Style="{StaticResource FieldLabel}" Text="Keep at most" Margin="0" VerticalAlignment="Center"/>
-                                <ctl:InfoTip Margin="6,0,0,0"
-                                    Title="Keep at most"
-                                    Explanation="The maximum number of past captures history remembers. Once you hit the limit, the oldest entry is dropped to make room for each new one."
-                                    Example="At 50, taking your 51st capture quietly removes the oldest one from history."/>
-                            </StackPanel>
-                            <UniformGrid Rows="1" HorizontalAlignment="Left" Width="180">
-                                <RadioButton x:Name="Cap10" Content="10" GroupName="HistoryCap" Style="{StaticResource Theme.SegmentLeft}" Checked="Changed"/>
-                                <RadioButton x:Name="Cap50" Content="50" GroupName="HistoryCap" Style="{StaticResource Theme.SegmentMid}" Checked="Changed"/>
-                                <RadioButton x:Name="Cap100" Content="100" GroupName="HistoryCap" Style="{StaticResource Theme.SegmentRight}" Checked="Changed"/>
-                            </UniformGrid>
-                        </StackPanel>
-                    </ctl:DarkSection>
-
-                    <!-- STARTUP -->
-                    <ctl:DarkSection HeaderText="Startup">
-                        <Grid>
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Style="{StaticResource RowTitle}" Text="Launch at login" VerticalAlignment="Center"/>
-                                    <ctl:InfoTip Margin="6,0,0,0"
-                                        Title="Launch at login"
-                                        Explanation="Starts BetterScreenshot automatically (in the system tray) each time you sign in to Windows, so your capture hotkeys always work."
-                                        Example="Turn on so you never have to open the app first before pressing your screenshot shortcut."/>
-                                </StackPanel>
-                                <TextBlock Style="{StaticResource RowSub}" Text="Start BetterScreenshot when you sign in"/>
-                            </StackPanel>
-                            <CheckBox x:Name="LaunchAtLoginCheck" Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource Theme.MonoSwitch}" Checked="Changed" Unchecked="Changed"/>
-                        </Grid>
-                    </ctl:DarkSection>
-
-                    <!-- SAVE LOCATION -->
-                    <ctl:DarkSection HeaderText="Save Location">
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <TextBlock Style="{StaticResource RowSub}" Text="Where saved captures &amp; recordings are written" Margin="0" VerticalAlignment="Center"/>
-                                <ctl:InfoTip Margin="6,0,0,0"
-                                    Title="Save folder"
-                                    Explanation="The folder on disk where screenshots and recordings are written when you Save them. Type a path or click Browse to pick one."
-                                    Example="e.g. C:\Users\You\Pictures\Screenshots — every saved capture lands here."/>
-                            </StackPanel>
-                            <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <TextBox x:Name="SaveDirBox" Grid.Column="0" VerticalContentAlignment="Center" LostFocus="Changed"/>
-                                <Button x:Name="BrowseBtn" Grid.Column="1" Content="Browse&#8230;" Style="{StaticResource Theme.PillButton}" Margin="8,0,0,0" Click="Browse_Click"/>
-                            </Grid>
-                        </StackPanel>
-                    </ctl:DarkSection>
-
-                    <!-- TEMPORARY FILES -->
-                    <ctl:DarkSection HeaderText="Temporary Files">
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                <TextBlock Style="{StaticResource FieldLabel}" Text="Keep temp copies for" Margin="0" VerticalAlignment="Center"/>
-                                <ctl:InfoTip Margin="6,0,0,0"
-                                    Title="Keep temp copies for"
-                                    Explanation="When you copy a capture, or drag one out of the Quick Access card, a throwaway PNG is written to your Windows temp folder (%TEMP%\BetterScreenshot-&#8230;) so other apps can take it as a file. This is how long that temp copy is kept before it deletes itself. Drag the bar between 5 and 30 minutes. Your actual screenshot is never touched &#8212; History keeps its own separate copy."
-                                    Example="At 5 min, a screenshot you copied can still be pasted as a file for 5 minutes. Drag it to 30 if you often copy a capture and only paste it into an email or upload box much later."/>
-                            </StackPanel>
-                            <TextBlock Style="{StaticResource RowSub}" Text="Lifetime of the clipboard/drag files in %TEMP% &#8212; not your saved screenshots" Margin="0,0,0,8"/>
-                            <Grid Width="240" HorizontalAlignment="Left">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <Slider x:Name="TempRetentionSlider" Grid.Column="0" VerticalAlignment="Center"
-                                        Minimum="5" Maximum="30" IsSnapToTickEnabled="True" TickFrequency="1"
-                                        SmallChange="1" LargeChange="5" IsMoveToPointEnabled="True"
-                                        Style="{StaticResource Theme.Slider}"
-                                        ValueChanged="TempRetentionSlider_ValueChanged"/>
-                                <TextBlock x:Name="TempRetentionValueLabel" Grid.Column="1" MinWidth="52"
-                                           Margin="12,0,0,0" VerticalAlignment="Center" TextAlignment="Right"
-                                           FontSize="12" FontWeight="SemiBold"
-                                           Foreground="{StaticResource Theme.TextW85}"/>
-                            </Grid>
-                        </StackPanel>
-                    </ctl:DarkSection>
-
-                </StackPanel>
-
-                <!-- ===== COLUMN C ===== -->
-                <StackPanel Grid.Column="4">
 
                     <!-- RECORDING (v3 Part 4: dropdowns, same stored values as the record strip) -->
                     <ctl:DarkSection HeaderText="Recording">
@@ -394,6 +291,58 @@
                         </StackPanel>
                     </ctl:DarkSection>
 
+                    <!-- STARTUP -->
+                    <ctl:DarkSection HeaderText="Startup">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource RowTitle}" Text="Launch at login" VerticalAlignment="Center"/>
+                                    <ctl:InfoTip Margin="6,0,0,0"
+                                        Title="Launch at login"
+                                        Explanation="Starts BetterScreenshot automatically (in the system tray) each time you sign in to Windows, so your capture hotkeys always work."
+                                        Example="Turn on so you never have to open the app first before pressing your screenshot shortcut."/>
+                                </StackPanel>
+                                <TextBlock Style="{StaticResource RowSub}" Text="Start BetterScreenshot when you sign in"/>
+                            </StackPanel>
+                            <CheckBox x:Name="LaunchAtLoginCheck" Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource Theme.MonoSwitch}" Checked="Changed" Unchecked="Changed"/>
+                        </Grid>
+                    </ctl:DarkSection>
+
+                    <!-- TEMPORARY FILES -->
+                    <ctl:DarkSection HeaderText="Temporary Files">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Keep temp copies for" Margin="0" VerticalAlignment="Center"/>
+                                <ctl:InfoTip Margin="6,0,0,0"
+                                    Title="Keep temp copies for"
+                                    Explanation="When you copy a capture, or drag one out of the Quick Access card, a throwaway PNG is written to your Windows temp folder (%TEMP%\BetterScreenshot-&#8230;) so other apps can take it as a file. This is how long that temp copy is kept before it deletes itself. Drag the bar between 5 and 30 minutes. Your actual screenshot is never touched &#8212; History keeps its own separate copy."
+                                    Example="At 5 min, a screenshot you copied can still be pasted as a file for 5 minutes. Drag it to 30 if you often copy a capture and only paste it into an email or upload box much later."/>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource RowSub}" Text="Lifetime of the clipboard/drag files in %TEMP% &#8212; not your saved screenshots" Margin="0,0,0,8"/>
+                            <Grid Width="240" HorizontalAlignment="Left">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Slider x:Name="TempRetentionSlider" Grid.Column="0" VerticalAlignment="Center"
+                                        Minimum="5" Maximum="30" IsSnapToTickEnabled="True" TickFrequency="1"
+                                        SmallChange="1" LargeChange="5" IsMoveToPointEnabled="True"
+                                        Style="{StaticResource Theme.Slider}"
+                                        ValueChanged="TempRetentionSlider_ValueChanged"/>
+                                <TextBlock x:Name="TempRetentionValueLabel" Grid.Column="1" MinWidth="52"
+                                           Margin="12,0,0,0" VerticalAlignment="Center" TextAlignment="Right"
+                                           FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{StaticResource Theme.TextW85}"/>
+                            </Grid>
+                        </StackPanel>
+                    </ctl:DarkSection>
+
+                </StackPanel>
+
+                <!-- ===== COLUMN C (In the video · History · Save location · Appearance) ===== -->
+                <StackPanel Grid.Column="4">
+
                     <!-- IN THE VIDEO -->
                     <ctl:DarkSection HeaderText="In the video">
                         <StackPanel>
@@ -441,6 +390,81 @@
                                 </StackPanel>
                                 <CheckBox x:Name="ControlsInVideoCheck" Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource Theme.MonoSwitch}" Checked="Changed" Unchecked="Changed"/>
                             </Grid>
+                        </StackPanel>
+                    </ctl:DarkSection>
+
+                    <!-- HISTORY -->
+                    <ctl:DarkSection HeaderText="History">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource RowTitle}" Text="Remember capture history" VerticalAlignment="Center"/>
+                                        <ctl:InfoTip Margin="6,0,0,0"
+                                            Title="Remember capture history"
+                                            Explanation="Keeps a local, browsable list of your recent captures so you can re-open, copy, annotate or pin them later. Everything stays on this PC — nothing is uploaded."
+                                            Example="With this on, open the tray's &#8220;History&#8230;&#8221; to grab a screenshot you took an hour ago."/>
+                                    </StackPanel>
+                                    <TextBlock Style="{StaticResource RowSub}" Text="Keep a local index of recent captures"/>
+                                </StackPanel>
+                                <CheckBox x:Name="HistoryEnabledCheck" Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource Theme.MonoSwitch}" Checked="Changed" Unchecked="Changed"/>
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" Margin="0,14,0,6">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Keep at most" Margin="0" VerticalAlignment="Center"/>
+                                <ctl:InfoTip Margin="6,0,0,0"
+                                    Title="Keep at most"
+                                    Explanation="The maximum number of past captures history remembers. Once you hit the limit, the oldest entry is dropped to make room for each new one."
+                                    Example="At 50, taking your 51st capture quietly removes the oldest one from history."/>
+                            </StackPanel>
+                            <UniformGrid Rows="1" HorizontalAlignment="Left" Width="180">
+                                <RadioButton x:Name="Cap10" Content="10" GroupName="HistoryCap" Style="{StaticResource Theme.SegmentLeft}" Checked="Changed"/>
+                                <RadioButton x:Name="Cap50" Content="50" GroupName="HistoryCap" Style="{StaticResource Theme.SegmentMid}" Checked="Changed"/>
+                                <RadioButton x:Name="Cap100" Content="100" GroupName="HistoryCap" Style="{StaticResource Theme.SegmentRight}" Checked="Changed"/>
+                            </UniformGrid>
+                        </StackPanel>
+                    </ctl:DarkSection>
+
+                    <!-- SAVE LOCATION -->
+                    <ctl:DarkSection HeaderText="Save Location">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <TextBlock Style="{StaticResource RowSub}" Text="Where saved captures &amp; recordings are written" Margin="0" VerticalAlignment="Center"/>
+                                <ctl:InfoTip Margin="6,0,0,0"
+                                    Title="Save folder"
+                                    Explanation="The folder on disk where screenshots and recordings are written when you Save them. Type a path or click Browse to pick one."
+                                    Example="e.g. C:\Users\You\Pictures\Screenshots — every saved capture lands here."/>
+                            </StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <TextBox x:Name="SaveDirBox" Grid.Column="0" VerticalContentAlignment="Center" LostFocus="Changed"/>
+                                <Button x:Name="BrowseBtn" Grid.Column="1" Content="Browse&#8230;" Style="{StaticResource Theme.PillButton}" Margin="8,0,0,0" Click="Browse_Click"/>
+                            </Grid>
+                        </StackPanel>
+                    </ctl:DarkSection>
+
+                    <!-- APPEARANCE (v3 §4.9 Opacity) -->
+                    <ctl:DarkSection HeaderText="Appearance">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Style="{StaticResource RowTitle}" Text="Opacity" VerticalAlignment="Center"/>
+                                    <ctl:InfoTip Margin="6,0,0,0"
+                                        Title="Opacity"
+                                        Explanation="How see-through BetterScreenshot's windows, panels and floating controls are. Transparent lets more of what's behind them show through; Opaque makes them solid."
+                                        Example="Default puts it back in the middle. Floating controls always keep enough dark tint that their text stays readable over a white page."/>
+                                </StackPanel>
+                                <Button x:Name="OpacityDefaultBtn" Grid.Column="1" Content="Default" FontSize="11" Padding="10,2" Click="OpacityDefault_Click"/>
+                            </Grid>
+                            <Slider x:Name="OpacitySlider" Margin="0,10,0,0" Minimum="0" Maximum="1" SmallChange="0.05" LargeChange="0.1"
+                                    IsMoveToPointEnabled="True" Style="{StaticResource Theme.Slider}" ValueChanged="OpacitySlider_ValueChanged"
+                                    AutomationProperties.Name="Opacity"/>
+                            <Grid Margin="0,2,0,0">
+                                <TextBlock Text="Transparent" FontSize="10.5" Foreground="{StaticResource Theme.SecondaryTextBrush}" HorizontalAlignment="Left"/>
+                                <TextBlock Text="Opaque" FontSize="10.5" Foreground="{StaticResource Theme.SecondaryTextBrush}" HorizontalAlignment="Right"/>
+                            </Grid>
+                            <TextBlock Style="{StaticResource RowSub}" Margin="0,6,0,0" Text="How much of what's behind the app shows through its windows and panels."/>
                         </StackPanel>
                     </ctl:DarkSection>
 

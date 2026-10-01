@@ -88,10 +88,9 @@ public sealed class VideoEditorWindow : Window
         MinWidth = 780;
         MinHeight = 560;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        Background = Frozen(Color.FromRgb(0x17, 0x17, 0x17));
         Foreground = System.Windows.Media.Brushes.White;
         Content = BuildLayout();
-        SourceInitialized += (_, _) => WindowThemer.ApplyDark(this);
+        Surfaces.UseMica(this); // dark translucent material + the Opacity layer
         Loaded += async (_, _) => await LoadAsync();
         PreviewKeyDown += OnKey;
         Closing += (_, e) => { if (_exporting) e.Cancel = true; };
@@ -117,7 +116,7 @@ public sealed class VideoEditorWindow : Window
         var preview = new Border { Background = System.Windows.Media.Brushes.Black, Child = _player, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 0, 12) };
         preview.MouseLeftButtonUp += (_, _) => TogglePlay();
         _body.Children.Add(preview);
-        _card.Background = Frozen(Color.FromArgb(0xF0, 0x22, 0x22, 0x24));
+        _card.SetResourceReference(Border.BackgroundProperty, "Panel.SurfaceBrush");
         _card.BorderBrush = Frozen(Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF));
         _card.BorderThickness = new Thickness(1);
         _card.CornerRadius = new CornerRadius(12);

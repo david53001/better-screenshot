@@ -23,7 +23,7 @@
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
                 <Border x:Name="ToolPill" HorizontalAlignment="Center" Margin="0,12,0,0" Padding="6"
-                        CornerRadius="15" Background="{StaticResource Ed.SurfaceBrush}"
+                        CornerRadius="15" Background="{DynamicResource Panel.SurfaceBrush}"
                         BorderBrush="{StaticResource Ed.HairlineBrush}" BorderThickness="1">
                     <StackPanel x:Name="Toolbar" Orientation="Horizontal"/>
                 </Border>

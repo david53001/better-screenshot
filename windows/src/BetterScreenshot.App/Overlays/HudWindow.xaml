@@ -4,7 +4,7 @@
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ShowActivated="False" IsHitTestVisible="False"
         SizeToContent="WidthAndHeight" WindowStartupLocation="Manual">
-    <Border CornerRadius="16" Background="#E6202020" Padding="18,10">
+    <Border CornerRadius="20" Background="{DynamicResource Hud.SurfaceBrush}" BorderBrush="#1AFFFFFF" BorderThickness="1" Padding="18,10">
         <TextBlock x:Name="Message" Foreground="White" FontSize="13" FontWeight="Medium"/>
     </Border>
 </Window>

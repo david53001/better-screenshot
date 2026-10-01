@@ -4,7 +4,7 @@
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ShowActivated="False"
         Width="200" Height="200" WindowStartupLocation="Manual">
-    <Border CornerRadius="24" Background="#E61C1C1C">
+    <Border CornerRadius="24" Background="{DynamicResource Hud.SurfaceBrush}" BorderBrush="#1AFFFFFF" BorderThickness="1">
         <Border.Effect>
             <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.5"/>
         </Border.Effect>

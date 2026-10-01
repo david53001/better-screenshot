@@ -60,7 +60,7 @@ public partial class EditorWindow : Window
         TextRendering.Install();
         InitializeComponent();
         Resources["Ed.AccentBrush"] = SystemAccent.Brush;
-        WindowThemer.ApplyDark(this);
+        Surfaces.UseMica(this); // v3 Part 9: Mica + the Opacity layer (dark title bar included)
         _baseImage = image;
         _style = (defaultStyle ?? AnnotationStyle.Default).Normalized();
         _recent = new RecentColors(recentColors);

@@ -5,6 +5,7 @@ using System.Windows.Media;
 using BetterScreenshot.App.Controls;
 using BetterScreenshot.Capture;
 using BetterScreenshot.Platform;
+using BetterScreenshot.Core;
 using BetterScreenshot.Recording;
 // Disambiguate WPF types from the WinForms types the App project also references (for the tray NotifyIcon).
 using Border = System.Windows.Controls.Border;
@@ -47,7 +48,7 @@ public partial class SettingsWindow : Window
         LoadRecording();
         BuildShortcutRows();
         _loading = false;
-        WindowThemer.ApplyDark(this);
+        Surfaces.UseMica(this); // v3 Part 9: Mica + the Opacity layer (dark title bar included)
         // The card layout sizes to content (SizeToContent=Height); clamp just under the work area so a
         // genuinely oversized window can't run past it (keeps the title-bar ✕ reachable) while leaving the
         // normal ~970px settings comfortably unclamped — no spurious outer scrollbar. The ScrollViewer only
@@ -85,7 +86,21 @@ public partial class SettingsWindow : Window
         LaunchAtLoginCheck.IsChecked = _settings.LaunchAtLogin;
         CaptureSoundCheck.IsChecked = _settings.CaptureSoundEnabled;
         FreezeScreenCheck.IsChecked = c.FreezeScreen;
+        OpacitySlider.Value = c.UiOpacity;
+        OpacityDefaultBtn.IsEnabled = Math.Abs(c.UiOpacity - UiOpacity.Default) > 0.001;
     }
+
+    /// <summary>Opacity (v3 §4.9): live while dragging — every window, panel and HUD re-tints at once — then saved.</summary>
+    private void OpacitySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (OpacityDefaultBtn is null) return;
+        OpacityDefaultBtn.IsEnabled = Math.Abs(OpacitySlider.Value - UiOpacity.Default) > 0.001;
+        if (_loading) return;
+        Surfaces.Set(OpacitySlider.Value);
+        Apply();
+    }
+
+    private void OpacityDefault_Click(object sender, RoutedEventArgs e) => OpacitySlider.Value = UiOpacity.Default;
 
     private void LoadRecording()
     {
@@ -384,7 +399,7 @@ public partial class SettingsWindow : Window
 
     private void Apply()
     {
-        _settings.Capture = new CaptureSettings
+        _settings.Capture = _settings.Capture with
         {
             AfterCapture = AfterCopy.IsChecked == true ? AfterCaptureBehavior.CopyOnly
                 : AfterSave.IsChecked == true ? AfterCaptureBehavior.SaveOnly
@@ -402,6 +417,7 @@ public partial class SettingsWindow : Window
             HistoryCap = Cap10.IsChecked == true ? 10 : Cap100.IsChecked == true ? 100 : 50,
             FreezeScreen = FreezeScreenCheck.IsChecked == true,
             TempRetentionMinutes = TempRetentionScale.PositionToMinutes(TempRetentionSlider.Value),
+            UiOpacity = Math.Round(OpacitySlider.Value, 3),
         };
 
         var recording = _settings.Recording;

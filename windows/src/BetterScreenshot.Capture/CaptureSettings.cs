@@ -38,6 +38,10 @@ public sealed record CaptureSettings
     /// </summary>
     public int TempRetentionMinutes { get; init; } = TempRetentionScale.DefaultMinutes;
 
+    /// <summary>"Opacity" (v3 §4.9 <c>uiOpacity</c>): 0 = Transparent … 1 = Opaque, default 0.5 — how much of
+    /// what's behind shows through windows, panels and floating controls (see <c>UiOpacity</c>).</summary>
+    public double UiOpacity { get; init; } = 0.5;
+
     public static CaptureSettings Default => new();
 
     public Dictionary<string, string> ToDictionary() => new()
@@ -64,6 +68,7 @@ public sealed record CaptureSettings
         ["historyCap"] = HistoryCap.ToString(CultureInfo.InvariantCulture),
         ["freezeScreen"] = FreezeScreen ? "true" : "false",
         ["tempRetentionMinutes"] = TempRetentionMinutes.ToString(CultureInfo.InvariantCulture),
+        ["uiOpacity"] = UiOpacity.ToString("0.###", CultureInfo.InvariantCulture),
     };
 
     public static CaptureSettings FromDictionary(IReadOnlyDictionary<string, string> d)
@@ -101,6 +106,10 @@ public sealed record CaptureSettings
             // Clamped on read: a hand-edited or future-written value can never shorten the lifetime below the
             // 5 minutes an in-flight drop needs, nor leave temp files lying around past the bar's 30-minute end.
             TempRetentionMinutes = TempRetentionScale.Clamp(ParseInt(d, "tempRetentionMinutes", def.TempRetentionMinutes)),
+            UiOpacity = d.TryGetValue("uiOpacity", out var op)
+                        && double.TryParse(op, NumberStyles.Float, CultureInfo.InvariantCulture, out var o) && double.IsFinite(o)
+                ? Math.Clamp(o, 0, 1)
+                : def.UiOpacity,
         };
     }
 

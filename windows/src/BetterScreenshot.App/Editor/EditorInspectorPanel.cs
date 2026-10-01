@@ -59,7 +59,7 @@ internal sealed class EditorInspectorPanel : Border
     {
         Width = 264;
         CornerRadius = new CornerRadius(12);
-        Background = Res("Ed.SurfaceBrush");
+        SetResourceReference(BackgroundProperty, "Panel.SurfaceBrush"); // docked panel, live with Opacity
         BorderBrush = Res("Ed.HairlineBrush");
         BorderThickness = new Thickness(1);
         SnapsToDevicePixels = true;

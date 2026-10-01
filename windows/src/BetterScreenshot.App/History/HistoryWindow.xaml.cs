@@ -46,7 +46,7 @@ public partial class HistoryWindow : Window
     public HistoryWindow(HistoryService history, HistoryWindowActions actions)
     {
         InitializeComponent();
-        Controls.WindowThemer.ApplyDark(this);
+        Controls.Surfaces.UseMica(this); // v3 Part 9 + §4.9: History uses the window material too
         _history = history;
         _actions = actions;
         Reload();

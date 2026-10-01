@@ -105,13 +105,13 @@ public sealed class RecordingPillWindow : Window
             Height = RecordingPillLayout.CapsuleHeight,
             CornerRadius = new CornerRadius(20),
             // The shared dark HUD + black 40 % tint (keeps white text readable on bright backdrops) + white 10 % border.
-            Background = Frozen(Color.FromArgb(0xF2, 0x17, 0x17, 0x19)),
             BorderBrush = Frozen(Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF)),
             BorderThickness = new Thickness(1),
             Child = _row,
             Margin = new Thickness(ShadowPad),
             Effect = new DropShadowEffect { BlurRadius = 16, ShadowDepth = 3, Direction = 270, Opacity = 0.45, Color = Colors.Black },
         };
+        _capsule.SetResourceReference(Border.BackgroundProperty, "Hud.SurfaceBrush"); // the one HUD surface, live with Opacity
         _capsule.MouseLeftButtonDown += OnCapsuleMouseDown;
         Content = _capsule;
 
@@ -380,12 +380,12 @@ public sealed class HintBubbleWindow : Window
         {
             Height = RecordingPillLayout.HintHeight,
             CornerRadius = new CornerRadius(7),
-            Background = new SolidColorBrush(Color.FromArgb(0xF2, 0x17, 0x17, 0x19)),
             BorderBrush = new SolidColorBrush(Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF)),
             BorderThickness = new Thickness(1),
             Padding = new Thickness(10, 0, 10, 0),
             Child = _text,
         };
+        _box.SetResourceReference(Border.BackgroundProperty, "Hud.SurfaceBrush");
         Content = _box;
         SourceInitialized += (_, _) =>
         {

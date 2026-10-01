@@ -20,7 +20,7 @@
             </Path.Data>
         </Path>
         <Rectangle x:Name="SelRect" Stroke="White" StrokeThickness="1" Visibility="Collapsed"/>
-        <Border x:Name="DimLabelHost" Background="#CC1C1C1C" CornerRadius="3" Padding="6,2" Visibility="Collapsed">
+        <Border x:Name="DimLabelHost" Background="{DynamicResource Hud.SurfaceBrush}" CornerRadius="6" Padding="6,2" Visibility="Collapsed">
             <TextBlock x:Name="DimLabel" Foreground="White" FontSize="12" FontWeight="Medium"/>
         </Border>
     </Canvas>

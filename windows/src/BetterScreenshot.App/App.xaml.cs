@@ -29,6 +29,7 @@ public partial class App : System.Windows.Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        Controls.Surfaces.Set(Core.UiOpacity.Default); // surface brushes exist before any window loads
 
         // Headless screenshot mode (see PreviewRenderer): every window off-screen → PNGs → exit.
         if (PreviewRenderer.IsRenderRequest(e.Args))
@@ -58,6 +59,7 @@ public partial class App : System.Windows.Application
         StartupRegistration.Reconcile(_settings.LaunchAtLogin);
         // How long clipboard/drag temp PNGs survive is a user setting; apply it before the first capture can run.
         TempFiles.Configure(_settings.Capture.TempRetentionMinutes);
+        Controls.Surfaces.Set(_settings.Capture.UiOpacity);
         _commands = new CaptureCoordinator(_settings, Shutdown);
         _tray = new TrayIcon(_commands, _settings.Hotkeys);
         _hotkeys = new HotkeyController(_commands);

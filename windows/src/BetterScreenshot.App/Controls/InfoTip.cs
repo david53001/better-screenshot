@@ -54,15 +54,15 @@ public sealed class InfoTip : Border
     private static readonly Brush HoverFill = Frozen(Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
     private static readonly Brush RingBrush = Frozen(Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
     private static readonly Brush GlyphBrush = Frozen(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF));
+    private static readonly Brush SecondaryGlyph = Frozen(Color.FromRgb(0x8E, 0x8E, 0x93));
+    private static readonly Brush PrimaryGlyph = Frozen(Color.FromRgb(0xF5, 0xF5, 0xF7));
 
     public InfoTip()
     {
+        // v3 Part 9: a plain info-circle glyph in the secondary colour (primary on hover) — no serif "i", no filled circle.
         Width = Diameter;
         Height = Diameter;
-        CornerRadius = new CornerRadius(Diameter / 2);
-        Background = IdleFill;
-        BorderBrush = RingBrush;
-        BorderThickness = new Thickness(1);
+        Background = Brushes.Transparent;
         Cursor = Cursors.Arrow; // hover-only affordance — keep the normal pointer, not the Help "?" cursor
         VerticalAlignment = VerticalAlignment.Center;
         HorizontalAlignment = HorizontalAlignment.Left;
@@ -72,10 +72,11 @@ public sealed class InfoTip : Border
         // The "i" is drawn as a filled vector path (not a TextBlock): this avoids ClearType subpixel colour
         // fringing on the dark circle and lets us centre by the glyph's *exact ink bounds* so every instance
         // is pixel-identical and perfectly centred.
-        Child = BuildGlyph();
+        var glyph = new IconPresenter { IconKey = "info", Width = 15, Height = 15, Brush = SecondaryGlyph };
+        Child = glyph;
 
-        MouseEnter += (_, _) => Background = HoverFill;
-        MouseLeave += (_, _) => Background = IdleFill;
+        MouseEnter += (_, _) => glyph.Brush = PrimaryGlyph;
+        MouseLeave += (_, _) => glyph.Brush = SecondaryGlyph;
 
         // Fast to appear, generous time to read, and re-openable without the WPF re-show delay.
         ToolTipService.SetInitialShowDelay(this, 120);

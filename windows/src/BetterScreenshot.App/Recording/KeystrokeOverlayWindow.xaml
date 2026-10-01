@@ -4,7 +4,7 @@
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ShowActivated="False"
         Width="280" Height="44" WindowStartupLocation="Manual">
-    <Border x:Name="Pill" CornerRadius="10" Background="#BF000000" Opacity="0">
+    <Border x:Name="Pill" CornerRadius="10" Background="{DynamicResource Hud.SurfaceBrush}" BorderBrush="#1AFFFFFF" BorderThickness="1" Opacity="0">
         <TextBlock x:Name="Glyph" Foreground="White" FontFamily="Consolas" FontSize="20"
                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
     </Border>
