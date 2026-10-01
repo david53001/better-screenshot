@@ -110,7 +110,7 @@ Priority P1 (do first) / P2 / P3.
 | 27 | Native look (MacStats design language) v3.1.0 | DONE b91c187 | P1 | v3 Part 9 |
 | 28 | **Opacity setting** (2026-09-30) | DONE b91c187 | P1 | §4.9 |
 | 29 | Tour outline follows each control's shape; Settings tour **Opacity** step with live demo | **DONE e07e40c** (+6cf5ae8) — outline = control radius + 4 / 6 square, capsule-clamped; Settings tour Opacity step with the live OpacityDemoPath demo | P2 | §4.10 |
-| 30 | Windows open on the current desktop (Spaces → Windows virtual desktops) | **MISSING** | P2 | §4.11 |
+| 30 | Windows open on the current desktop (Spaces → Windows virtual desktops) | **DONE d968b0a** — IVirtualDesktopManager: an open window on another desktop is moved here and re-centred under the pointer | P2 | §4.11 |
 | 31 | Freeze screen while selecting (Mac 2026-09-30) | **WIN-AHEAD** (Windows built it first, with a setting and window mode) | — | §4.12 |
 
 ---
