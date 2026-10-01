@@ -120,4 +120,63 @@ public static class FfmpegRunner
         await outTask;
         return (process.HasExited && process.ExitCode == 0, stderr);
     }
+
+    /// <summary>Like <see cref="RunAsync"/>, but hands every stdout line to <paramref name="onLine"/> as it arrives
+    /// (for <c>-progress pipe:1</c>). The callback runs on a thread-pool thread. No timeout: exports can be long.</summary>
+    public static async Task<(bool Success, string StdErr)> RunWithProgressAsync(IEnumerable<string> args, Action<string> onLine,
+        CancellationToken cancel = default)
+    {
+        var psi = new ProcessStartInfo(ExecutablePath)
+        {
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        foreach (var a in args) psi.ArgumentList.Add(a);
+
+        using var process = new Process { StartInfo = psi };
+        process.Start();
+        var errTask = process.StandardError.ReadToEndAsync();
+        var outTask = Task.Run(async () =>
+        {
+            string? line;
+            while ((line = await process.StandardOutput.ReadLineAsync()) is not null) onLine(line);
+        });
+        try
+        {
+            await process.WaitForExitAsync(cancel);
+        }
+        catch (OperationCanceledException)
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+        }
+        string stderr = await errTask;
+        await outTask;
+        return (process.HasExited && process.ExitCode == 0, stderr);
+    }
+
+    private static bool? _nvenc;
+
+    /// <summary>Whether this ffmpeg build lists the NVIDIA H.264 encoder (the owner's RTX 3060 Ti). A listed encoder can
+    /// still fail at runtime (no driver) — callers fall back to libx264 on failure.</summary>
+    public static async Task<bool> HasNvencAsync()
+    {
+        if (_nvenc is { } known) return known;
+        try
+        {
+            var psi = new ProcessStartInfo(ExecutablePath) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
+            foreach (var a in new[] { "-hide_banner", "-encoders" }) psi.ArgumentList.Add(a);
+            using var p = Process.Start(psi)!;
+            var outTask = p.StandardOutput.ReadToEndAsync();
+            _ = p.StandardError.ReadToEndAsync();
+            await p.WaitForExitAsync();
+            _nvenc = (await outTask).Contains("h264_nvenc");
+        }
+        catch
+        {
+            _nvenc = false;
+        }
+        return _nvenc.Value;
+    }
 }

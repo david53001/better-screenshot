@@ -258,7 +258,7 @@ public sealed class CaptureCoordinator : IAppCommands
     {
         if (_historyWindow is null)
         {
-            _historyWindow = new HistoryWindow(_history, new HistoryWindowActions(Annotate, PinImage));
+            _historyWindow = new HistoryWindow(_history, new HistoryWindowActions(Annotate, PinImage) { EditVideo = p => OpenVideoEditor(p, null) });
             _historyWindow.Closed += (_, _) => _historyWindow = null;
             _historyWindow.Show();
         }
@@ -283,15 +283,58 @@ public sealed class CaptureCoordinator : IAppCommands
 
     private void ShowRecordingCard(string path, BitmapSource thumbnail, Guid? historyId)
     {
+        bool mp4 = string.Equals(Path.GetExtension(path), ".mp4", StringComparison.OrdinalIgnoreCase);
         var actions = new QuickAccessActions
         {
             OnCopy = () => ClipboardService.SetFile(path),
             OnOpen = () => OpenFile(path),
             OnReveal = () => RevealFile(path),
+            OnTrim = mp4 ? () => OpenVideoEditor(path, () => _ = BringBackCardAsync(path, historyId)) : null,
         };
         // Recording cards drag the real saved file (never a temp copy) — so it is NOT scheduled for deletion.
         _stack.Present(thumbnail, QuickAccessKind.Recording, actions, MapCorner(_settings.Capture.OverlayCorner),
             path, _settings.Capture.OverlayAutoDismissSeconds, reason => OnCardDismissed(historyId, reason));
+    }
+
+    private VideoEditorWindow? _videoEditor;
+
+    /// <summary>
+    /// One video editor at a time (v3 Part 0 / Part 6). Opening a different file closes the current one (which
+    /// restores its card); the same file just comes forward, chaining this caller's restore onto its close.
+    /// </summary>
+    public void OpenVideoEditor(string path, Action? restoreCard)
+    {
+        if (_videoEditor is { } open)
+        {
+            if (string.Equals(open.FilePath, path, StringComparison.OrdinalIgnoreCase))
+            {
+                if (restoreCard is not null) open.AddRestore(restoreCard);
+                open.Activate();
+                return;
+            }
+            open.Close();
+        }
+        var editor = new VideoEditorWindow(path, restoreCard)
+        {
+            CopySaved = copy => _ = ShowNewRecordingAsync(copy),
+            GifSaved = gif => _ = ShowNewRecordingAsync(gif),
+        };
+        editor.Closed += (_, _) => { if (_videoEditor == editor) _videoEditor = null; };
+        _videoEditor = editor;
+        editor.Show();
+    }
+
+    /// <summary>The card a recording's editor restores on close: same History id, a fresh first-frame thumbnail (so an
+    /// edited file shows its new first frame); no card if the file can't be read any more.</summary>
+    private async Task BringBackCardAsync(string path, Guid? historyId)
+    {
+        if (await VideoExporter.FirstFrameAsync(path) is { } thumb) ShowRecordingCard(path, thumb, historyId);
+    }
+
+    /// <summary>An exported copy / GIF: its own History entry + card (thumbnail = its first frame).</summary>
+    private async Task ShowNewRecordingAsync(string path)
+    {
+        if (await VideoExporter.FirstFrameAsync(path) is { } thumb) OnRecordingFinished(path, thumb);
     }
 
     private static void OpenFile(string path)

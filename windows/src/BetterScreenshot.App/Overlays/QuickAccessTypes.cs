@@ -13,4 +13,6 @@ public sealed class QuickAccessActions
     public Action OnEdit { get; init; } = () => { };
     public Action OnOpen { get; init; } = () => { };
     public Action OnReveal { get; init; } = () => { };
+    /// <summary>MP4 recordings only: ✂ Edit video (v3 A.3 / Part 6). Null = no button (screenshots, GIFs).</summary>
+    public Action? OnTrim { get; init; }
 }

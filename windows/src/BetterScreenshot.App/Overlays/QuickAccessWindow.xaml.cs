@@ -67,13 +67,16 @@ public partial class QuickAccessWindow : Window
                 ("save", "Save", () => { actions.OnSave(); Dismiss(DismissReason.ActionTaken); }),
                 ("close", "Close", () => Dismiss(DismissReason.Closed)),
             }
-            : new (string Key, string Tip, Action Click)[]
+            : new (string Key, string Tip, Action Click)?[]
             {
                 ("copy", "Copy file", actions.OnCopy),
+                // MP4 cards: Copy file · Edit video · Open · Show in folder · Close (GIF cards keep 4). The card leaves as
+                // ActionTaken; the editor brings it back when it closes (v3 Part 0).
+                actions.OnTrim is { } trim ? ("scissors", "Edit video", () => { Dismiss(DismissReason.ActionTaken); trim(); }) : null,
                 ("play", "Open", () => { actions.OnOpen(); Dismiss(DismissReason.ActionTaken); }),
                 ("folder", "Show in folder", () => { actions.OnReveal(); Dismiss(DismissReason.ActionTaken); }),
                 ("close", "Close", () => Dismiss(DismissReason.Closed)),
-            };
+            }.Where(x => x is not null).Select(x => x!.Value).ToArray();
         double rowWidth = specs.Length * (ButtonWidth + 2 * ButtonGap);
         double rowTop = contentHeight - RowBottomMargin - ButtonHeight;
         var rowRect = new Rect((ContentWidth - rowWidth) / 2, rowTop, rowWidth, ButtonHeight);

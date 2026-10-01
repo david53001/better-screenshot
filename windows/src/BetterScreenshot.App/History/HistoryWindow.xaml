@@ -14,6 +14,8 @@
                         Style="{StaticResource Theme.DangerButton}" Click="Delete_Click" Padding="10,5" Margin="6,0,0,0"/>
                 <Button x:Name="RevealButton" DockPanel.Dock="Right" Content="Show in Explorer"
                         Click="Reveal_Click" Padding="10,5" Margin="6,0,0,0"/>
+                <Button x:Name="EditVideoButton" DockPanel.Dock="Right" Content="Edit Video…"
+                        Click="EditVideo_Click" Padding="10,5" Margin="6,0,0,0"/>
                 <Button x:Name="PinButton" DockPanel.Dock="Right" Content="Pin"
                         Click="Pin_Click" Padding="10,5" Margin="6,0,0,0"/>
                 <Button x:Name="AnnotateButton" DockPanel.Dock="Right" Content="Annotate"

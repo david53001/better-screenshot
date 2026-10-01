@@ -58,6 +58,8 @@ internal static class PreviewRenderer
             try { await Render(make(), Path.Combine(_outDir, name + ".png")); log.Add("ok   " + name); }
             catch (Exception ex) { log.Add($"FAIL {name}: {ex.GetType().Name} {ex.Message}"); }
         }
+        try { await RenderVideoEditor(Path.Combine(_outDir, "video-editor.png")); log.Add("ok   video-editor"); }
+        catch (Exception ex) { log.Add($"FAIL video-editor: {ex.GetType().Name} {ex.Message}"); }
         File.WriteAllLines(Path.Combine(_outDir, "_preview-log.txt"), log);
         app.Shutdown(log.Any(l => l.StartsWith("FAIL")) ? 1 : 0);
     }
@@ -206,6 +208,29 @@ internal static class PreviewRenderer
         bmp.Render(visual);
         bmp.Freeze();
         return bmp;
+    }
+
+    /// <summary>The v3 Part 6 editor on a generated 20 s clip: a cut, the second segment at 2× (auto-muted), selected.</summary>
+    private static async Task RenderVideoEditor(string path)
+    {
+        string clip = Path.Combine(Path.GetTempPath(), $"bs-preview-clip-{Environment.ProcessId}.mp4");
+        var (ok, err) = await BetterScreenshot.Platform.FfmpegRunner.RunAsync(new[]
+        {
+            "-hide_banner", "-y", "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=30:duration=20",
+            "-f", "lavfi", "-i", "sine=frequency=440:duration=20", "-c:v", "libx264", "-g", "15", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", clip,
+        });
+        if (!ok) throw new InvalidOperationException("ffmpeg clip: " + err);
+        var w = new BetterScreenshot.App.Recording.VideoEditorWindow(clip, null)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual, ShowActivated = false, ShowInTaskbar = false, Left = -30000, Top = -30000,
+        };
+        w.Show();
+        await Task.WhenAny(w.FramesReady.Task, Task.Delay(30000));
+        w.PreviewEdit(c => c.Split(5) && c.Split(9) && c.Remove(1) && c.SetSpeed(2, 1), select: 1, playhead: 7);
+        for (int i = 0; i < 3; i++) await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        SavePng(w, path);
+        w.Close();
+        try { File.Delete(clip); } catch { }
     }
 
     /// <summary>The v3 Part 5 snapshot states (expanded / muted / area-no-mic paused / countdown / confirm / collapsed / full screen).</summary>

@@ -35,7 +35,7 @@ public class FfmpegArgsTests
             "-hide_banner", "-y",
             "-f", "gdigrab", "-framerate", "30", "-draw_mouse", "1",
             "-offset_x", "0", "-offset_y", "0", "-video_size", "1920x1080", "-i", "desktop",
-            "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-b:v", "7464960", "-r", "30",
+            "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-b:v", "7464960", "-r", "30", "-g", "15",
             @"C:\out.mp4",
         }, args);
     }
@@ -57,7 +57,7 @@ public class FfmpegArgsTests
             "-offset_x", "100", "-offset_y", "50", "-video_size", "800x600", "-i", "desktop",
             "-f", "dshow", "-i", "audio=Stereo Mix",
             "-f", "dshow", "-i", "audio=Mic (USB)",
-            "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-b:v", "3456000", "-r", "60",
+            "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-b:v", "3456000", "-r", "60", "-g", "30",
             "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
             "-map", "0:v", "-map", "1:a", "-map", "2:a",
             @"C:\rec.mp4",

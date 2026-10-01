@@ -19,7 +19,11 @@ using Path = System.Windows.Shapes.Path;
 namespace BetterScreenshot.App.History;
 
 /// <summary>What the History window calls back into the capture layer for (reuses the coordinator's flows).</summary>
-public sealed record HistoryWindowActions(Action<BitmapSource> Annotate, Action<BitmapSource> Pin);
+public sealed record HistoryWindowActions(Action<BitmapSource> Annotate, Action<BitmapSource> Pin)
+{
+    /// <summary>Edit Video… on a single MP4 recording whose file still exists (v3 Part 6; nothing is restored on close).</summary>
+    public Action<string>? EditVideo { get; init; }
+}
 
 /// <summary>
 /// The capture-history browser: a thumbnail grid over <see cref="HistoryService"/> with a kind badge + relative
@@ -72,9 +76,20 @@ public partial class HistoryWindow : Window
         CopyButton.IsEnabled = sel != null;
         AnnotateButton.IsEnabled = isScreenshot;
         PinButton.IsEnabled = isScreenshot;
+        EditVideoButton.IsEnabled = sel is { } r && EditablePath(r) is not null && _actions.EditVideo is not null;
         RevealButton.IsEnabled = sel != null && CanReveal(sel);
         DeleteButton.IsEnabled = sel != null;
         ClearAllButton.IsEnabled = _history.Entries.Count > 0;
+    }
+
+    /// <summary>The MP4 behind a recording entry, if it still exists.</summary>
+    private string? EditablePath(HistoryEntry e) =>
+        e.Kind == HistoryKind.Recording && _history.SavedFilePath(e) is { } p && File.Exists(p)
+        && string.Equals(System.IO.Path.GetExtension(p), ".mp4", StringComparison.OrdinalIgnoreCase) ? p : null;
+
+    private void EditVideo_Click(object sender, RoutedEventArgs e)
+    {
+        if (Selected is { } s && EditablePath(s) is { } p) _actions.EditVideo?.Invoke(p);
     }
 
     private bool CanReveal(HistoryEntry e) => e.Kind == HistoryKind.Screenshot
@@ -141,6 +156,13 @@ public partial class HistoryWindow : Window
             Cursor = Cursors.Hand,
             Child = stack,
         };
+        if (EditablePath(entry) is { } editable && _actions.EditVideo is { } editVideo)
+        {
+            var item = new System.Windows.Controls.MenuItem { Header = "Edit Video…" };
+            item.Click += (_, _) => editVideo(editable);
+            cell.ContextMenu = new System.Windows.Controls.ContextMenu { Items = { item } };
+        }
+        cell.MouseRightButtonDown += (_, _) => Select(entry.Id);
         cell.MouseLeftButtonDown += (_, e) =>
         {
             if (e.ClickCount == 2) Open(entry);
