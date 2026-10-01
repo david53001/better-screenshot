@@ -1,130 +1,112 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using BetterScreenshot.Core;
 using Brush = System.Windows.Media.Brush;
 using Color = System.Windows.Media.Color;
 using Point = System.Windows.Point;
+using Size = System.Windows.Size;
 
 namespace BetterScreenshot.App.Overlays;
 
 /// <summary>
-/// Pure luminance helpers for the Quick Access card's auto-contrast (kept WPF-window-free so they're unit
-/// testable). The card overlays its action buttons directly on the captured image, so the glyphs / hover
-/// pills / bottom scrim must flip between light and dark to stay legible against whatever the image shows.
-/// </summary>
-public static class QuickAccessContrast
-{
-    /// <summary>Average relative luminance above which the strip behind the toolbar counts as "light"
-    /// (→ dark controls). Below it, controls go light.</summary>
-    public const double LightThreshold = 0.58;
-
-    /// <summary>Average relative luminance (0..1) of a 32bpp BGRA pixel buffer; alpha is ignored.</summary>
-    public static double AverageLuminance(byte[] bgra, int stride, int width, int height)
-    {
-        if (bgra.Length == 0 || width <= 0 || height <= 0) return 0.0;
-
-        double sum = 0;
-        long n = 0;
-        for (int y = 0; y < height; y++)
-        {
-            int row = y * stride;
-            for (int x = 0; x < width; x++)
-            {
-                int i = row + x * 4;
-                double b = bgra[i] / 255.0, g = bgra[i + 1] / 255.0, r = bgra[i + 2] / 255.0;
-                sum += 0.2126 * r + 0.7152 * g + 0.0722 * b; // Rec. 709 relative luminance
-                n++;
-            }
-        }
-        return n > 0 ? sum / n : 0.0;
-    }
-
-    public static bool IsLightBackground(double luminance) => luminance > LightThreshold;
-}
-
-/// <summary>
-/// A light-or-dark control palette derived from the average luminance of the image's bottom strip (where the
-/// toolbar sits): a bright strip → near-black glyphs + a light scrim; a dark strip → near-white glyphs + a
-/// dark scrim. Every part (glyph, hover pill, pressed pill, scrim) comes from that single decision so the
-/// overlaid toolbar reads as one coherent, auto-contrasting unit against any wallpaper/screenshot behind it.
+/// The Quick Access card's guaranteed-contrast controls (Mac v2.9.0). The pure maths lives in
+/// <see cref="BetterScreenshot.Core.QuickAccessContrast"/>; this class samples the pixels that are actually drawn
+/// behind the button row (aspect-fill aware, at device resolution) and turns the resulting
+/// <see cref="ContrastPlan"/> into brushes. The scrim holds <see cref="ContrastPlan.ScrimAlpha"/> FLAT from the
+/// row's top edge to the card's bottom â€” the 4.5:1 guarantee holds only while the scrimmed region âŠ‡ the sampled
+/// region, so never narrow the scrim or widen the sample without redoing that argument.
 /// </summary>
 internal sealed class ContrastPalette
 {
+    /// <summary>Height (DIPs) of the soft fade ABOVE the row's top edge; purely cosmetic â€” it never sits under a glyph.</summary>
+    public const double FadeAbove = 16;
+    private const double ScreenMargin = 0.05;
+
     public Brush Glyph { get; }
     public Brush Hover { get; }
     public Brush Pressed { get; }
-    public Brush Scrim { get; } // vertical gradient: transparent (top) → tone (bottom)
-    public bool IsLightBackground { get; }
+    public Brush Scrim { get; }
+    public ContrastPlan Plan { get; }
 
-    private ContrastPalette(bool light, Brush glyph, Brush hover, Brush pressed, Brush scrim)
+    private ContrastPalette(ContrastPlan plan, double scrimHeight)
     {
-        IsLightBackground = light;
-        Glyph = glyph;
-        Hover = hover;
-        Pressed = pressed;
+        Plan = plan;
+        Glyph = Frozen(plan.Colors.GlyphArgb);
+        Hover = Frozen(plan.Colors.HoverArgb);
+        Pressed = Frozen(plan.Colors.PressedArgb);
+        byte tone = plan.Colors.ScrimIsWhite ? (byte)0xFF : (byte)0x00;
+        // +0.05 absorbs WPF's byte-quantised alpha and the bitmap filtering of the drawn thumbnail (measured on a busy
+        // photo: the exact alpha landed at 4.41:1 on screen, the margin lifts it past 4.5:1). Rounded UP, never down.
+        byte a = (byte)Math.Ceiling(Math.Min(QuickAccessContrast.MaxScrimAlpha, plan.ScrimAlpha + ScreenMargin) * 255);
+        var scrim = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+        double flatFrom = scrimHeight > 0 ? Math.Clamp(FadeAbove / scrimHeight, 0, 1) : 0;
+        scrim.GradientStops.Add(new GradientStop(Color.FromArgb(0, tone, tone, tone), 0));
+        scrim.GradientStops.Add(new GradientStop(Color.FromArgb(a, tone, tone, tone), flatFrom));
+        scrim.GradientStops.Add(new GradientStop(Color.FromArgb(a, tone, tone, tone), 1));
+        scrim.Freeze();
         Scrim = scrim;
     }
 
-    public static ContrastPalette ForImageBottom(BitmapSource image)
+    /// <summary>Plans the palette for a button row occupying <paramref name="rowRect"/> (card DIPs) on a card of
+    /// <paramref name="cardSize"/> showing <paramref name="image"/> with UniformToFill. <paramref name="deviceScale"/>
+    /// is the monitor's DPI scale: the band is sampled at device resolution, because downsampling box-filters a
+    /// white headline into its surround and would under-state the bright end.</summary>
+    public static ContrastPalette ForButtonRow(BitmapSource image, Size cardSize, Rect rowRect, double deviceScale, double scrimHeight)
     {
-        bool light = QuickAccessContrast.IsLightBackground(SampleBottomLuminance(image));
-
-        // Light image → dark controls over a faint white scrim. Dark image → light controls over a faint
-        // black scrim. The scrim shares the image's tone so the (opposite-tone) glyph always pops, even over
-        // busy/mixed content near the bottom edge.
-        return light
-            ? new ContrastPalette(true,
-                Frozen(Color.FromRgb(0x18, 0x18, 0x1A)),
-                Frozen(Color.FromArgb(0x24, 0x00, 0x00, 0x00)),
-                Frozen(Color.FromArgb(0x3D, 0x00, 0x00, 0x00)),
-                BottomScrim(0xFF, 0xFF, 0xFF, 0x8C))
-            : new ContrastPalette(false,
-                Frozen(Color.FromRgb(0xF4, 0xF4, 0xF6)),
-                Frozen(Color.FromArgb(0x2B, 0xFF, 0xFF, 0xFF)),
-                Frozen(Color.FromArgb(0x45, 0xFF, 0xFF, 0xFF)),
-                BottomScrim(0x00, 0x00, 0x00, 0x8C));
+        var extremes = SampleBand(image, cardSize, rowRect, deviceScale);
+        return new ContrastPalette(QuickAccessContrast.Plan(extremes), scrimHeight);
     }
 
-    private static SolidColorBrush Frozen(Color c)
-    {
-        var b = new SolidColorBrush(c);
-        b.Freeze();
-        return b;
-    }
-
-    private static LinearGradientBrush BottomScrim(byte r, byte g, byte b, byte bottomAlpha)
-    {
-        var brush = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
-        brush.GradientStops.Add(new GradientStop(Color.FromArgb(0x00, r, g, b), 0.0));
-        brush.GradientStops.Add(new GradientStop(Color.FromArgb((byte)(bottomAlpha / 3), r, g, b), 0.5));
-        brush.GradientStops.Add(new GradientStop(Color.FromArgb(bottomAlpha, r, g, b), 1.0));
-        brush.Freeze();
-        return brush;
-    }
-
-    /// <summary>Average luminance of the image's bottom ~30% strip, sampled cheaply (crop → downscale → BGRA).</summary>
-    private static double SampleBottomLuminance(BitmapSource image)
+    internal static BandExtremes SampleBand(BitmapSource image, Size cardSize, Rect rowRect, double deviceScale)
     {
         try
         {
-            int w = image.PixelWidth, h = image.PixelHeight;
-            if (w <= 0 || h <= 0) return 0.0;
+            var srcRect = AspectFillMap.SourceRect(new PxSize(cardSize.Width, cardSize.Height),
+                new PxSize(image.PixelWidth, image.PixelHeight),
+                new PxRect(rowRect.X, rowRect.Y, rowRect.Width, rowRect.Height));
+            if (srcRect.IsEmpty) return new BandExtremes(0, 0);
 
-            int stripH = Math.Max(1, (int)(h * 0.30));
-            var strip = new CroppedBitmap(image, new Int32Rect(0, h - stripH, w, stripH));
+            int x0 = (int)Math.Floor(srcRect.X), y0 = (int)Math.Floor(srcRect.Y);
+            int x1 = Math.Min(image.PixelWidth, (int)Math.Ceiling(srcRect.Right));
+            int y1 = Math.Min(image.PixelHeight, (int)Math.Ceiling(srcRect.Bottom));
+            if (x1 <= x0 || y1 <= y0) return new BandExtremes(0, 0);
+            var bgra = new FormatConvertedBitmap(new CroppedBitmap(image, new Int32Rect(x0, y0, x1 - x0, y1 - y0)),
+                PixelFormats.Bgra32, null, 0);
+            int w = bgra.PixelWidth, h = bgra.PixelHeight;
+            var src = new byte[w * h * 4];
+            bgra.CopyPixels(src, w * 4, 0);
 
-            double scale = Math.Min(1.0, 48.0 / Math.Max(strip.PixelWidth, strip.PixelHeight));
-            BitmapSource small = scale < 1.0 ? new TransformedBitmap(strip, new ScaleTransform(scale, scale)) : strip;
-            var bgra = new FormatConvertedBitmap(small, PixelFormats.Bgra32, null, 0);
-
-            int sw = bgra.PixelWidth, sh = bgra.PixelHeight, stride = sw * 4;
-            var px = new byte[stride * sh];
-            bgra.CopyPixels(px, stride, 0);
-            return QuickAccessContrast.AverageLuminance(px, stride, sw, sh);
+            // Never box-filter the band below what's on screen (that averages a white headline into its surround
+            // and under-states the bright end). Instead POINT-sample the untouched source pixels on a grid of at
+            // least 2Ã— the device pixels the row covers: source pixels are at least as extreme as the filtered
+            // pixels WPF draws, so the plan is conservative, and the cost stays bounded for 4K captures.
+            int gw = Math.Min(w, (int)Math.Ceiling(rowRect.Width * deviceScale * 2));
+            int gh = Math.Min(h, (int)Math.Ceiling(rowRect.Height * deviceScale * 2));
+            gw = Math.Max(1, gw); gh = Math.Max(1, gh);
+            var px = new byte[gw * gh * 4];
+            for (int gy = 0; gy < gh; gy++)
+            {
+                int sy = Math.Min(h - 1, (int)((gy + 0.5) * h / gh));
+                for (int gx = 0; gx < gw; gx++)
+                {
+                    int sx = Math.Min(w - 1, (int)((gx + 0.5) * w / gw));
+                    Buffer.BlockCopy(src, (sy * w + sx) * 4, px, (gy * gw + gx) * 4, 4);
+                }
+            }
+            return BandLuminance.Extremes(px, gw * gh);
         }
         catch
         {
-            return 0.0; // fall back to the dark-background palette (light glyphs)
+            // Unreadable source: assume the worst bimodal band so the plan still guarantees contrast.
+            return new BandExtremes(0, 1);
         }
+    }
+
+    private static SolidColorBrush Frozen(uint argb)
+    {
+        var b = new SolidColorBrush(Color.FromArgb((byte)(argb >> 24), (byte)(argb >> 16), (byte)(argb >> 8), (byte)argb));
+        b.Freeze();
+        return b;
     }
 }

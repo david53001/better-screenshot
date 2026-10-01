@@ -28,6 +28,7 @@ public partial class QuickAccessWindow : Window
     private const double MaxContentHeight = 280;
     private const double CornerRadiusPx = 14;     // must match the Hairline CornerRadius in the XAML
     private const double ShadowMargin = 6;        // must match the shadow-host Border Margin in the XAML
+    private const double ButtonWidth = 32, ButtonHeight = 30, ButtonGap = 2, RowBottomMargin = 9;
 
     private readonly string? _dragFile;
     private readonly int _autoDismissSeconds;
@@ -52,31 +53,42 @@ public partial class QuickAccessWindow : Window
         Width = ContentWidth + 2 * ShadowMargin;
         Height = contentHeight + 2 * ShadowMargin;
 
-        Scrim.Height = Math.Min(64, contentHeight * 0.42);
         Root.Clip = RoundedClip(ContentWidth, contentHeight);
         Root.SizeChanged += (_, _) => Root.Clip = RoundedClip(Root.ActualWidth, Root.ActualHeight);
 
-        // Auto-contrast the overlaid controls to whatever the image shows behind the toolbar.
-        var palette = ContrastPalette.ForImageBottom(image);
+        // Guaranteed contrast (Mac v2.9.0): lay the button row out FIRST so the sampled rect is the row's final
+        // on-screen frame, sample the pixels aspect-fill actually draws there at device resolution, then hold the
+        // planned scrim alpha flat from the row's top edge to the card's bottom.
+        var specs = kind == QuickAccessKind.Screenshot
+            ? new (string Key, string Tip, Action Click)[]
+            {
+                ("copy", "Copy", actions.OnCopy),
+                ("edit", "Edit", () => { actions.OnEdit(); Dismiss(DismissReason.ActionTaken); }),
+                ("pin", "Pin to screen", () => { actions.OnPin(); Dismiss(DismissReason.ActionTaken); }),
+                ("save", "Save", () => { actions.OnSave(); Dismiss(DismissReason.ActionTaken); }),
+                ("close", "Close", () => Dismiss(DismissReason.Closed)),
+            }
+            : new (string Key, string Tip, Action Click)[]
+            {
+                ("copy", "Copy file", actions.OnCopy),
+                ("play", "Open", () => { actions.OnOpen(); Dismiss(DismissReason.ActionTaken); }),
+                ("folder", "Show in folder", () => { actions.OnReveal(); Dismiss(DismissReason.ActionTaken); }),
+                ("close", "Close", () => Dismiss(DismissReason.Closed)),
+            };
+        double rowWidth = specs.Length * (ButtonWidth + 2 * ButtonGap);
+        double rowTop = contentHeight - RowBottomMargin - ButtonHeight;
+        var rowRect = new Rect((ContentWidth - rowWidth) / 2, rowTop, rowWidth, ButtonHeight);
+        double scrimHeight = contentHeight - rowTop + ContrastPalette.FadeAbove;
+        Scrim.Height = scrimHeight;
+        ButtonRow.Margin = new Thickness(0, 0, 0, RowBottomMargin);
+        var palette = ContrastPalette.ForButtonRow(image, new System.Windows.Size(ContentWidth, contentHeight), rowRect,
+            VisualTreeHelper.GetDpi(this).DpiScaleX, scrimHeight);
         Scrim.Fill = palette.Scrim;
         Resources["QA.HoverBrush"] = palette.Hover;
         Resources["QA.PressedBrush"] = palette.Pressed;
 
-        if (kind == QuickAccessKind.Screenshot)
-        {
-            ButtonRow.Children.Add(MakeButton("copy", "Copy", palette.Glyph, actions.OnCopy));
-            ButtonRow.Children.Add(MakeButton("edit", "Edit", palette.Glyph, () => { actions.OnEdit(); Dismiss(DismissReason.ActionTaken); }));
-            ButtonRow.Children.Add(MakeButton("pin", "Pin to screen", palette.Glyph, () => { actions.OnPin(); Dismiss(DismissReason.ActionTaken); }));
-            ButtonRow.Children.Add(MakeButton("save", "Save", palette.Glyph, () => { actions.OnSave(); Dismiss(DismissReason.ActionTaken); }));
-            ButtonRow.Children.Add(MakeButton("close", "Close", palette.Glyph, () => Dismiss(DismissReason.Closed)));
-        }
-        else
-        {
-            ButtonRow.Children.Add(MakeButton("copy", "Copy file", palette.Glyph, actions.OnCopy));
-            ButtonRow.Children.Add(MakeButton("play", "Open", palette.Glyph, () => { actions.OnOpen(); Dismiss(DismissReason.ActionTaken); }));
-            ButtonRow.Children.Add(MakeButton("folder", "Show in folder", palette.Glyph, () => { actions.OnReveal(); Dismiss(DismissReason.ActionTaken); }));
-            ButtonRow.Children.Add(MakeButton("close", "Close", palette.Glyph, () => Dismiss(DismissReason.Closed)));
-        }
+        foreach (var (key, tip, click) in specs)
+            ButtonRow.Children.Add(MakeButton(key, tip, palette.Glyph, click));
 
         DragSurface.MouseLeftButtonDown += (_, e) => _dragStart = e.GetPosition(this);
         DragSurface.MouseMove += DragSurface_MouseMove;
@@ -147,9 +159,9 @@ public partial class QuickAccessWindow : Window
         var button = new Button
         {
             Content = new IconPresenter { IconKey = iconKey, Brush = glyph, Width = 17, Height = 17 },
-            Width = 32,
-            Height = 30,
-            Margin = new Thickness(2, 0, 2, 0),
+            Width = ButtonWidth,
+            Height = ButtonHeight,
+            Margin = new Thickness(ButtonGap, 0, ButtonGap, 0),
             ToolTip = tip,
             Style = (Style)FindResource("QA.IconButton"),
         };
