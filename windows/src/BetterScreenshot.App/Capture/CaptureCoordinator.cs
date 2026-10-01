@@ -96,6 +96,7 @@ public sealed class CaptureCoordinator : IAppCommands
     public void CaptureText()
     {
         RememberFrontmostApp();
+        TextRecognizerService.WarmUp(); // load the OCR model while the user drags (Mac v2.10.0)
         _selection.Present(_settings.Capture.FreezeScreen, selection =>
         {
             if (selection is { } s) _ = CaptureTextAsync(s);
