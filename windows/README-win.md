@@ -17,7 +17,7 @@ capture history. **No cloud, no accounts, no uploads, ever.**
   were using loses focus the moment the overlay appears, and apps that react to that — a full-screen game pausing
   to its menu, a video player showing its controls — change what you were trying to capture. Toggle it in
   **Settings → Capture**.
-- **Quick Access overlay** — a floating post-capture card (copy / edit / pin / save / close), stacking up to 3,
+- **Quick Access overlay** — a floating post-capture card (copy / edit / save / close — Pin lives in History and the tray), stacking up to 3,
   drag-to-export.
 - **Annotation editor** — arrow, line, rectangle (outline/filled), ellipse, text, counter, blur, pixelate, crop,
   select/move; color + size inspector; undo/redo; sticky last-used style; Copy / Save / Stack / Done. The window

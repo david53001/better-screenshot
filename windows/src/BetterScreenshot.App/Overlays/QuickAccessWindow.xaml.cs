@@ -64,7 +64,6 @@ public partial class QuickAccessWindow : Window
             {
                 ("copy", "Copy", actions.OnCopy),
                 ("edit", "Edit", () => { actions.OnEdit(); Dismiss(DismissReason.ActionTaken); }),
-                ("pin", "Pin to screen", () => { actions.OnPin(); Dismiss(DismissReason.ActionTaken); }),
                 ("save", "Save", () => { actions.OnSave(); Dismiss(DismissReason.ActionTaken); }),
                 ("close", "Close", () => Dismiss(DismissReason.Closed)),
             }

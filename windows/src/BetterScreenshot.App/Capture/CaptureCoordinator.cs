@@ -125,7 +125,6 @@ public sealed class CaptureCoordinator : IAppCommands
         {
             OnCopy = () => Copy(image),
             OnSave = () => Save(image),
-            OnPin = () => PinImage(image),
             OnEdit = () => Annotate(image),
         };
         _stack.Present(image, QuickAccessKind.Screenshot, actions, MapCorner(_settings.Capture.OverlayCorner),

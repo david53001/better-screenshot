@@ -11,7 +11,6 @@ public sealed class QuickAccessActions
     public Action OnCopy { get; init; } = () => { };
     public Action OnSave { get; init; } = () => { };
     public Action OnEdit { get; init; } = () => { };
-    public Action OnPin { get; init; } = () => { };
     public Action OnOpen { get; init; } = () => { };
     public Action OnReveal { get; init; } = () => { };
 }
