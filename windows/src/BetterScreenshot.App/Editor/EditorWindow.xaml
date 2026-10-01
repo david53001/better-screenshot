@@ -56,7 +56,7 @@
                 <DockPanel Margin="16,0,16,8" VerticalAlignment="Bottom" LastChildFill="False">
                     <StackPanel x:Name="TitleActions" Orientation="Horizontal" Margin="-6,0,10,0"/>
                     <Button x:Name="ZoomButton" Style="{StaticResource Ed.SmallButton}" Click="Zoom_Click"
-                            ToolTip="Zoom â€” pinch, Ctrl+scroll, Ctrl+plus / Ctrl+minus, Ctrl+0 fits, Ctrl+1 is 100%"/>
+                            ToolTip="Zoom — pinch, Ctrl+scroll, Ctrl+plus / Ctrl+minus, Ctrl+0 fits, Ctrl+1 is 100%"/>
                     <TextBlock x:Name="SizeText" Margin="12,0,0,0" FontSize="12" VerticalAlignment="Center"
                                Foreground="{StaticResource Ed.SecondaryBrush}" ToolTip="Image size"/>
                     <Button DockPanel.Dock="Right" x:Name="CopyButton" Style="{StaticResource Ed.PrimaryButton}" Margin="8,0,0,0"

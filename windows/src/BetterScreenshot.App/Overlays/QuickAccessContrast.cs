@@ -14,12 +14,12 @@ namespace BetterScreenshot.App.Overlays;
 /// <see cref="BetterScreenshot.Core.QuickAccessContrast"/>; this class samples the pixels that are actually drawn
 /// behind the button row (aspect-fill aware, at device resolution) and turns the resulting
 /// <see cref="ContrastPlan"/> into brushes. The scrim holds <see cref="ContrastPlan.ScrimAlpha"/> FLAT from the
-/// row's top edge to the card's bottom â€” the 4.5:1 guarantee holds only while the scrimmed region âŠ‡ the sampled
+/// row's top edge to the card's bottom — the 4.5:1 guarantee holds only while the scrimmed region ⊇ the sampled
 /// region, so never narrow the scrim or widen the sample without redoing that argument.
 /// </summary>
 internal sealed class ContrastPalette
 {
-    /// <summary>Height (DIPs) of the soft fade ABOVE the row's top edge; purely cosmetic â€” it never sits under a glyph.</summary>
+    /// <summary>Height (DIPs) of the soft fade ABOVE the row's top edge; purely cosmetic — it never sits under a glyph.</summary>
     public const double FadeAbove = 16;
     private const double ScreenMargin = 0.05;
 
@@ -79,7 +79,7 @@ internal sealed class ContrastPalette
 
             // Never box-filter the band below what's on screen (that averages a white headline into its surround
             // and under-states the bright end). Instead POINT-sample the untouched source pixels on a grid of at
-            // least 2Ã— the device pixels the row covers: source pixels are at least as extreme as the filtered
+            // least 2× the device pixels the row covers: source pixels are at least as extreme as the filtered
             // pixels WPF draws, so the plan is conservative, and the cost stays bounded for 4K captures.
             int gw = Math.Min(w, (int)Math.Ceiling(rowRect.Width * deviceScale * 2));
             int gh = Math.Min(h, (int)Math.Ceiling(rowRect.Height * deviceScale * 2));
