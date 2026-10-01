@@ -91,7 +91,7 @@ Priority P1 (do first) / P2 / P3.
 | 8 | Quick Access card **Pin button removed** (v2.9.0) | **DONE `c0805ee`** | P2 | §4.5 |
 | 9 | Capture Text: warm OCR during the drag, explicit languages, upscale < 2× (v2.10.0) | **DONE `e9f5511`** | P2 | §4.6 |
 | 10 | Capture Text paragraph reflow `TextReflow` (v2.11.0) | **DONE `b82e20a`** | P1 | §4.6 |
-| 11 | Capture Text structure + maths rework, "Recognize math" setting (unmerged Mac WIP) | **MISSING** | P2 | v3 Part 8 + §4.13 |
+| 11 | Capture Text structure + maths rework, "Recognize math" setting (unmerged Mac WIP) | **PARTIAL — maths passes deferred (Mac WIP)** 09b2dc0 — §8.2 clipboard format: tables (tabs, grid lines), code, lists, hyphen word list, QR dominance; scripts/fractions/display maths + Recognize math setting deferred | P2 | v3 Part 8 + §4.13 |
 | 12 | Universal build + one-line installer; installer reports old → new version (v2.10, v3.1.0) | **N/A** for the Mac script; Windows analogue optional | P3 | §4.8 |
 | 13 | Bundle id `com.betterscreenshot.mac`, macOS 26 menu-bar fix | **N/A** | — | — |
 | 14 | Text tool: fonts, text boxes, in-place editing, "line above disappears" fix (2026-09-24) | DONE 5748be5 | P1 | v3 A.1 |
