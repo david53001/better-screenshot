@@ -98,18 +98,20 @@ public partial class EditorWindow : Window
 
     private double DpiScale => VisualTreeHelper.GetDpi(this).DpiScaleX;
 
-    /// <summary>Initial size (v3 §1.1): the capture's real on-screen size (≤ 1200 DIPs wide) + chrome, clamped to
-    /// the work area; centred on the screen in use.</summary>
+    /// <summary>Remembers how the editor was last closed (v3 "Window placement"); null in previews.</summary>
+    public BetterScreenshot.Platform.SettingsStore? PlacementStore { get; init; }
+
+    /// <summary>Initial size (v3 §1.1): the capture's real on-screen size (≤ 1200 DIPs wide) + chrome, inside the work
+    /// area — or the way the last editor was closed; exactly centred on the screen in use (v3 "Window placement").</summary>
     private void SizeToImage()
     {
         var size = ZoomMath.PointSize(new PxSize(_baseImage.PixelWidth, _baseImage.PixelHeight), DpiScale);
         double imgW = Math.Min(size.Width, 1200);
         double imgH = size.Width > 0 ? imgW * size.Height / size.Width : size.Height;
         var work = WindowPlacement.WorkAreaUnderCursor(this);
-        Width = Math.Min(Math.Max(imgW + 48, 600) + 284 + 16, work.Width - 40);
-        Height = Math.Min(Math.Max(imgH + 112 + 64 + 40, 660), work.Height - 60);
-        Left = work.Left + (work.Width - Width) / 2;
-        Top = work.Top + (work.Height - Height) / 2;
+        var defaultSize = new PxSize(Math.Min(Math.Max(imgW + 48, 600) + 284 + 16, work.Width - 40),
+            Math.Min(Math.Max(imgH + 112 + 64 + 40, 660), work.Height - 60));
+        WindowPlacement.Place(this, defaultSize, "annotate", PlacementStore);
     }
 
     private void BuildToolbar()

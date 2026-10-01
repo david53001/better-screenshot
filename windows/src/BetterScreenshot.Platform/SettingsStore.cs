@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using BetterScreenshot.Capture;
+using BetterScreenshot.Core;
 using BetterScreenshot.Editor;
 using BetterScreenshot.Recording;
 
@@ -41,6 +42,9 @@ public sealed class SettingsStore
     public Dictionary<string, int> ToursSeen { get; set; } = new();
     /// <summary><c>toursPaused</c>: tour id → step index to resume at.</summary>
     public Dictionary<string, int> ToursPaused { get; set; } = new();
+    /// <summary>v3 "Window placement": how the last window of each resizable kind (<c>annotate</c>, <c>editVideo</c>,
+    /// <c>history</c>) was closed.</summary>
+    public Dictionary<string, WindowPlacementMemo> WindowPlacements { get; set; } = new();
 
     /// <summary>Env var that relocates settings + History (dev/preview/new-user testing only — e.g.
     /// <c>--settings-dir</c>), so a throwaway profile never touches the real <c>%APPDATA%</c> files.</summary>
@@ -110,6 +114,7 @@ public sealed class SettingsStore
         FirstUseToursEnabled = FirstUseToursEnabled,
         ToursSeen = ToursSeen.Count == 0 ? null : new Dictionary<string, int>(ToursSeen),
         ToursPaused = ToursPaused.Count == 0 ? null : new Dictionary<string, int>(ToursPaused),
+        WindowPlacement = WindowPlacements.Count == 0 ? null : new Dictionary<string, WindowPlacementMemo>(WindowPlacements),
     };
 
     private static SettingsStore FromDto(Dto dto) => new()
@@ -131,6 +136,7 @@ public sealed class SettingsStore
         FirstUseToursEnabled = dto.FirstUseToursEnabled,
         ToursSeen = dto.ToursSeen ?? new Dictionary<string, int>(),
         ToursPaused = dto.ToursPaused ?? new Dictionary<string, int>(),
+        WindowPlacements = dto.WindowPlacement ?? new Dictionary<string, WindowPlacementMemo>(),
     };
 
     private sealed class Dto
@@ -152,6 +158,7 @@ public sealed class SettingsStore
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? FirstUseToursEnabled { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, int>? ToursSeen { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, int>? ToursPaused { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, WindowPlacementMemo>? WindowPlacement { get; set; }
     }
 
     /// <summary>

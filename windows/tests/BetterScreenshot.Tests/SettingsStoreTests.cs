@@ -75,4 +75,22 @@ public class SettingsStoreTests
             Directory.Delete(Path.GetDirectoryName(path)!, true);
         }
     }
+
+    [Fact]
+    public void Window_placements_round_trip_in_the_v3_shape()
+    {
+        var path = TempPath();
+        var store = new SettingsStore();
+        store.WindowPlacements["history"] = new BetterScreenshot.Core.WindowPlacementMemo(1000, 700, BetterScreenshot.Core.WindowPlacementMode.Fill);
+        store.Save(path);
+        string json = File.ReadAllText(path);
+        Assert.Contains("\"windowPlacement\"", json);
+        Assert.Contains("\"mode\": \"fill\"", json);
+        var loaded = SettingsStore.Load(path);
+        Assert.Equal(store.WindowPlacements["history"], loaded.WindowPlacements["history"]);
+        // Nothing remembered: the key isn't written at all.
+        var empty = TempPath();
+        new SettingsStore().Save(empty);
+        Assert.DoesNotContain("windowPlacement", File.ReadAllText(empty));
+    }
 }

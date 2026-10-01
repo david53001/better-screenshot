@@ -234,6 +234,7 @@ public sealed class CaptureCoordinator : IAppCommands
     {
         var editor = new EditorWindow(image, _settings.EditorStyle, _settings.EditorRecentColors)
         {
+            PlacementStore = _settings,
             OnCopy = Copy,
             OnSave = Save,
             OnAddToStack = KeepInStack,
@@ -269,6 +270,7 @@ public sealed class CaptureCoordinator : IAppCommands
                 CaptureAreaChord = () => _settings.Hotkeys.Combo(HotkeyAction.CaptureArea)?.DisplayString,
             });
             _historyWindow.Closed += (_, _) => _historyWindow = null;
+            Controls.WindowPlacement.Place(_historyWindow, new PxSize(760, 540), "history", _settings);
             _historyWindow.Show();
         }
         else
@@ -330,6 +332,7 @@ public sealed class CaptureCoordinator : IAppCommands
         };
         editor.Closed += (_, _) => { if (_videoEditor == editor) _videoEditor = null; };
         _videoEditor = editor;
+        Controls.WindowPlacement.Place(editor, new PxSize(960, 720), "editVideo", _settings);
         editor.Show();
     }
 
