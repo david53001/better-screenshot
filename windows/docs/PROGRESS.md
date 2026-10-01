@@ -19,6 +19,7 @@ The loop (`windows/LOOP-PROMPT.md`) reads this first every firing to avoid redoi
 finished tasks, move the pointer, log assumptions/known-issues. One firing = one durable increment.
 
 ## 2026-10-02 — Overnight parity revamp (docs/MAC-TO-WINDOWS-PARITY.md), newest first
+**#20 Record strip v2 (v3 Part 4)** — 72788e3. Labelled strip with device dropdowns, live mic meter (AudioGraph), hint line; Settings Recording + In the video cards; systemAudioMode/device ids/showsCursor keys with legacy rules. All apps except BetterScreenshot isn't offered on Windows (dshow loopback can't exclude a process) — reads as All apps.
 **#21 Live recording pill v2 (v3 Part 5)** — e054f98. Mute mic/system (silent anullsrc segment, track kept), camera show/hide in place, Switch Window/Area letterboxed into the first frame, Restart/Discard with 3 s confirm, collapse + anchor persisted, instant hint bubble. Live-driven: focus never taken, switch → 800×400 letterboxed, discard leaves nothing.
 **#15 Recording pill v1 + Show recording controls in the video (v3 A.2)** — e054f98. Non-activating pill from target pick through countdown; WDA_EXCLUDEFROMCAPTURE keeps it out of the video (probed with gdigrab) unless the new setting is on.
 **#19 Redaction / Highlighter / Spotlight (v3 Part 3)** — 5748be5. One redaction tool with Blur/Pixelate/Black-out modes + strength, centred pixel grid, 3σ blur margin, cached patches; multiply highlighter (H) with pen memory; spotlight (S) with shared dim and Alt ellipse.

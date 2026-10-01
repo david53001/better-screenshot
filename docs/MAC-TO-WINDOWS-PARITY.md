@@ -100,7 +100,7 @@ Priority P1 (do first) / P2 / P3.
 | 17 | Editor right-side inspector, hint line, zoom, single-key tools, per-object opacity, recent colours, eyedropper | DONE 5748be5 | P1 | v3 Part 1 |
 | 18 | Text v2: corner scaling, background, B I U S, outline, shadow, presets | DONE 5748be5 | P1 | v3 Part 2 |
 | 19 | Redaction strength + Blur/Pixelate/Black-out conversion + stale-patch fix; **Highlighter (H)**; **Spotlight (S)** | DONE 5748be5 | P1 | v3 Part 3 |
-| 20 | Record strip v2 (labelled buttons, device menus, level meter, hint line) | **MISSING** | P1 | v3 Part 4 |
+| 20 | Record strip v2 (labelled buttons, device menus, level meter, hint line) | DONE 72788e3 | P1 | v3 Part 4 |
 | 21 | Live recording pill v2 (mute mic/system, camera, switch window/area, restart, discard) | DONE e054f98 | P1 | v3 Part 5 |
 | 22 | Video editor v2 (cut/split, per-segment speed + mute, GIF export) | **MISSING** | P1 | v3 Part 6 |
 | 23 | UI-review fixes for editor / recording / overlays (E1–E12, V1–V5, X1–X6, Q1–Q2, O1–O3, T1–T6, C1–C5) | **MISSING** | P2 | v3 Parts 1–6 + §4.7 |
