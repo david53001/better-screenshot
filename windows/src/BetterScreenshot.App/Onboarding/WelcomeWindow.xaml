@@ -21,7 +21,7 @@
 
         <TextBlock Text="Welcome to BetterScreenshot" FontSize="19" FontWeight="Bold"
                    Margin="0,18,0,0" HorizontalAlignment="Center"/>
-        <TextBlock TextWrapping="Wrap" TextAlignment="Center" Foreground="{StaticResource Theme.SecondaryTextBrush}" Margin="0,8,0,0"
+        <TextBlock x:Name="TrayBlurb" TextWrapping="Wrap" TextAlignment="Center" Foreground="{StaticResource Theme.SecondaryTextBrush}" Margin="0,8,0,0"
                    Text="A free, 100% local screenshot &amp; recording tool that lives in your system tray — no cloud, no accounts."/>
 
         <Border x:Name="ShortcutsCard"

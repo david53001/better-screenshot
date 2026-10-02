@@ -27,6 +27,9 @@ public partial class WelcomeWindow : Window
         InitializeComponent();
         Controls.WindowThemer.ApplyDark(this);
         BuildShortcuts(bindings);
+        // The tray icon is outside any window the tour can point into, so its step points at the line that says
+        // where the app lives (review round 1 #18 — the step was always skipped for want of an anchor).
+        TourAnchors.Set(TrayBlurb, "menuBar.icon");
         InfoSlot.Content = new InfoButton(TourId.Welcome);
         SetAsking(askQuestion);
         ContentRendered += (_, _) => TourEvents.SurfaceShown(TourSurface.Welcome, this);
