@@ -35,6 +35,7 @@ public sealed class InfoButton : Border
     private readonly TourId _tour;
     private readonly Func<IReadOnlyList<(string Keys, string Action)>>? _shortcuts;
     private readonly Popup _popup;
+    private long _closedAt;
 
     public InfoButton(TourId tour, Func<IReadOnlyList<(string Keys, string Action)>>? shortcuts = null)
     {
@@ -61,10 +62,16 @@ public sealed class InfoButton : Border
         };
         MouseEnter += (_, _) => SetResourceReference(BackgroundProperty, "Theme.Ink12Brush");
         MouseLeave += (_, _) => Background = Brushes.Transparent;
-        MouseLeftButtonDown += (_, e) =>
+        // Opens on the button's RELEASE (David, 2026-10-02: "it shows for a second then disappears"): opened on the
+        // press, the click-away-closing popup took that same click's release, outside itself, as a click away and
+        // shut. A press that just closed the open menu (a click outside closes it first) must not reopen it.
+        _popup.Closed += (_, _) => _closedAt = Environment.TickCount64;
+        MouseLeftButtonDown += (_, e) => e.Handled = true;
+        MouseLeftButtonUp += (_, e) =>
         {
             e.Handled = true;
             if (_popup.IsOpen) { _popup.IsOpen = false; return; }
+            if (Environment.TickCount64 - _closedAt < 300) return; // this click closed it
             ShowMenu();
         };
     }
