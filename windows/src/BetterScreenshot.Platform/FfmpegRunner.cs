@@ -67,6 +67,7 @@ public static class FfmpegRunner
         foreach (var a in args) psi.ArgumentList.Add(a);
         var process = new Process { StartInfo = psi };
         process.Start();
+        ChildProcessJob.Add(process);
         return process;
     }
 
@@ -110,6 +111,7 @@ public static class FfmpegRunner
 
         using var process = new Process { StartInfo = psi };
         process.Start();
+        ChildProcessJob.Add(process);
         var errTask = process.StandardError.ReadToEndAsync();
         var outTask = process.StandardOutput.ReadToEndAsync();
 
@@ -144,6 +146,7 @@ public static class FfmpegRunner
 
         using var process = new Process { StartInfo = psi };
         process.Start();
+        ChildProcessJob.Add(process);
         var errTask = process.StandardError.ReadToEndAsync();
         var outTask = Task.Run(async () =>
         {

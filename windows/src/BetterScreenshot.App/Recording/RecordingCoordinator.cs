@@ -75,6 +75,17 @@ public sealed class RecordingCoordinator
         };
         _confirmTimer = new DispatcherTimer { Interval = ConfirmWindow };
         _confirmTimer.Tick += (_, _) => CancelConfirm();
+        var dispatcher = Dispatcher.CurrentDispatcher;
+        _engine.SegmentDied += () => dispatcher.BeginInvoke(OnSegmentDied);
+    }
+
+    /// <summary>The live segment's ffmpeg quit by itself (round 2 #1): stop the take so what was recorded is saved, and
+    /// say why (StopAsync shows <see cref="RecordingEngine.LastFailure"/>). A Switch checks its own new segment and
+    /// rolls back, so it is left to do that.</summary>
+    private void OnSegmentDied()
+    {
+        if (_switching || _stopping || _state.Phase != RecorderPhase.Recording) return;
+        _ = StopAsync();
     }
 
     public bool IsRecording => _state.Phase is RecorderPhase.Recording or RecorderPhase.Paused;
@@ -84,6 +95,7 @@ public sealed class RecordingCoordinator
 
     private async Task PauseResumeAsync()
     {
+        if (_switching) return; // the Switch picker owns pause/resume until it's done (round 2 #12)
         CancelConfirm();
         await _gate.WaitAsync();
         try
@@ -244,7 +256,7 @@ public sealed class RecordingCoordinator
         {
             _state = RecorderState.Idle;
             TearDownOverlays();
-            HudController.Show("Could not start recording", HudIcon.Warning);
+            HudController.Show(_engine.LastFailure ?? "Could not start recording", HudIcon.Warning);
             _onStateChange(false, null);
             return;
         }
@@ -611,11 +623,9 @@ public sealed class RecordingCoordinator
                 _onPauseStateChange(false, false);
             }
 
-            if (path is null)
-            {
-                if (_engine.LastFailure is { } why) HudController.Show(why, HudIcon.Warning); // never vanish silently (round 1 #2)
-                return;
-            }
+            // Never vanish silently (round 1 #2, round 2 #1): a failure is shown whether or not a file came out of it.
+            if (_engine.LastFailure is { } why) HudController.Show(why, HudIcon.Warning);
+            if (path is null) return;
             toGif = !_exiting && _format == RecordingFormat.Gif;
         }
         finally

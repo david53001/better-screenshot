@@ -117,6 +117,11 @@ public static class FfmpegArgs
             if (includeMic) { args.AddRange(new[] { "-map", $"{audioIndex}:a" }); }
         }
 
+        // Fragmented MP4 (round 2 #2): the index is written up front and each fragment is playable on its own, so a
+        // segment that is force-killed (a crash, the 8 s stop timeout) still holds everything up to its last fragment
+        // (-flush_packets: without it the fragments sit in the output buffer and a kill loses them all).
+        // The join at Stop re-muxes into an ordinary MP4. -nostats keeps the captured stderr to real messages.
+        args.AddRange(new[] { "-movflags", "+frag_keyframe+empty_moov", "-flush_packets", "1", "-nostats" });
         args.Add(outputPath);
         return args;
     }

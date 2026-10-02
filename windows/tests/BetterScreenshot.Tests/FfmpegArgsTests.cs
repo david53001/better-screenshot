@@ -36,6 +36,7 @@ public class FfmpegArgsTests
             "-f", "gdigrab", "-framerate", "30", "-draw_mouse", "1",
             "-offset_x", "0", "-offset_y", "0", "-video_size", "1920x1080", "-i", "desktop",
             "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-b:v", "7464960", "-r", "30", "-g", "15",
+            "-movflags", "+frag_keyframe+empty_moov", "-flush_packets", "1", "-nostats",
             @"C:\out.mp4",
         }, args);
     }
@@ -60,6 +61,7 @@ public class FfmpegArgsTests
             "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-b:v", "3456000", "-r", "60", "-g", "30",
             "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
             "-map", "0:v", "-map", "1:a", "-map", "2:a",
+            "-movflags", "+frag_keyframe+empty_moov", "-flush_packets", "1", "-nostats",
             @"C:\rec.mp4",
         }, args);
     }

@@ -63,4 +63,61 @@ public class RecordingEngineTests
         Assert.Null(await engine.StopAsync());
         Assert.True(Directory.GetFiles(Path.GetTempPath(), "bs_rec_*").Length <= before);
     }
+
+    [Fact]
+    [Trait("category", "hardware")]
+    public async Task A_force_killed_segment_is_still_recoverable()
+    {
+        // Round 2 #2: a crash or the 8 s stop timeout kills ffmpeg; the fragmented segment must keep what it recorded,
+        // and the launch sweep must turn it into a normal MP4.
+        string dir = Path.Combine(Path.GetTempPath(), "bs-recover-test-" + Guid.NewGuid().ToString("N"));
+        string outDir = Path.Combine(dir, "out");
+        Directory.CreateDirectory(dir);
+        try
+        {
+            string seg = Path.Combine(dir, $"bs_rec_{Guid.NewGuid():N}_0.mp4");
+            var p = FfmpegRunner.StartRecording(FfmpegArgs.BuildRecording(
+                RecordingConfig.Default with { SystemAudio = false }, new PxRect(0, 0, 320, 240), seg, AudioInputs.None));
+            await Task.Delay(2500);
+            p.Kill(entireProcessTree: true);
+            await p.WaitForExitAsync();
+            Assert.True(RecordingEngine.HasRecordedMedia(seg));
+
+            File.WriteAllBytes(Path.Combine(dir, $"bs_rec_{Guid.NewGuid():N}_0.mp4"), Array.Empty<byte>()); // nothing recorded
+            Assert.Equal(1, await RecordingEngine.RecoverOrphansAsync(outDir, dir));
+            Assert.Empty(Directory.GetFiles(dir, "bs_rec_*"));
+            var recovered = Assert.Single(Directory.GetFiles(outDir, "*.mp4"));
+            await using var fs = File.OpenRead(recovered);
+            Assert.True(BetterScreenshot.History.MediaInfo.Mp4Duration(fs) is { } d && d > TimeSpan.FromSeconds(0.5));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void A_window_entirely_off_screen_is_refused_with_a_reason()
+    {
+        var engine = new RecordingEngine();
+        Assert.False(engine.Start(RecordingConfig.Default, new PxRect(-90000, -90000, 400, 300), TempMp4()));
+        Assert.Contains("off-screen", engine.LastFailure);
+    }
+
+    [Fact]
+    [Trait("category", "hardware")]
+    public async Task A_segment_that_dies_is_reported_not_silent()
+    {
+        // Round 2 #1: a mic ffmpeg can't open — the segment exits at once, writes nothing, and the take must say so.
+        string path = TempMp4();
+        var engine = new RecordingEngine();
+        var died = new TaskCompletionSource();
+        engine.SegmentDied += () => died.TrySetResult();
+        Assert.True(engine.Start(RecordingConfig.Default with { SystemAudio = false, Microphone = true },
+            new PxRect(0, 0, 320, 240), path, new AudioInputs { MicrophoneDevice = "No Such Microphone 7f3a" }));
+        Assert.Same(died.Task, await Task.WhenAny(died.Task, Task.Delay(10000)));
+        Assert.Null(await engine.StopAsync());
+        Assert.NotNull(engine.LastFailure);
+        Assert.False(File.Exists(path));
+    }
 }

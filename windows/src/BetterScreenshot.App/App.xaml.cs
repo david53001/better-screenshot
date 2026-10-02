@@ -102,6 +102,14 @@ public partial class App : System.Windows.Application
         TempFiles.Configure(_settings.Capture.TempRetentionSeconds);
         // v3 §4.2: the launch sweep removes expired payload folders a previous run left (off the UI thread).
         _ = Task.Run(() => TempFiles.SweepOrphans());
+        // A take the last run never finished (crash / kill): join its parts into the Recordings folder (round 2 #2).
+        string recordingsDir = _settings.RecordingsDirectory;
+        _ = Task.Run(() => Recording.RecordingEngine.RecoverOrphansAsync(recordingsDir)).ContinueWith(t =>
+        {
+            if (t.Status == TaskStatus.RanToCompletion && t.Result > 0)
+                Overlays.HudController.Show(t.Result == 1 ? "Recovered an interrupted recording to your Recordings folder"
+                    : $"Recovered {t.Result} interrupted recordings to your Recordings folder", Overlays.HudIcon.Done);
+        }, TaskScheduler.FromCurrentSynchronizationContext());
         Controls.Surfaces.Set(_settings.Capture.UiOpacity);
         _commands = new CaptureCoordinator(_settings, Shutdown);
         _tray = new TrayIcon(_commands, _settings.Hotkeys);
