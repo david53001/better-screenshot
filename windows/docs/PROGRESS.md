@@ -796,6 +796,38 @@ nothing changes until it's moved).
   "BetterScreenshot Settings" window open, and a title-only window search grabbed *that* (old build) — which looked
   exactly like the new card silently failing to render. `dist/` republished + tray agent relaunched.
 
+## Overnight revamp review rounds 3–4 + dogfood fixes (2026-10-02)
+Review loop in `REVAMP-2026-10\` (round 4: BS 8/10, 0 blockers, 0 majors; tests 708/708).
+
+**Round 3 fixes**
+- **System audio on any PC (`eba8cc4`).** New `Platform/LoopbackPipe` does in-process WASAPI loopback of the default output, plus a silent `WasapiOut` keep-alive. It streams raw PCM through a named pipe as ffmpeg input 0, so "Stereo Mix" is no longer needed.
+  - Live-audio segments use `-tune zerolatency`. ffmpeg paces each input to the encoded video, so x264's lookahead held the audio reader ~0.5 s behind, and 'q' cut ~0.35 s of sound off every segment.
+  - A hardware test checks A/V durations within 0.1 s.
+- **Light mode for Settings + History (`daf33c3`, P1 row 27).** The `Theme.xaml` palette is read by DynamicResource, and the white washes became `Theme.InkNN` keys.
+  - `Resources/ThemeLight.xaml` holds the same keys in light colours.
+  - `Controls/SystemTheme` reads `AppsUseLightTheme` (read only), re-reads it on UserPreferenceChanged, and merges the light palette, a light Mica layer and a light title bar into follower windows.
+  - The editor and HUDs stay dark. `--ui-preview` renders `settings-light` / `history-*-light`.
+- **Smaller fixes**
+  - `d9857bd`:
+    - live-text refocus after a font list closes;
+    - a LoadFailed session doesn't auto-save over `settings.json` (only `SaveUserChange` from Settings writes);
+    - the segment join writes `.part`, then renames.
+  - `3eb1806`:
+    - toasts are excluded from capture;
+    - a stopped GIF deletes its partial file, and quitting cancels the conversion;
+    - Settings type ramp 12.5/11.5 and a path fade;
+    - Welcome keeps its height.
+  - `887cb64`: the inspector skips unchanged rebuilds.
+
+**Dogfood fixes (David, same day)**
+- **ⓘ menu (`ebd79db`).** It opened on mouse-down, and the click-away popup closed on that click's release. It now opens on release.
+- **Colours (`e192b2c`, `07089b9`).** Measured against JVoice side by side, BS was greyer:
+  - window `#1E1E1F` vs `#202020`;
+  - sub-labels 110 vs 213 brightness;
+  - dropdowns darker than their cards.
+  
+  The dark palette now uses JVoice's Windows 11 values: `#202020` layer, white / 77 % / 53 % text, 8/12/16 % white control fills, 6 % input and dropdown fill, `#2C2C2C` popups. Settings titles and sub-labels use the primary and secondary text. Re-measured on screen: identical window (32) and card (41) pixels in both apps.
+
 ## Known issues / TODO discovered during build (append as you find them)
 - Git warns LF→CRLF on the C# files (autocrlf). Harmless; could add a `.gitattributes` to normalize.
 - **Republish `dist/` after runtime-visible changes.** `dist/` is a manual publish snapshot; a plain build/commit
