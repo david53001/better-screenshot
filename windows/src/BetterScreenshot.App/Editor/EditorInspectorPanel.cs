@@ -52,6 +52,7 @@ internal sealed class EditorInspectorPanel : Border
     private InspectorContent _content = new("", Array.Empty<InspectorSection>());
     private AnnotationStyle _style = AnnotationStyle.Default;
     private IReadOnlyList<RGBAColor> _recent = Array.Empty<RGBAColor>();
+    private bool _built;
     private bool _dragging;
     private bool _rebuildQueued;
 
@@ -98,13 +99,16 @@ internal sealed class EditorInspectorPanel : Border
     public void Show(InspectorContent content, AnnotationStyle shown, IReadOnlyList<RGBAColor> recent)
     {
         bool structural = !content.Equals(_content);
+        bool same = _built && !structural && shown == _style && recent.SequenceEqual(_recent);
         _content = content;
         _style = shown;
         _recent = recent;
+        if (same) return; // nothing it shows changed (most canvas mouse moves)
         if (_dragging && !structural) return;
         if (_rebuildQueued) return;
         _rebuildQueued = true;
-        Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(Rebuild));
+        // Below input priority, so a burst of mouse moves (scaling text) coalesces into one rebuild (round 3 #8).
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(Rebuild));
     }
 
     /// <summary>Synchronous rebuild (tests, previews).</summary>
@@ -114,6 +118,7 @@ internal sealed class EditorInspectorPanel : Border
     {
         if (!_rebuildQueued) return;
         _rebuildQueued = false;
+        _built = true;
         double offset = _scroll.VerticalOffset;
         _heading.Text = _content.Title;
         _sections.Children.Clear();

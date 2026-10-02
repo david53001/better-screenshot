@@ -22,9 +22,12 @@ public static class TextRendering
     private static readonly Lazy<HashSet<string>> Installed = new(() =>
         new HashSet<string>(Fonts.SystemFontFamilies.Select(f => f.Source), StringComparer.OrdinalIgnoreCase));
 
-    /// <summary>Installed families for the font menu, sorted, no "."-names, no "@" vertical faces.</summary>
-    public static IReadOnlyList<string> InstalledFamilies =>
-        Installed.Value.Where(n => !n.StartsWith('.') && !n.StartsWith('@')).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+    /// <summary>Installed families for the font menu, sorted, no "."-names, no "@" vertical faces. Sorted once: the
+    /// inspector asks for it on every rebuild (round 3 #8).</summary>
+    public static IReadOnlyList<string> InstalledFamilies => SortedFamilies.Value;
+
+    private static readonly Lazy<IReadOnlyList<string>> SortedFamilies = new(() =>
+        Installed.Value.Where(n => !n.StartsWith('.') && !n.StartsWith('@')).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList());
 
     private static string FirstInstalled(params string[] names) =>
         names.FirstOrDefault(n => Installed.Value.Contains(n)) ?? "Segoe UI";
