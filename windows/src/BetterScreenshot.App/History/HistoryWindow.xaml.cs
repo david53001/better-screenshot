@@ -285,7 +285,10 @@ public partial class HistoryWindow : Window
         var data = new DataObject();
         data.SetData(System.Windows.DataFormats.FileDrop, files);
         try { System.Windows.DragDrop.DoDragDrop(cell, data, DragDropEffects.Copy); }
-        catch (Exception) { /* a target refused mid-drag: nothing to undo */ }
+        catch (Exception ex) // a target refused mid-drag: nothing to undo, but say what happened
+        {
+            BetterScreenshot.Platform.ErrorLog.Write("History drag-out failed", ex);
+        }
     }
 
     private void Apply(HistorySelectionState state)
