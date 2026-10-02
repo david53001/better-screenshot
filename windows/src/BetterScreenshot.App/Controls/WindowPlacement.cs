@@ -36,8 +36,7 @@ public static class WindowPlacement
             var normal = restore.IsEmpty ? new PxSize(window.ActualWidth, window.ActualHeight) : new PxSize(restore.Width, restore.Height);
             store.WindowPlacements[kind] = WindowPlacementRules.Memo(new PxSize(window.ActualWidth, window.ActualHeight), normal,
                 window.WindowState == WindowState.Maximized, WorkAreaOf(window));
-            try { store.Save(); }
-            catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException) { /* next close tries again */ }
+            store.Save(); // never throws; a failed write is logged and retried on the next save
         };
     }
 

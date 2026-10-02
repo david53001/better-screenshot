@@ -70,14 +70,30 @@ public sealed class SettingsStore
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
     };
 
-    public void Save(string? path = null)
+    /// <summary>Writes settings.json atomically (temp file + replace). Never throws (review round 1 #6): a transient
+    /// lock (antivirus, indexer) or a full disk is retried once, then logged to <see cref="ErrorLog"/>; the in-memory
+    /// settings stay current and the next save writes them. Returns whether the file was written.</summary>
+    public bool Save(string? path = null)
     {
         path ??= DefaultSettingsPath;
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         string json = JsonSerializer.Serialize(ToDto(), JsonOptions);
-        string tmp = path + ".tmp";
-        File.WriteAllText(tmp, json);
-        File.Move(tmp, path, overwrite: true);
+        for (int attempt = 0; ; attempt++)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                string tmp = path + ".tmp";
+                File.WriteAllText(tmp, json);
+                File.Move(tmp, path, overwrite: true);
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (attempt == 0) { Thread.Sleep(50); continue; }
+                ErrorLog.Write("Couldn't save " + path, ex);
+                return false;
+            }
+        }
     }
 
     public static SettingsStore Load(string? path = null)

@@ -101,4 +101,18 @@ public class SettingsStoreTests
         Assert.NotEqual(real, SettingsStore.DefaultDirectory, StringComparer.OrdinalIgnoreCase);
         Assert.StartsWith(Path.GetTempPath(), SettingsStore.DefaultDirectory, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void Save_survives_a_locked_file_and_logs_it()
+    {
+        var path = TempPath();
+        var store = new SettingsStore();
+        Assert.True(store.Save(path));
+        using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Assert.False(store.Save(path)); // a lock (antivirus, indexer) must not crash the app
+        }
+        Assert.True(store.Save(path));
+        Assert.Contains("Couldn't save", File.ReadAllText(ErrorLog.FilePath));
+    }
 }

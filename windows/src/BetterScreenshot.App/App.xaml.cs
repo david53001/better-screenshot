@@ -37,6 +37,7 @@ public partial class App : System.Windows.Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        InstallCrashGuards();
         Controls.Surfaces.Set(Core.UiOpacity.Default); // surface brushes exist before any window loads
 
         // Perf harness workload (REVAMP section 6.1): 20 off-screen capture/card/editor cycles, then exit.
@@ -155,6 +156,29 @@ public partial class App : System.Windows.Application
         if (!Enum.TryParse<HotkeyAction>(name, ignoreCase: true, out var action) || !string.Equals(name, char.ToLowerInvariant(action.ToString()[0]) + action.ToString()[1..], StringComparison.Ordinal))
             return null;
         return _settings.Hotkeys.Combo(action)?.DisplayString ?? action.Title();
+    }
+
+    /// <summary>
+    /// A tray agent must not die because one window hit a bug (review round 1 #1/#6): a UI-thread exception is logged to
+    /// <see cref="ErrorLog"/> and reported with a HUD, and the app keeps running (an active recording keeps going);
+    /// unobserved task exceptions are logged and observed; anything else that is truly fatal is at least logged.
+    /// </summary>
+    private void InstallCrashGuards()
+    {
+        DispatcherUnhandledException += (_, args) =>
+        {
+            ErrorLog.Write("Unhandled UI exception (recovered)", args.Exception);
+            args.Handled = true;
+            try { Overlays.HudController.Show("Something went wrong — details in error.log", Overlays.HudIcon.Warning); }
+            catch (Exception) { /* the HUD itself failed; the log has it */ }
+        };
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            ErrorLog.Write("Unobserved task exception", args.Exception);
+            args.SetObserved();
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+            ErrorLog.Write("Fatal unhandled exception", args.ExceptionObject as Exception);
     }
 
     /// <summary><c>--perf-ready-log &lt;file&gt;</c> (perf harness only): once the tray + hotkeys are up, write the
