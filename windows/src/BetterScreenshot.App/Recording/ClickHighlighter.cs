@@ -23,9 +23,10 @@ public sealed class ClickHighlighter : IDisposable
     private ClickOverlayWindow? _window;
     private MouseHook? _hook;
 
-    public void Start()
+    /// <summary>Rings on the monitor being recorded (round 2 #4) — clicks elsewhere aren't in the video anyway.</summary>
+    public void Start(PxRect region)
     {
-        _window = new ClickOverlayWindow();
+        _window = new ClickOverlayWindow(Controls.MonitorPlacement.MonitorFor(region));
         _window.Show();
         _hook = new MouseHook();
         _hook.MouseDown += OnMouseDown;
@@ -48,17 +49,20 @@ public sealed class ClickHighlighter : IDisposable
     public void Dispose() => Stop();
 }
 
-/// <summary>Full-primary transparent, click-through window that draws fading click dots.</summary>
+/// <summary>A transparent, click-through window covering one monitor that draws fading click dots.</summary>
 internal sealed class ClickOverlayWindow : Window
 {
     private const double Diameter = 36;
     private static readonly Color Accent = Color.FromRgb(0x2F, 0x6F, 0xEB);
 
     private readonly Canvas _canvas = new();
-    private readonly double _scale = Math.Max(0.1, Screens.Primary().DpiScale);
+    private readonly MonitorInfo _monitor;
+    private readonly double _scale;
 
-    public ClickOverlayWindow()
+    public ClickOverlayWindow(MonitorInfo monitor)
     {
+        _monitor = monitor;
+        _scale = Math.Max(0.1, monitor.DpiScale);
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
@@ -67,18 +71,21 @@ internal sealed class ClickOverlayWindow : Window
         ShowActivated = false;
         ResizeMode = ResizeMode.NoResize;
         IsHitTestVisible = false;
-        Left = 0;
-        Top = 0;
-        Width = SystemParameters.PrimaryScreenWidth;
-        Height = SystemParameters.PrimaryScreenHeight;
+        Width = monitor.Bounds.Width / _scale;
+        Height = monitor.Bounds.Height / _scale;
         Content = _canvas;
-        SourceInitialized += (_, _) => RecordingOverlayInterop.MakeClickThrough(this);
+        SourceInitialized += (_, _) =>
+        {
+            RecordingOverlayInterop.MakeClickThrough(this);
+            Controls.MonitorPlacement.Move(this, monitor.Bounds.X, monitor.Bounds.Y, monitor.Bounds.Width, monitor.Bounds.Height);
+        };
     }
 
     /// <summary>Draw a fading dot at the given physical-pixel click point (converted to primary-monitor DIPs).</summary>
     public void Flash(PxPoint physical)
     {
-        double cx = physical.X / _scale, cy = physical.Y / _scale;
+        if (!_monitor.Bounds.Contains(physical)) return; // another monitor — not in this recording
+        double cx = (physical.X - _monitor.Bounds.X) / _scale, cy = (physical.Y - _monitor.Bounds.Y) / _scale;
         var dot = new Ellipse
         {
             Width = Diameter,

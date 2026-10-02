@@ -22,13 +22,16 @@ public partial class CountdownOverlayWindow : Window
     }
 
     /// <summary>Shows the countdown for <paramref name="seconds"/>; resolves true to proceed, false if cancelled.</summary>
-    public Task<bool> RunAsync(int seconds)
+    public Task<bool> RunAsync(int seconds, BetterScreenshot.Core.PxRect region)
     {
         _tcs = new TaskCompletionSource<bool>();
         _remaining = seconds;
         Digit.Text = seconds.ToString();
-        Left = (SystemParameters.PrimaryScreenWidth - Width) / 2;
-        Top = (SystemParameters.PrimaryScreenHeight - Height) / 2;
+        // Centred on the monitor being recorded (round 2 #4), placed in device pixels before it first paints.
+        var mon = Controls.MonitorPlacement.MonitorFor(region);
+        SourceInitialized += (_, _) => Controls.MonitorPlacement.Move(this,
+            mon.Bounds.X + (mon.Bounds.Width - Width * mon.DpiScale) / 2,
+            mon.Bounds.Y + (mon.Bounds.Height - Height * mon.DpiScale) / 2);
         Show();
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };

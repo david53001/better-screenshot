@@ -241,7 +241,7 @@ public sealed class RecordingCoordinator
         if (_config.CountdownSeconds > 0)
         {
             _countdown = new CountdownOverlayWindow();
-            bool proceed = await _countdown.RunAsync(_config.CountdownSeconds);
+            bool proceed = await _countdown.RunAsync(_config.CountdownSeconds, _region);
             _countdown = null;
             if (!proceed) { AbortArm(); TearDownOverlays(); return; } // cancelled during countdown
             if (_state.Phase != RecorderPhase.Armed) return;
@@ -266,9 +266,9 @@ public sealed class RecordingCoordinator
 
         // On-screen recording overlays (captured in the video). Start after the engine so they only show while live;
         // a Restart keeps the ones already up.
-        if (_config.ClickHighlights && _clicks is null) { _clicks = new ClickHighlighter(); _clicks.Start(); }
-        if (_config.KeystrokeOverlay && _keystrokes is null) { _keystrokes = new KeystrokeOverlayWindow(); _keystrokes.Start(); }
-        if (_config.Camera && _camera is null) _ = ShowNewCameraAsync();
+        if (_config.ClickHighlights && _clicks is null) { _clicks = new ClickHighlighter(); _clicks.Start(_region); }
+        if (_config.KeystrokeOverlay && _keystrokes is null) { _keystrokes = new KeystrokeOverlayWindow(); _keystrokes.Start(_region); }
+        if (_config.Camera && _camera is null) _ = ShowCameraAtStartAsync();
 
         _onStateChange(true, _state.ElapsedString(DateTime.Now));
         _onPauseStateChange(true, false);
@@ -381,17 +381,36 @@ public sealed class RecordingCoordinator
         finally { _gate.Release(); }
     }
 
+    /// <summary>A camera start or stop is in flight: further Camera clicks wait for it (round 2 #3 — a second click
+    /// used to start a second MediaCapture and leave the light on).</summary>
+    private bool _cameraBusy;
+
     private async Task ToggleCameraAsync()
     {
-        if (_camera is { } cam)
+        if (_cameraBusy) return;
+        _cameraBusy = true;
+        try
         {
-            bool hide = _cameraState == PillCamera.Showing;
-            bool ok = await cam.SetHiddenAsync(hide);
-            _cameraState = hide ? PillCamera.Hidden : ok ? PillCamera.Showing : PillCamera.NoCamera;
-            UpdatePill();
-            return;
+            if (_camera is { } cam)
+            {
+                bool hide = _cameraState == PillCamera.Showing;
+                bool ok = await cam.SetHiddenAsync(hide);
+                if (_camera != cam) return; // torn down meanwhile
+                _cameraState = hide ? PillCamera.Hidden : ok ? PillCamera.Showing : PillCamera.NoCamera;
+                UpdatePill();
+                return;
+            }
+            await ShowNewCameraAsync();
         }
-        await ShowNewCameraAsync();
+        finally { _cameraBusy = false; }
+    }
+
+    private async Task ShowCameraAtStartAsync()
+    {
+        if (_cameraBusy) return;
+        _cameraBusy = true;
+        try { await ShowNewCameraAsync(); }
+        finally { _cameraBusy = false; }
     }
 
     /// <summary>Camera off at start (or first show): create the bubble — same size setting, same corner rule as at start.</summary>

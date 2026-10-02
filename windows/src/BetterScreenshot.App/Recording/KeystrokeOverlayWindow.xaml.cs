@@ -20,10 +20,12 @@ public partial class KeystrokeOverlayWindow : Window
         SourceInitialized += (_, _) => RecordingOverlayInterop.MakeClickThrough(this);
     }
 
-    public void Start()
+    public void Start(BetterScreenshot.Core.PxRect region)
     {
-        Left = (SystemParameters.PrimaryScreenWidth - Width) / 2;
-        Top = 100;
+        // Top-centre of the monitor being recorded (round 2 #4), in device pixels.
+        var mon = Controls.MonitorPlacement.MonitorFor(region);
+        SourceInitialized += (_, _) => Controls.MonitorPlacement.Move(this,
+            mon.Bounds.X + (mon.Bounds.Width - Width * mon.DpiScale) / 2, mon.Bounds.Y + 100 * mon.DpiScale);
         Show();
         _hook = new KeyboardHook();
         _hook.KeyDown += OnKeyDown;

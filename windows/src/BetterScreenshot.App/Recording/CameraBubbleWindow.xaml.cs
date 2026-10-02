@@ -40,14 +40,16 @@ public partial class CameraBubbleWindow : Window
         MouseLeftButtonDown += (_, _) => { try { DragMove(); } catch { /* ignore mid-drag races */ } };
     }
 
+    /// <summary>Bottom-right of the recorded region, kept inside that monitor's work area — in device pixels, so it
+    /// lands right on a secondary monitor with its own scaling (round 2 #4).</summary>
     private void PositionBottomRight(double diameter, PxRect region)
     {
-        double scale = Math.Max(0.1, Screens.Primary().DpiScale);
-        var work = SystemParameters.WorkArea; // DIPs on the primary monitor
-        double left = region.Right / scale - diameter - EdgeMargin;
-        double top = region.Bottom / scale - diameter - EdgeMargin;
-        Left = Math.Max(work.Left, Math.Min(left, work.Right - diameter));
-        Top = Math.Max(work.Top, Math.Min(top, work.Bottom - diameter));
+        double scale = Math.Max(0.1, Controls.MonitorPlacement.MonitorFor(region).DpiScale);
+        var work = Controls.MonitorPlacement.WorkAreaFor(region);
+        double d = diameter * scale, margin = EdgeMargin * scale;
+        double left = Math.Max(work.X, Math.Min(region.Right - d - margin, work.Right - d));
+        double top = Math.Max(work.Y, Math.Min(region.Bottom - d - margin, work.Bottom - d));
+        SourceInitialized += (_, _) => Controls.MonitorPlacement.Move(this, left, top);
     }
 
     /// <summary>What the last <see cref="StartAsync"/> found (drives the recording pill's Camera button).</summary>
@@ -57,6 +59,8 @@ public partial class CameraBubbleWindow : Window
     /// shows) and is reported so the pill can grey its Camera button with the reason.</summary>
     public async Task<StartResult> StartAsync()
     {
+        StopCamera(); // a second start must never leave the first MediaCapture (and its light) running (round 2 #3)
+        if (_stopped) return StartResult.NoCamera;
         try
         {
             _capture = new MediaCapture();
@@ -68,6 +72,7 @@ public partial class CameraBubbleWindow : Window
             };
             if (!string.IsNullOrEmpty(DeviceId)) settings.VideoDeviceId = DeviceId; // the Camera menu's choice
             await _capture.InitializeAsync(settings);
+            if (_stopped) { StopCamera(); return StartResult.NoCamera; } // the recording ended while it opened
 
             var source = _capture.FrameSources.Values.FirstOrDefault(s =>
                              s.Info.SourceKind == MediaFrameSourceKind.Color &&
@@ -78,17 +83,19 @@ public partial class CameraBubbleWindow : Window
             _reader = await _capture.CreateFrameReaderAsync(source, MediaEncodingSubtypes.Bgra8);
             _reader.FrameArrived += OnFrameArrived;
             await _reader.StartAsync();
+            if (_stopped) { StopCamera(); return StartResult.NoCamera; }
             Show();
             return StartResult.Started;
         }
         catch (UnauthorizedAccessException)
         {
-            Stop(); // Settings › Privacy & security › Camera is off for desktop apps
+            Fail(); // Settings › Privacy & security › Camera is off for desktop apps
             return StartResult.Denied;
         }
-        catch
+        catch (Exception ex)
         {
-            Stop(); // no camera or device busy — degrade
+            BetterScreenshot.Platform.ErrorLog.Write("Camera bubble couldn't start", ex);
+            Fail(); // no camera or device busy — degrade
             return StartResult.NoCamera;
         }
     }
@@ -139,10 +146,22 @@ public partial class CameraBubbleWindow : Window
         });
     }
 
+    private bool _stopped;
+
+    /// <summary>The recording is over: camera off and the bubble gone for good — also for a start still in flight,
+    /// which checks <c>_stopped</c> after each await instead of showing an orphaned bubble (round 2 #3).</summary>
     public void Stop()
     {
+        _stopped = true;
         StopCamera();
-        if (!_keepWindow) Close();
+        Close();
+    }
+
+    /// <summary>A start that failed: camera off; the window survives only for a pill re-show (SetHiddenAsync).</summary>
+    private void Fail()
+    {
+        StopCamera();
+        if (!_keepWindow) Stop();
     }
 
     private void StopCamera()
