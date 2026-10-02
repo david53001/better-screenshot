@@ -59,3 +59,32 @@ the screen, and the screenshot is taken from that image.
 - Opening on the current desktop with several Spaces / a full-screen app.
 - Windows port (`windows-port` branch): the outline + Opacity step are in `docs/MAC-TO-WINDOWS-PARITY-v3.md`
   (§ outline box, Settings tour table); window Spaces and freeze screen are not in the parity doc yet.
+
+## Follow-up 2026-10-01 — freeze screen lag (owner: "it lags when I screenshot")
+Cause: `presentFrozenSelection` waited for the grab (`SCShareableContent` ~20 ms + `captureImage` ~40 ms
+warm, ~150 ms cold, measured on the 14″ MacBook) **before** putting the overlay up, so the hotkey felt
+unresponsive. Fix: the overlay goes up at once (`SelectionOverlayController.present(activating: false)`,
+an empty backdrop layer under the selection view), the grab runs right behind it with the overlay's own
+windows excluded (`overlay.windowIDs` — a probe confirmed a just-ordered window is listed by
+`SCShareableContent` immediately), then `showFrozen` fills the backdrop and `activate()` activates the app.
+Activation is held until after the grab so the user's window doesn't get repainted inactive in the still.
+`SelectionView.acceptsFirstMouse` is true so a drag started before activation still works. A selection
+finished before the grab lands waits for it; the post-selection work now runs in a `Task`, so the overlay is
+off screen before the history PNG encode etc. Built, tests pass (OverlayKit 50, CaptureKit 122), installed to
+`/Applications`. Committed 2026-10-02 together with the follow-up below. Needs owner check by hand.
+
+## Follow-up 2026-10-02 — dark screenshots (owner: "it is dark since it freezes my screen")
+Regression from the 2026-10-01 lag fix above. Some shots came out with the selection overlay's 35 % black dim
+baked in. You can measure it: a white page comes out as exactly 166 = 255 × 0.65. That was 4 of the 21
+captures in History after the 10-01 install, and none before it. Cause: the grab now runs with the overlay
+already up and excluded it by window ID, but a window that was just ordered front is sometimes missing from
+`SCShareableContent.windows`. An unlisted window can't be excluded, so the dim got into the still. A probe (an
+app bundle signed with the project identity so it has TCC, scratchpad only) confirmed that an unlisted window
+leaks with `excludingWindows` (10/10) and doesn't with app exclusion (0/10).
+Fix (`CaptureService.freezeDisplays`): `SCContentFilter(display:excludingApplications: [our app],
+exceptingWindows: our listed windows minus excludingWindowIDs)`. App exclusion is applied at grab time, so the
+overlay is left out whether it's listed or not. Our other on-screen windows (editor, Quick Access, pins) still
+appear in the shot. Falls back to the old window-ID filter if our app isn't listed (it always is, because the
+menu-bar item is a window). CaptureKit 122/122 passed, installed to `/Applications`. Committed and pushed 2026-10-02 together with the lag
+fix (not tagged, no CHANGELOG entry, same as the rest of this note). The owner needs to check it by hand: take a
+few area shots of a white page, and none of them should come out grey.

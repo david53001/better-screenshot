@@ -14,10 +14,9 @@ public final class SelectionOverlayController {
     public init() {}
 
     /// Presents selection overlays on all screens; calls completion with the result (or nil if cancelled).
-    /// `frozen`: display id → that display's image grabbed just before (freeze screen) — shown under the
-    /// selection instead of the live screen, so what the user selects is exactly what gets cut out of it.
-    public func present(frozen: [CGDirectDisplayID: CGImage] = [:],
-                        completion: @escaping (SelectionResult?) -> Void) {
+    /// `activating: false` leaves the app inactive until `activate()` — freeze screen grabs the still just
+    /// after the overlay goes up, and activating first would repaint the user's window as inactive in it.
+    public func present(activating: Bool = true, completion: @escaping (SelectionResult?) -> Void) {
         // Re-entry guard: a second capture hotkey (e.g. ⌘⇧7 during ⌘⇧4's
         // selection) cancels the open selection instead of stacking windows
         // and orphaning the first completion.
@@ -38,27 +37,40 @@ public final class SelectionOverlayController {
             window.backgroundColor = .clear
             window.isOpaque = false
             window.ignoresMouseEvents = false
-            if let image = frozen[Self.displayID(of: screen)] {
-                // Freeze screen: the still image fills the window; the selection view's dim (with its clear
-                // hole) sits on top, so the hole shows the frozen pixels that will be cut out.
-                let backdrop = NSView(frame: NSRect(origin: .zero, size: screen.frame.size))
-                backdrop.wantsLayer = true
-                backdrop.layer?.contents = image
-                backdrop.layer?.contentsGravity = .resize
-                view.frame = backdrop.bounds
-                view.autoresizingMask = [.width, .height]
-                backdrop.addSubview(view)
-                window.contentView = backdrop
-                window.isOpaque = true
-            } else {
-                window.contentView = view
-            }
+            // The backdrop stays empty (the live screen shows through) until `showFrozen` fills it; the
+            // selection view's dim, with its clear hole, sits on top.
+            let backdrop = NSView(frame: NSRect(origin: .zero, size: screen.frame.size))
+            backdrop.wantsLayer = true
+            backdrop.layer?.contentsGravity = .resize
+            view.frame = backdrop.bounds
+            view.autoresizingMask = [.width, .height]
+            backdrop.addSubview(view)
+            window.contentView = backdrop
             window.makeKeyAndOrderFront(nil)
             // Borderless windows can't become key by default; KeyableOverlayWindow
             // overrides that, so make the view first responder to receive Escape.
             window.makeFirstResponder(view)
             windows.append(window)
         }
+        if activating { NSApp.activate(ignoringOtherApps: true) }
+    }
+
+    /// The overlay windows on screen — left out of the freeze-screen grab.
+    public var windowIDs: [CGWindowID] { windows.map { CGWindowID($0.windowNumber) } }
+
+    /// Freeze screen: shows each display's still (display id → image) under the selection instead of the
+    /// live screen, so what the user selects is exactly what gets cut out of it.
+    public func showFrozen(_ frozen: [CGDirectDisplayID: CGImage]) {
+        for window in windows {
+            guard let screen = window.screen, let image = frozen[Self.displayID(of: screen)] else { continue }
+            window.contentView?.layer?.contents = image
+            window.isOpaque = true
+        }
+    }
+
+    /// Activates the app for an overlay presented with `activating: false` (no-op once it's gone).
+    public func activate() {
+        guard isPresenting else { return }
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -103,6 +115,8 @@ final class SelectionView: NSView {
     private var current: NSPoint?
 
     override var acceptsFirstResponder: Bool { true }
+    // The overlay can be up before the app activates (freeze screen); the first click must still start a drag.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func resetCursorRects() { addCursorRect(bounds, cursor: .crosshair) }
 
     /// "400 × 176" on a dark HUD chip just outside the selection's corner, so it stays

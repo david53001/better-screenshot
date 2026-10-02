@@ -89,12 +89,26 @@ final class CaptureCoordinator {
     /// selection is drawn over that still image, so the shot is the screen at that exact moment — a video,
     /// animation or disappearing menu doesn't change while the user drags. `completion` gets the frozen
     /// display the selection was made on (nil if the freeze failed; the selection then shows the live screen).
+    ///
+    /// The overlay goes up at once and the still is grabbed right behind it, leaving the overlay out —
+    /// grabbing first held the overlay back 60–200 ms after the hotkey. The app activates only after the
+    /// grab, so the user's window still looks active in the still.
     private func presentFrozenSelection(_ completion: @escaping (SelectionResult?, FrozenScreen?) -> Void) {
-        Task {
-            let frozen = (try? await service.freezeDisplays(excludingWindowIDs: Self.tourTagWindowIDs)) ?? []
-            overlay.present(frozen: Dictionary(frozen.map { ($0.displayID, $0.image) }) { a, _ in a }) { result in
-                completion(result, result.flatMap { r in frozen.first { $0.displayID == r.displayID } })
+        var freeze: Task<[FrozenScreen], Never>!   // set below, before any event can finish the selection
+        overlay.present(activating: false) { result in
+            guard let result else { completion(nil, nil); return }
+            // A selection finished before the grab landed waits for it (at most a moment).
+            Task { @MainActor in
+                let frozen = await freeze.value
+                completion(result, frozen.first { $0.displayID == result.displayID })
             }
+        }
+        let excluded = Self.tourTagWindowIDs.union(overlay.windowIDs)
+        freeze = Task { [service] in (try? await service.freezeDisplays(excludingWindowIDs: excluded)) ?? [] }
+        Task { @MainActor [overlay] in
+            let frozen = await freeze.value
+            overlay.showFrozen(Dictionary(frozen.map { ($0.displayID, $0.image) }) { a, _ in a })
+            overlay.activate()
         }
     }
 

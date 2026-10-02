@@ -58,13 +58,26 @@ public struct CaptureService {
 
     /// Every display as it looks right now (`FrozenScreen`), grabbed together — for an area capture
     /// that freezes the screen while the user selects.
+    ///
+    /// The selection overlay is already up when this runs, and a window ordered front a moment ago is
+    /// sometimes missing from `SCShareableContent` — excluded by ID only, its dim was baked into the shot.
+    /// So our own app is excluded as a whole (applied at grab time, listed or not) and only our *listed*
+    /// windows outside `excludingWindowIDs` are let back in.
     public func freezeDisplays(excludingWindowIDs: Set<CGWindowID> = []) async throws -> [FrozenScreen] {
         let content = try await SCShareableContent.excludingDesktopWindows(
             false, onScreenWindowsOnly: true)
         let hidden = content.windows.filter { excludingWindowIDs.contains($0.windowID) }
+        let pid = ProcessInfo.processInfo.processIdentifier
+        let me = content.applications.first { $0.processID == pid }
+        let kept = content.windows.filter {
+            $0.owningApplication?.processID == pid && !excludingWindowIDs.contains($0.windowID)
+        }
         return try await withThrowingTaskGroup(of: FrozenScreen.self) { group in
             for display in content.displays {
-                let (filter, config) = try displayFilter(display.displayID, content: content, hiding: hidden)
+                var (filter, config) = try displayFilter(display.displayID, content: content, hiding: hidden)
+                if let me {
+                    filter = SCContentFilter(display: display, excludingApplications: [me], exceptingWindows: kept)
+                }
                 group.addTask {
                     let image = try await SCScreenshotManager.captureImage(
                         contentFilter: filter, configuration: config)
