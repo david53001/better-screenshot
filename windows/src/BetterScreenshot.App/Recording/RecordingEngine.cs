@@ -80,10 +80,6 @@ public sealed class RecordingEngine
         return region.Intersection(new PxRect(d.X, d.Y, d.Width, d.Height));
     }
 
-    /// <summary>The track exists in this session (requested and a device resolved) — only those can be muted.</summary>
-    public bool HasSystemAudioTrack => _config.SystemAudio && _audio.SystemAudioDevice is not null;
-    public bool HasMicrophoneTrack => _config.Microphone && _audio.MicrophoneDevice is not null;
-
     /// <summary>
     /// Mute/unmute tracks (v3 Part 5, option A): the track stays, fed from silence. A running segment is ended and a
     /// new one started with the new inputs (ffmpeg can't swap inputs live); while paused the flags just apply to the
