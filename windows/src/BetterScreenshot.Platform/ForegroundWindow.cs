@@ -21,10 +21,16 @@ public static class ForegroundWindow
 
     /// <summary>Reactivates <paramref name="hwnd"/> if it still exists and isn't already foreground. We are the
     /// foreground process at this moment (our overlay just closed), which satisfies the foreground lock; if
-    /// Windows refuses anyway, attach to the current foreground thread's input queue and retry once.</summary>
-    public static bool Restore(IntPtr hwnd)
+    /// Windows refuses anyway, attach to the current foreground thread's input queue and retry once. With
+    /// <paramref name="expectedProcessId"/>, a handle that now belongs to another process (closed and reused) is left alone.</summary>
+    public static bool Restore(IntPtr hwnd, int? expectedProcessId = null)
     {
         if (hwnd == IntPtr.Zero || !IsWindow(hwnd)) return false;
+        if (expectedProcessId is { } want)
+        {
+            GetWindowThreadProcessId(hwnd, out uint owner);
+            if (owner != (uint)want) return false;
+        }
         if (GetForegroundWindow() == hwnd) return true;
         if (IsIconic(hwnd)) return false; // a minimised window wasn't what the user was looking at; don't pop it up
         if (SetForegroundWindow(hwnd)) return true;

@@ -110,13 +110,15 @@ public sealed class CaptureCoordinator : IAppCommands
     private void RememberFrontmostApp()
     {
         var (hwnd, pid) = ForegroundWindow.Current();
-        if (hwnd == IntPtr.Zero) return;
-        _focus.Record(hwnd, pid, ForegroundWindow.OwnProcessId, _selection.IsPresenting || _picker.IsPresenting);
+        bool selecting = _selection.IsPresenting || _picker.IsPresenting;
+        if (hwnd == IntPtr.Zero) { _focus.RecordNothing(selecting); return; }
+        _focus.Record(hwnd, pid, ForegroundWindow.OwnProcessId, selecting);
     }
 
     private void RestoreFrontmostApp()
     {
-        if (_focus.RestoreTarget(ForegroundWindow.OwnProcessId) is { } hwnd) ForegroundWindow.Restore(hwnd);
+        if (_focus.RestoreTarget(ForegroundWindow.OwnProcessId) is { } hwnd)
+            ForegroundWindow.Restore(hwnd, _focus.RememberedProcessId);
     }
 
     /// <summary>A cancelled selection hands focus back too — unless it was cancelled BY a second capture hotkey,

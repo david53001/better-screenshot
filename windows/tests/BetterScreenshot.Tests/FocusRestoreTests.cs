@@ -38,6 +38,24 @@ public class FocusRestoreTests
     }
 
     [Fact]
+    public void No_foreground_window_forgets_a_stale_target()
+    {
+        var m = new FocusMemory<long>();
+        m.Record(7, 42, Own, selectionActive: false);
+        m.RecordNothing(selectionActive: false);   // hotkey pressed on the bare desktop later
+        Assert.Null(m.RestoreTarget(Own));
+    }
+
+    [Fact]
+    public void No_foreground_window_during_a_selection_keeps_the_target()
+    {
+        var m = new FocusMemory<long>();
+        m.Record(7, 42, Own, selectionActive: false);
+        m.RecordNothing(selectionActive: true);
+        Assert.Equal(7, m.RestoreTarget(Own));
+    }
+
+    [Fact]
     public void Restore_does_not_clear_the_memory()
     {
         var m = new FocusMemory<long>();

@@ -42,6 +42,15 @@ public sealed class FocusMemory<THandle> where THandle : struct
         }
     }
 
+    /// <summary>No foreground window at the hotkey (desktop / lock screen): an earlier target is stale, so forget it —
+    /// unless our own selection is already up and the remembered window is the real one (review round 1 #19).</summary>
+    public void RecordNothing(bool selectionActive)
+    {
+        if (selectionActive) return;
+        Remembered = null;
+        RememberedProcessId = null;
+    }
+
     /// <summary>The window to reactivate, or null when <see cref="FocusRestore.ShouldRestore"/> says no.</summary>
     public THandle? RestoreTarget(int ownProcessId) =>
         FocusRestore.ShouldRestore(RememberedProcessId, ownProcessId) ? Remembered : null;
