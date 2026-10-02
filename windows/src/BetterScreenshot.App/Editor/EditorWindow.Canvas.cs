@@ -548,13 +548,16 @@ public partial class EditorWindow
         foreach (var a in selected)
         {
             var box = a.BoundingBox();
+            // Outside the object's own stroke, so it's visible on a thick shape too (round 2 #25: on a red rectangle
+            // the outline sat exactly on the stroke).
+            double pad = (a is TextAnnotation ? 0 : Math.Max(0, a.Style.LineWidth) / 2) + View(4);
             var outline = new Rectangle
             {
-                Width = box.Width + View(4), Height = box.Height + View(4), Stroke = SelectionBlue, StrokeThickness = View(1),
+                Width = box.Width + 2 * pad, Height = box.Height + 2 * pad, Stroke = SelectionBlue, StrokeThickness = View(1),
                 StrokeDashArray = new DoubleCollection { 4, 3 }, IsHitTestVisible = false,
             };
-            Canvas.SetLeft(outline, box.X - View(2));
-            Canvas.SetTop(outline, box.Y - View(2));
+            Canvas.SetLeft(outline, box.X - pad);
+            Canvas.SetTop(outline, box.Y - pad);
             AddOverlay(outline);
         }
         if (selected.Count != 1) return;

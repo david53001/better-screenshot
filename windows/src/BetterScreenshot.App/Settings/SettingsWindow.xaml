@@ -461,7 +461,8 @@
                             </StackPanel>
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <TextBox x:Name="SaveDirBox" Grid.Column="0" VerticalContentAlignment="Center" LostFocus="Changed"/>
+                                <TextBox x:Name="SaveDirBox" Grid.Column="0" VerticalContentAlignment="Center" LostFocus="Changed"
+                                         ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" TextChanged="SaveDirBox_TextChanged"/>
                                 <Button x:Name="BrowseBtn" Grid.Column="1" Content="Browse&#8230;" Style="{StaticResource Theme.PillButton}" Margin="8,0,0,0" Click="Browse_Click"/>
                             </Grid>
                         </StackPanel>

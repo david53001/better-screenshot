@@ -37,7 +37,8 @@
                            TextWrapping="Wrap" TextAlignment="Center" Margin="0,6,0,0"/>
             </StackPanel>
             <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto" Padding="12">
-                <WrapPanel x:Name="CellsPanel" Orientation="Horizontal" Background="Transparent"/>
+                <!-- Centred as a block (rows stay left-aligned inside it): no empty band on one side at odd widths. -->
+                <WrapPanel x:Name="CellsPanel" Orientation="Horizontal" Background="Transparent" HorizontalAlignment="Center"/>
             </ScrollViewer>
         </Grid>
     </DockPanel>

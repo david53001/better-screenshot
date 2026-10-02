@@ -54,7 +54,7 @@ public partial class WelcomeWindow : Window
             var keys = new TextBlock
             {
                 Text = rows[r].Keys,
-                FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontWeight = FontWeights.SemiBold,
+                FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI"), FontWeight = FontWeights.SemiBold,
                 Foreground = (System.Windows.Media.Brush)FindResource("Theme.TextBrush"),
                 HorizontalAlignment = System.Windows.HorizontalAlignment.Right, Margin = new Thickness(0, 3, 0, 3),
             };

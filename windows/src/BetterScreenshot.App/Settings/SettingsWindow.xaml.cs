@@ -87,6 +87,7 @@ public partial class SettingsWindow : Window, Tours.ITourHost
         TempRetentionSlider.Value = TempRetentionScale.SecondsToPosition(c.TempRetentionSeconds);
         UpdateTempRetentionLabel();
         SaveDirBox.Text = _settings.SaveDirectory;
+        SaveDirBox.Loaded += (_, _) => ShowPathEnd();
         PinRadiusCombo.SelectedIndex = Math.Max(0, Array.IndexOf(PinRadii, c.PinCornerRadius));
         PinShadowCheck.IsChecked = c.PinShadow;
         HistoryEnabledCheck.IsChecked = c.HistoryEnabled;
@@ -559,5 +560,18 @@ public partial class SettingsWindow : Window, Tours.ITourHost
     {
         _hotkeys.Apply(_settings.Hotkeys); // re-arm in case the window closed mid-shortcut-recording
         base.OnClosed(e);
+    }
+
+    /// <summary>A long folder path shows its END — the folder's own name — not the drive letter (review round 2 #25);
+    /// the tooltip has the whole path.</summary>
+    private void SaveDirBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+    {
+        if (!SaveDirBox.IsKeyboardFocused) ShowPathEnd();
+    }
+
+    private void ShowPathEnd()
+    {
+        SaveDirBox.CaretIndex = SaveDirBox.Text.Length;
+        SaveDirBox.ScrollToHorizontalOffset(double.MaxValue);
     }
 }
