@@ -221,7 +221,7 @@ public sealed class VideoEditorWindow : Window
             double speed = CutList.Speeds[i];
             var rb = new RadioButton
             {
-                Content = speed == 1 ? "1×" : CutTimeline.FormatSpeed(speed), GroupName = "editor-speed", Width = 40, Height = 22, FontSize = 11,
+                Content = speed == 1 ? "1×" : CutTimeline.FormatSpeed(speed), GroupName = "editor-speed", MinWidth = 46, FontSize = 11, // sized by the segment template (round 1 #9)
                 Style = (Style)FindResource(i == 0 ? "Theme.SegmentLeft" : i == CutList.Speeds.Length - 1 ? "Theme.SegmentRight" : "Theme.SegmentMid"),
             };
             rb.Checked += (_, _) => { if (!_updating) ApplyEdit(c => c.SetSpeed(speed, _selected)); };
@@ -354,6 +354,7 @@ public sealed class VideoEditorWindow : Window
     {
         b.Content = new IconPresenter { IconKey = icon, Width = 13, Height = 13, Brush = White85 };
         b.ToolTip = tip;
+        b.Padding = new Thickness(0); // the implicit Button padding (12,5) left 8 px and clipped the glyph (round 1 #8)
         b.Width = borderless ? 26 : 32;
         b.Height = 28;
         if (borderless) b.Style = (Style)FindResource("Theme.SubtleButton");
@@ -474,6 +475,7 @@ public sealed class VideoEditorWindow : Window
         if (!_history.Apply(edit)) { System.Media.SystemSounds.Beep.Play(); Refresh(); return; }
         _note = null;
         _selected = Math.Clamp(_selected, 0, Cuts.Segments.Count - 1);
+        ResyncPlayback();
         Refresh();
     }
 
@@ -500,6 +502,7 @@ public sealed class VideoEditorWindow : Window
         _note = null;
         _selected = Math.Min(index, Cuts.Segments.Count - 1);
         SetPlayhead(Math.Min(start, Cuts.KeptDuration), seekPlayer: true);
+        ResyncPlayback();
         Refresh();
     }
 
@@ -509,6 +512,7 @@ public sealed class VideoEditorWindow : Window
         ApplyEdit(c => c.TrimBefore(source));
         _selected = 0;
         SetPlayhead(0, seekPlayer: true);
+        ResyncPlayback();
         Refresh();
     }
 
@@ -518,6 +522,7 @@ public sealed class VideoEditorWindow : Window
         ApplyEdit(c => c.TrimAfter(source));
         _selected = Cuts.Segments.Count - 1;
         SetPlayhead(Math.Max(0, Cuts.KeptDuration - 1.0 / 60), seekPlayer: true);
+        ResyncPlayback();
         Refresh();
     }
 
@@ -528,6 +533,7 @@ public sealed class VideoEditorWindow : Window
         _selected = Math.Clamp(_selected, 0, Cuts.Segments.Count - 1);
         _note = null;
         SetPlayhead(Cuts.OutputTimeForSource(source) ?? 0, seekPlayer: true);
+        ResyncPlayback();
         Refresh();
     }
 
@@ -611,9 +617,33 @@ public sealed class VideoEditorWindow : Window
         _player.IsMuted = _muteAll.IsChecked == true || segMuted;
     }
 
+    /// <summary>
+    /// After any edit while playing (delete, trim, split, speed, undo/redo — review round 1 #1), find the segment being
+    /// played again: the one holding the player's source position, else the one under the playhead (seeking there).
+    /// The cut list can shrink under the running timer, so <c>_playIndex</c> must never be trusted across an edit.
+    /// </summary>
+    private void ResyncPlayback()
+    {
+        if (!_playing) return;
+        if (Cuts.Segments.Count == 0) { Pause(); return; }
+        double source = _player.Position.TotalSeconds;
+        if (Cuts.SegmentIndexContainingSource(source) is { } here)
+        {
+            _playIndex = here;
+        }
+        else
+        {
+            _playIndex = Math.Clamp(Cuts.SegmentIndexAtOutput(_playhead), 0, Cuts.Segments.Count - 1);
+            _player.Position = TimeSpan.FromSeconds(Cuts.SourceTimeForOutput(_playhead));
+        }
+        ApplySegmentPlayback();
+    }
+
     /// <summary>Skip through the cut list: at a segment's end jump to the next one's start (its speed + mute), stop at the end.</summary>
     private void OnPlaybackTick()
     {
+        if (!_playing) return;
+        if (_playIndex < 0 || _playIndex >= Cuts.Segments.Count) ResyncPlayback();
         if (!_playing) return;
         double pos = _player.Position.TotalSeconds;
         var seg = Cuts.Segments[_playIndex];
