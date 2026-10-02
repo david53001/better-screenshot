@@ -11,13 +11,14 @@ public static class GifExporter
 {
     /// <summary>Returns the .gif path on success (the source MP4 is deleted), or null on failure (the MP4 is kept so
     /// nothing is lost). <paramref name="progress"/> gets 0…1 as the frames are written.</summary>
-    public static async Task<string?> ConvertAsync(string mp4Path, string gifPath, Action<double>? progress = null)
+    public static async Task<string?> ConvertAsync(string mp4Path, string gifPath, Action<double>? progress = null,
+        CancellationToken cancel = default)
     {
         string palette = Path.Combine(Path.GetTempPath(), $"bs-palette-{Guid.NewGuid():N}.png");
         try
         {
-            var (paletteOk, _) = await FfmpegRunner.RunWithProgressAsync(FfmpegArgs.BuildGifPalette(mp4Path, palette), _ => { });
-            if (!paletteOk || !File.Exists(palette)) return null;
+            var (paletteOk, _) = await FfmpegRunner.RunWithProgressAsync(FfmpegArgs.BuildGifPalette(mp4Path, palette), _ => { }, cancel);
+            if (!paletteOk || cancel.IsCancellationRequested || !File.Exists(palette)) return null;
             progress?.Invoke(0.2);
 
             double seconds = Duration(mp4Path);
@@ -25,8 +26,8 @@ public static class GifExporter
             {
                 if (seconds > 0 && FfmpegArgs.ProgressFraction(line, seconds) is { } f) progress?.Invoke(0.2 + 0.8 * f);
             }
-            var (ok, _) = await FfmpegRunner.RunWithProgressAsync(FfmpegArgs.BuildGifConversion(mp4Path, palette, gifPath), OnLine);
-            if (!ok || !File.Exists(gifPath)) return null;
+            var (ok, _) = await FfmpegRunner.RunWithProgressAsync(FfmpegArgs.BuildGifConversion(mp4Path, palette, gifPath), OnLine, cancel);
+            if (!ok || cancel.IsCancellationRequested || !File.Exists(gifPath)) return null;
             try { File.Delete(mp4Path); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* leave the mp4 if it can't be removed */ }
             return gifPath;

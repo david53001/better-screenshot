@@ -123,6 +123,20 @@ public sealed class VideoExportTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_cancelled_export_leaves_nothing_and_the_original_untouched()
+    {
+        // Round 2 #10: Stop Export — an already-cancelled token stops each export before anything is written.
+        byte[] before = await File.ReadAllBytesAsync(_clip);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        Assert.Null(await VideoExporter.SaveCopyAsync(_clip, ThreeSegments(), _info, muteAll: false, _ => { }, cts.Token));
+        Assert.Null(await VideoExporter.ExportGifAsync(_clip, ThreeSegments(), _info, _ => { }, cts.Token));
+        Assert.False(await VideoExporter.ReplaceAsync(_clip, ThreeSegments(), _info, muteAll: false, _ => { }, cts.Token));
+        Assert.Equal(new[] { "Recording.mp4" }, Directory.GetFiles(_dir).Select(Path.GetFileName));
+        Assert.Equal(before, await File.ReadAllBytesAsync(_clip));
+    }
+
+    [Fact]
     public async Task FailedReplaceLeavesTheOriginalBytes()
     {
         string fake = Path.Combine(_dir, "notavideo.mp4");

@@ -94,7 +94,8 @@ public sealed class VideoEditorWindow : Window
         Loaded += async (_, _) => await LoadAsync();
         ContentRendered += (_, _) => Tours.TourEvents.SurfaceShown(BetterScreenshot.Tours.TourSurface.VideoEditor, this);
         PreviewKeyDown += OnKey;
-        Closing += (_, e) => { if (_exporting) e.Cancel = true; };
+        // Closing mid-export stops the export first (its temp file is removed); close again once it has stopped.
+        Closing += (_, e) => { if (_exporting) { _exportCts?.Cancel(); e.Cancel = true; } };
         Closed += (_, _) => OnClosedOnce();
         _tick.Tick += (_, _) => OnPlaybackTick();
         _player.MediaEnded += (_, _) => { if (_playing) StopAtEnd(); };
@@ -316,7 +317,7 @@ public sealed class VideoEditorWindow : Window
         _cancel.Content = "Cancel";
         _cancel.Padding = new Thickness(12, 4, 12, 4);
         _cancel.ToolTip = "Close without saving";
-        _cancel.Click += (_, _) => Close();
+        _cancel.Click += (_, _) => { if (_exporting) _exportCts?.Cancel(); else Close(); };
         foreach (var el in new FrameworkElement[] { _replace, split, _cancel })
         {
             DockPanel.SetDock(el, System.Windows.Controls.Dock.Right);
@@ -736,7 +737,7 @@ public sealed class VideoEditorWindow : Window
     private async Task SaveCopyAsync()
     {
         if (_info is null) return;
-        var path = await RunExport(p => VideoExporter.SaveCopyAsync(_path, Cuts, _info, _muteAll.IsChecked == true, p));
+        var path = await RunExport((p, ct) => VideoExporter.SaveCopyAsync(_path, Cuts, _info, _muteAll.IsChecked == true, p, ct));
         if (path is null) { Fail("Couldn't export the edit — original untouched"); return; }
         CopySaved?.Invoke(path);
         Close();
@@ -745,7 +746,7 @@ public sealed class VideoEditorWindow : Window
     private async Task ExportGifAsync()
     {
         if (_info is null) return;
-        var path = await RunExport(p => VideoExporter.ExportGifAsync(_path, Cuts, _info, p));
+        var path = await RunExport((p, ct) => VideoExporter.ExportGifAsync(_path, Cuts, _info, p, ct));
         if (path is null) { Fail("Couldn't export the GIF — nothing was changed"); return; }
         _note = "GIF saved ✓ " + Path.GetFileName(path);
         GifSaved?.Invoke(path);
@@ -760,7 +761,7 @@ public sealed class VideoEditorWindow : Window
         bool muteAll = _muteAll.IsChecked == true;
         _player.Source = null; // release the file so it can be swapped
         await StopFramesAsync(); // …and the filmstrip ffmpeg's handle on it
-        bool ok = await RunExport(async p => await VideoExporter.ReplaceAsync(_path, cuts, _info, muteAll, p) ? "ok" : null) is not null;
+        bool ok = await RunExport(async (p, ct) => await VideoExporter.ReplaceAsync(_path, cuts, _info, muteAll, p, ct) ? "ok" : null) is not null;
         var info = ok ? await VideoExporter.ProbeAsync(_path) : _info;
         _info = info ?? _info;
         _player.Source = new Uri(_path);
@@ -780,11 +781,18 @@ public sealed class VideoEditorWindow : Window
         Refresh();
     }
 
-    private async Task<string?> RunExport(Func<Action<double?>, Task<string?>> export)
+    /// <summary>The export in flight; the Cancel button (and closing the window) stops it (review round 2 #10).</summary>
+    private CancellationTokenSource? _exportCts;
+
+    private async Task<string?> RunExport(Func<Action<double?>, CancellationToken, Task<string?>> export)
     {
         Pause();
         _exporting = true;
+        using var cts = _exportCts = new CancellationTokenSource();
         SetEnabled(false);
+        object cancelLabel = _cancel.Content;
+        _cancel.IsEnabled = true; // "Stop Export" while it runs
+        _cancel.Content = "Stop Export";
         _progress.Visibility = Visibility.Visible;
         Refresh();
         void Progress(double? f) => Dispatcher.BeginInvoke(() =>
@@ -795,14 +803,19 @@ public sealed class VideoEditorWindow : Window
         });
         try
         {
-            return await export(Progress);
+            var result = await export(Progress, cts.Token);
+            if (cts.IsCancellationRequested) { _note = "Export stopped — nothing was changed"; return null; }
+            return result;
         }
-        catch
+        catch (Exception ex)
         {
+            BetterScreenshot.Platform.ErrorLog.Write("Video export failed", ex);
             return null;
         }
         finally
         {
+            _exportCts = null;
+            _cancel.Content = cancelLabel;
             _exporting = false;
             _progress.Visibility = _pct.Visibility = Visibility.Collapsed;
             _progress.IsIndeterminate = false;

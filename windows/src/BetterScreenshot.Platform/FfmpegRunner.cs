@@ -163,7 +163,8 @@ public static class FfmpegRunner
         }
         catch (OperationCanceledException)
         {
-            try { process.Kill(entireProcessTree: true); } catch { }
+            try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { /* already gone */ }
+            try { await process.WaitForExitAsync(); } catch (InvalidOperationException) { } // its files are free on return
         }
         string stderr = await errTask;
         await outTask;

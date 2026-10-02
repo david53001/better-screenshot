@@ -22,47 +22,50 @@ public static class VideoExporter
 
     /// <summary>Renders the edit to <paramref name="output"/>. Progress: null = indeterminate (passthrough), else 0…1.</summary>
     public static async Task<bool> RenderAsync(string source, CutList cuts, MediaInfo info, bool muteAll, string output,
-        Action<double?> progress)
+        Action<double?> progress, CancellationToken cancel = default)
     {
         if (cuts.Passthrough is { } p)
         {
             progress(null);
             var (ok, _) = await FfmpegRunner.RunWithProgressAsync(
-                FfmpegArgs.BuildPassthroughTrim(source, p.Start, p.End, muteAll || p.Muted, output), _ => { });
-            return ok && File.Exists(output);
+                FfmpegArgs.BuildPassthroughTrim(source, p.Start, p.End, muteAll || p.Muted, output), _ => { }, cancel);
+            return ok && !cancel.IsCancellationRequested && File.Exists(output);
         }
 
         double outSeconds = cuts.KeptDuration;
         void OnLine(string line) { if (FfmpegArgs.ProgressFraction(line, outSeconds) is { } f) progress(f); }
         bool nvenc = await FfmpegRunner.HasNvencAsync();
         var (done, _) = await FfmpegRunner.RunWithProgressAsync(
-            FfmpegArgs.BuildCutExport(source, cuts, info.AudioTracks, muteAll, info.Fps, nvenc, output), OnLine);
-        if (!done && nvenc)
+            FfmpegArgs.BuildCutExport(source, cuts, info.AudioTracks, muteAll, info.Fps, nvenc, output), OnLine, cancel);
+        if (!done && nvenc && !cancel.IsCancellationRequested)
             (done, _) = await FfmpegRunner.RunWithProgressAsync(
-                FfmpegArgs.BuildCutExport(source, cuts, info.AudioTracks, muteAll, info.Fps, nvenc: false, output), OnLine);
-        return done && File.Exists(output);
+                FfmpegArgs.BuildCutExport(source, cuts, info.AudioTracks, muteAll, info.Fps, nvenc: false, output), OnLine, cancel);
+        return done && !cancel.IsCancellationRequested && File.Exists(output);
     }
 
     /// <summary>Save as Copy → "&lt;stem&gt; (trimmed).mp4" next to the original (" 2", " 3"… on collision); null on failure.</summary>
-    public static async Task<string?> SaveCopyAsync(string source, CutList cuts, MediaInfo info, bool muteAll, Action<double?> progress)
+    public static async Task<string?> SaveCopyAsync(string source, CutList cuts, MediaInfo info, bool muteAll, Action<double?> progress,
+        CancellationToken cancel = default)
     {
         string target = TrimmedFileName.Unique(source, File.Exists);
-        if (await RenderAsync(source, cuts, info, muteAll, target, progress)) return target;
+        if (await RenderAsync(source, cuts, info, muteAll, target, progress, cancel)) return target;
         TryDelete(target);
         return null;
     }
 
     /// <summary>Export as GIF → "&lt;stem&gt; (edited).gif": render the edit without sound to a temp MP4 (first half of
     /// the progress), then the GIF converter (10 fps, ≤ 960 px, loops); null on failure, no temp file left.</summary>
-    public static async Task<string?> ExportGifAsync(string source, CutList cuts, MediaInfo info, Action<double?> progress)
+    public static async Task<string?> ExportGifAsync(string source, CutList cuts, MediaInfo info, Action<double?> progress,
+        CancellationToken cancel = default)
     {
         string temp = Path.Combine(Path.GetTempPath(), $"bs-gif-{Guid.NewGuid():N}.mp4");
         string target = TrimmedFileName.Unique(source, File.Exists, "edited", "gif");
         try
         {
-            if (!await RenderAsync(source, cuts, info, muteAll: true, temp, f => progress(f is { } v ? v / 2 : 0.25))) return null;
+            if (!await RenderAsync(source, cuts, info, muteAll: true, temp, f => progress(f is { } v ? v / 2 : 0.25), cancel)) return null;
             progress(0.5);
-            var gif = await GifExporter.ConvertAsync(temp, target, f => progress(0.5 + f / 2));
+            var gif = await GifExporter.ConvertAsync(temp, target, f => progress(0.5 + f / 2), cancel);
+            if (cancel.IsCancellationRequested) { TryDelete(target); return null; }
             progress(1);
             return gif;
         }
@@ -74,19 +77,21 @@ public static class VideoExporter
 
     /// <summary>Replace Original: render to a temp file in the same folder, check it's a playable video, then swap it
     /// in atomically. The original's bytes are unchanged on any failure.</summary>
-    public static async Task<bool> ReplaceAsync(string source, CutList cuts, MediaInfo info, bool muteAll, Action<double?> progress)
+    public static async Task<bool> ReplaceAsync(string source, CutList cuts, MediaInfo info, bool muteAll, Action<double?> progress,
+        CancellationToken cancel = default)
     {
         string dir = Path.GetDirectoryName(source) ?? Path.GetTempPath();
         string temp = Path.Combine(dir, $".{Path.GetFileNameWithoutExtension(source)}.bs-edit-{Guid.NewGuid():N}.mp4");
         try
         {
-            if (!await RenderAsync(source, cuts, info, muteAll, temp, progress)) return false;
-            if (await ProbeAsync(temp) is null) return false;
+            if (!await RenderAsync(source, cuts, info, muteAll, temp, progress, cancel)) return false;
+            if (cancel.IsCancellationRequested || await ProbeAsync(temp) is null) return false;
             File.Move(temp, source, overwrite: true); // MoveFileEx(MOVEFILE_REPLACE_EXISTING) on the same volume
             return true;
         }
-        catch
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            BetterScreenshot.Platform.ErrorLog.Write("Replace Original couldn't swap the file", ex);
             return false;
         }
         finally
