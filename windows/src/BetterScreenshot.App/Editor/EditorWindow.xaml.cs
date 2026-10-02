@@ -275,6 +275,7 @@ public partial class EditorWindow : Window
         {
             _textEdit.Style = edit(_textEdit.Style).Normalized();
             ApplyTextEditLook();
+            RefocusTextEdit();
         }
         var styleBefore = _style;
         _style = StyleEdits.ApplyToDefault(_style, edit, editsPen);
@@ -321,17 +322,24 @@ public partial class EditorWindow : Window
             FullOpen = true, AnyColor = true,
             Color = System.Drawing.Color.FromArgb((int)Math.Round(current.R * 255), (int)Math.Round(current.G * 255), (int)Math.Round(current.B * 255)),
         };
-        if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+        _pickerOpen = true;
+        System.Windows.Forms.DialogResult result;
+        try { result = dialog.ShowDialog(); }
+        finally { _pickerOpen = false; }
+        if (result != System.Windows.Forms.DialogResult.OK) { RefocusTextEdit(); return; }
         var c = RGBAColor.FromBytes(dialog.Color.R, dialog.Color.G, dialog.Color.B, (byte)Math.Round(current.A * 255));
         ApplyPickedColor(target, c);
     }
 
     private void PickFromScreen(ColorTarget target)
     {
+        _pickerOpen = true;
         Eyedropper.Pick(c =>
         {
+            _pickerOpen = false;
             Activate();
             if (c is { } color) ApplyPickedColor(target, color);
+            else RefocusTextEdit();
         });
     }
 
@@ -623,7 +631,7 @@ public partial class EditorWindow : ITourHost
     {
         var list = new List<(string, string)>();
         foreach (var t in Enum.GetValues<EditorTool>())
-            if (t.ShortcutKey() != ' ') list.Add((char.ToUpperInvariant(t.ShortcutKey()).ToString(), t.DisplayName()));
+            if (t.ShortcutKey() != '\0') list.Add((char.ToUpperInvariant(t.ShortcutKey()).ToString(), t.DisplayName()));
         list.AddRange(new (string, string)[]
         {
             ("Ctrl+Z", "Undo"), ("Ctrl+Shift+Z", "Redo"), ("Ctrl+C", "Copy"), ("Ctrl+S", "Save"), ("Ctrl+W", "Close"),

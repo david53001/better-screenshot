@@ -662,11 +662,47 @@ public partial class EditorWindow
         ApplyTextEditLook();
         box.PreviewKeyDown += TextBoxKeyDown;
         box.TextChanged += (_, _) => PositionTextEditor();
-        box.LostKeyboardFocus += (_, _) => { if (ReferenceEquals(_textEdit?.Box, box)) CommitText(); };
+        box.LostKeyboardFocus += (_, e) =>
+        {
+            if (!ReferenceEquals(_textEdit?.Box, box)) return;
+            if (KeepsTextEditOpen(e.NewFocus)) return; // restyling from the inspector / a colour picker (round 2 #8)
+            CommitText();
+        };
         box.CaretIndex = box.Text.Length;
         CanvasImage.Source = DocumentRenderer.Render(HiddenWhileEditing(), _baseImage);
         RefreshChrome();
         Dispatcher.BeginInvoke(new Action(() => { box.Focus(); Keyboard.Focus(box); }), System.Windows.Threading.DispatcherPriority.Input);
+    }
+
+    /// <summary>A colour dialog or eyedropper session is open on behalf of the live text.</summary>
+    private bool _pickerOpen;
+
+    /// <summary>Focus moving to the inspector (a font or size list, its drop-down) or to a picker session restyles the
+    /// text being typed (v3 §1.4: restyle the live text, commit as one step) — it must not commit it.</summary>
+    private bool KeepsTextEditOpen(IInputElement? newFocus)
+    {
+        if (_pickerOpen) return true;
+        for (var d = newFocus as DependencyObject; d is not null; d = UpTree(d))
+            if (ReferenceEquals(d, _panel)) return true;
+        return false;
+    }
+
+    /// <summary>Up the visual tree, across a popup (a ComboBox drop-down) to the element that owns it.</summary>
+    private static DependencyObject? UpTree(DependencyObject d)
+    {
+        if (d is System.Windows.Controls.Primitives.Popup popup) return popup.PlacementTarget ?? popup.Parent;
+        var up = d is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) : null;
+        return up ?? LogicalTreeHelper.GetParent(d) ?? (d as FrameworkElement)?.TemplatedParent;
+    }
+
+    /// <summary>Hands the keyboard back to the live text after a restyle, so typing carries on.</summary>
+    private void RefocusTextEdit()
+    {
+        if (_textEdit?.Box is not { } box) return;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (ReferenceEquals(_textEdit?.Box, box)) { box.Focus(); Keyboard.Focus(box); }
+        }), System.Windows.Threading.DispatcherPriority.Input);
     }
 
     private static ControlTemplate BareTextBoxTemplate()
