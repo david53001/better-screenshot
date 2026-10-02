@@ -53,7 +53,11 @@ public partial class RecordStripWindow : Window
     private readonly StackPanel _meter = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
     private readonly Button _accessLink = new();
     private Action? _refreshFormat, _refreshFps;
-    private DeviceList _mics = DeviceList.Empty, _cameras = DeviceList.Empty;
+    private DeviceList _mics = s_lastMics, _cameras = s_lastCameras;
+
+    /// <summary>The device lists the last strip saw, so a reopened strip shows its menus filled at once while the
+    /// fresh enumeration runs (review round 1 #11 — they used to sit empty for the dshow probe's duration).</summary>
+    private static DeviceList s_lastMics = DeviceList.Empty, s_lastCameras = DeviceList.Empty;
     private MicLevelMonitor? _monitor;
     private string? _meteredMic;
     private double _level;
@@ -75,6 +79,7 @@ public partial class RecordStripWindow : Window
         Loaded += async (_, _) =>
         {
             Reposition();
+            FillDeviceMenus();
             await ReloadDevicesAsync(fresh: true);
             WatchDevices();
         };
@@ -367,8 +372,8 @@ public partial class RecordStripWindow : Window
         if (fresh) DshowAudioDevices.InvalidateCache();
         var micsTask = DshowAudioDevices.MicrophonesAsync();
         var camsTask = CameraDevices.ListAsync();
-        _mics = await micsTask;
-        _cameras = await camsTask;
+        _mics = s_lastMics = await micsTask;
+        _cameras = s_lastCameras = await camsTask;
         if (!IsLoaded) return;
         FillDeviceMenus();
         UpdateMeter();

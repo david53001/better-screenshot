@@ -25,7 +25,14 @@ public static class FfmpegRunner
         return "ffmpeg";
     }
 
-    public static bool IsAvailable()
+    private static bool _knownAvailable;
+
+    /// <summary>Whether ffmpeg runs. A success is cached for the session (review round 1 #16: every recording start
+    /// used to spawn <c>ffmpeg -version</c> on the UI thread); a failure is re-checked, so installing ffmpeg works
+    /// without a restart.</summary>
+    public static bool IsAvailable() => _knownAvailable || (_knownAvailable = Probe());
+
+    private static bool Probe()
     {
         try
         {

@@ -207,7 +207,11 @@ public static class TextRecognizerService
         }
         else sb = await decoder.GetSoftwareBitmapAsync();
         if (sb.BitmapPixelFormat != BitmapPixelFormat.Bgra8 || sb.BitmapAlphaMode == BitmapAlphaMode.Straight)
-            sb = SoftwareBitmap.Convert(sb, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+        {
+            var original = sb;
+            sb = SoftwareBitmap.Convert(original, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+            original.Dispose(); // the decoded copy is no longer needed (round 1 #21)
+        }
         return sb;
     }
 

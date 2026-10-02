@@ -160,7 +160,7 @@ internal sealed class EditorInspectorPanel : Border
         {
             case InspectorSection.Styles:
             {
-                var grid = new UniformGrid { Columns = 3, Width = ContentWidth + 8, Margin = new Thickness(-4, 0, -4, 0) };
+                var grid = new UniformGrid { Columns = 3, Width = ContentWidth }; // inside the column, no bleed (round 1 #10)
                 foreach (var p in Enum.GetValues<TextStylePreset>()) grid.Children.Add(PresetChip(p));
                 Row(grid);
                 break;
@@ -173,13 +173,13 @@ internal sealed class EditorInspectorPanel : Border
             case InspectorSection.Stroke:
                 Row(SliderRow("Width", 1, 24, _style.LineWidth, v => $"{v:0} px", "stroke",
                     (st, v) => st with { LineWidth = Math.Round(v) }, null));
-                Row(Segmented(ColorPresets.StrokePresets.Select(w => (Label: Name(w), Tip: $"{w:0} px", On: Math.Abs(_style.LineWidth - w) < 0.01,
+                Row(Segmented(ColorPresets.StrokePresets.Select(w => (Label: WidthName(w), Tip: $"{w:0} px", On: Math.Abs(_style.LineWidth - w) < 0.01,
                     Click: (Action)(() => Edit?.Invoke(st => st with { LineWidth = w }, null)))).ToArray()));
                 break;
             case InspectorSection.HighlighterStroke:
                 Row(SliderRow("Width", HighlighterPen.MinWidth, HighlighterPen.MaxWidth, _style.LineWidth, v => $"{v:0} px", "stroke",
                     (st, v) => st with { LineWidth = Math.Round(v) }, null));
-                Row(Segmented(HighlighterPen.WidthPresets.Select(w => (Label: Name(w == 12 ? 2 : w == 20 ? 4 : 7), Tip: $"{w:0} px",
+                Row(Segmented(HighlighterPen.WidthPresets.Select(w => (Label: WidthName(w == 12 ? 2 : w == 20 ? 4 : 7), Tip: $"{w:0} px",
                     On: Math.Abs(_style.LineWidth - w) < 0.01, Click: (Action)(() => Edit?.Invoke(st => st with { LineWidth = w }, null)))).ToArray()));
                 break;
             case InspectorSection.Font:
@@ -275,7 +275,7 @@ internal sealed class EditorInspectorPanel : Border
         return panel;
     }
 
-    private static string Name(double w) => w switch { 2 => "Thin", 4 => "Medium", _ => "Thick" };
+    private static string WidthName(double w) => w switch { 2 => "Thin", 4 => "Medium", _ => "Thick" };
 
     private static AnnotationStyle WithStroke(AnnotationStyle st, RGBAColor c)
     {
