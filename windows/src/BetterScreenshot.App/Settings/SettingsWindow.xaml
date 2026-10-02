@@ -13,19 +13,19 @@
         <Style x:Key="FieldLabel" TargetType="TextBlock">
             <Setter Property="FontSize" Value="12.5"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Foreground" Value="{DynamicResource Theme.TextW85}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Theme.TextBrush}"/>
             <Setter Property="Margin" Value="0,0,0,6"/>
         </Style>
         <!-- Primary label in a label+switch row -->
         <Style x:Key="RowTitle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="12.5"/>
             <Setter Property="FontWeight" Value="Medium"/>
-            <Setter Property="Foreground" Value="{DynamicResource Theme.TextW85}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Theme.TextBrush}"/>
         </Style>
         <!-- Secondary sub-label under a row title -->
         <Style x:Key="RowSub" TargetType="TextBlock">
             <Setter Property="FontSize" Value="11.5"/>
-            <Setter Property="Foreground" Value="{DynamicResource Theme.SubtleTextBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Theme.SecondaryTextBrush}"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
             <Setter Property="Margin" Value="0,2,0,0"/>
         </Style>

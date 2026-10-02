@@ -299,7 +299,7 @@ public partial class SettingsWindow : Window, Tours.ITourHost
                 Text = action.Title(),
                 FontSize = 12.5,
                 VerticalAlignment = VerticalAlignment.Center,
-            }, (TextBlock.ForegroundProperty, "Theme.TextW85")));
+            }, (TextBlock.ForegroundProperty, "Theme.TextBrush")));
             var (explanation, example) = ShortcutHelp(action);
             titleRow.Children.Add(new InfoTip
             {

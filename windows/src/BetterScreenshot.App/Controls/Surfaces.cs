@@ -45,7 +45,7 @@ public static class Surfaces
             ? Color.FromRgb(0x2A, 0x2A, 0x2D)
             : Color.FromArgb(A(UiOpacity.PanelAlpha(_value)), 0x2A, 0x2A, 0x2D));
         double layer = MicaSupported ? UiOpacity.WindowLayerAlpha(_value) : 1;
-        res["Window.LayerBrush"] = Frozen(Color.FromArgb(A(layer), 0x1C, 0x1C, 0x1E));
+        res["Window.LayerBrush"] = Frozen(Color.FromArgb(A(layer), 0x20, 0x20, 0x20)); // JVoice's / Windows' #202020
         res["Editor.LayerBrush"] = Frozen(Color.FromArgb(A(layer), 0x1C, 0x1C, 0x1E));
         res["Card.FillBrush"] = Frozen(Color.FromArgb(A(UiOpacity.CardFillAlpha(_value)), 0xFF, 0xFF, 0xFF));
         SystemTheme.Refresh(); // light-mode windows carry their own layer + card brushes
