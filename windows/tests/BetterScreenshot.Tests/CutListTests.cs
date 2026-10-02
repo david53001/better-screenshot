@@ -380,4 +380,12 @@ public class CutListTests
         var rec = FfmpegArgs.BuildRecording(RecordingConfig.Default with { Fps = 60 }, new BetterScreenshot.Core.PxRect(0, 0, 64, 64), "o.mp4", AudioInputs.None).ToList();
         Assert.Equal("30", rec[rec.IndexOf("-g") + 1]); // a keyframe every 0.5 s
     }
+
+    [Fact]
+    public void Edges_of_a_segment_shorter_than_the_minimum_refuse_instead_of_throwing()
+    {
+        var cuts = new CutList(0.05); // a 50 ms recording: one segment below MinimumSegment
+        Assert.False(cuts.SetStart(0.02, 0));
+        Assert.False(cuts.SetEnd(0.03, 0));
+    }
 }

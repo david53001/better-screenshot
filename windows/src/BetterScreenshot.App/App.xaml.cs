@@ -67,6 +67,7 @@ public partial class App : System.Windows.Application
             if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable(Platform.SettingsStore.DirectoryOverrideVariable)))
                 Environment.SetEnvironmentVariable(Platform.SettingsStore.DirectoryOverrideVariable,
                     System.IO.Path.Combine(System.IO.Path.GetTempPath(), "BetterScreenshot-preview-" + Environment.ProcessId));
+            _startupComplete = true; // dev gallery: a failing window is logged, the rest still render
             UiPreview.Show(e.Args.Length > 1 ? e.Args[1] : "settings");
             return;
         }
@@ -132,6 +133,7 @@ public partial class App : System.Windows.Application
         _tray.AddHelpMenu(id => TourEvents.Replay(id, null), () => Overlays.HudController.Show(_tours.ResetAll()));
 
         WritePerfReadyLog(e.Args);
+        _startupComplete = true;
 
         var stored = TourAudience.Parse(_settings.TourAudience);
         bool answered = _settings.TourQuestionAnswered == true;
@@ -188,12 +190,26 @@ public partial class App : System.Windows.Application
     /// <see cref="ErrorLog"/> and reported with a HUD, and the app keeps running (an active recording keeps going);
     /// unobserved task exceptions are logged and observed; anything else that is truly fatal is at least logged.
     /// </summary>
+    private bool _startupComplete;
+    private DateTime _lastCrashToast = DateTime.MinValue;
+
     private void InstallCrashGuards()
     {
         DispatcherUnhandledException += (_, args) =>
         {
-            ErrorLog.Write("Unhandled UI exception (recovered)", args.Exception);
             args.Handled = true;
+            if (!_startupComplete)
+            {
+                // A half-started tray app would hold the single-instance mutex with no tray or hotkeys, and every
+                // relaunch would exit quietly (round 2 #9): log it and quit so the next launch starts clean.
+                ErrorLog.Write("Unhandled exception during startup — quitting", args.Exception);
+                Shutdown(1);
+                return;
+            }
+            ErrorLog.Write("Unhandled UI exception (recovered)", args.Exception);
+            // A repeating fault (a timer tick, a layout pass) logs every time but toasts at most every 10 s.
+            if (DateTime.UtcNow - _lastCrashToast < TimeSpan.FromSeconds(10)) return;
+            _lastCrashToast = DateTime.UtcNow;
             try { Overlays.HudController.Show("Something went wrong — details in error.log", Overlays.HudIcon.Warning); }
             catch (Exception) { /* the HUD itself failed; the log has it */ }
         };

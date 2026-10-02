@@ -79,8 +79,10 @@ public partial class RecordStripWindow : Window
         Loaded += async (_, _) =>
         {
             Reposition();
+            SeedFromSettings();
             FillDeviceMenus();
             await ReloadDevicesAsync(fresh: true);
+            if (!IsLoaded) return; // closed during enumeration: don't start a watcher nobody will stop (round 2 #15)
             WatchDevices();
         };
         Closed += (_, _) => { StopMeter(); StopWatching(); };
@@ -365,6 +367,17 @@ public partial class RecordStripWindow : Window
         _cursor.Items.Add(new ComboBoxItem { Content = "Hidden", Tag = false, ToolTip = RecordStripHints.CursorTooltip(false) });
         _cursor.SelectedIndex = Config.ShowsCursor ? 0 : 1;
         _building = false;
+    }
+
+    /// <summary>The first strip after launch has no device lists yet: show the saved mic / camera rather than "Off"
+    /// until enumeration returns (round 2 #14). The mic id is its dshow name; a camera id is opaque, so it reads
+    /// "Camera" for that moment.</summary>
+    private void SeedFromSettings()
+    {
+        if (_mics.Devices.Count == 0 && Config.Microphone && Config.MicrophoneDeviceId is { } mic)
+            _mics = new DeviceList(new[] { new CaptureDevice(mic, mic) }, mic);
+        if (_cameras.Devices.Count == 0 && Config.Camera && Config.CameraDeviceId is { } cam)
+            _cameras = new DeviceList(new[] { new CaptureDevice(cam, "Camera") }, cam);
     }
 
     private async Task ReloadDevicesAsync(bool fresh)

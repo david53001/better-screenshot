@@ -198,7 +198,9 @@ public sealed class CutList : IEquatable<CutList>
         if (index < 0 || index >= _segments.Count) return false;
         var s = _segments[index];
         double lo = index > 0 ? _segments[index - 1].End : 0;
-        double v = Math.Clamp(t, lo, s.End - MinimumSegment);
+        double hi = s.End - MinimumSegment;
+        if (hi < lo) return false; // a segment already shorter than the minimum can't move this edge (round 2 #15)
+        double v = Math.Clamp(t, lo, hi);
         if (Math.Abs(v - s.Start) <= Eps) return false;
         _segments[index] = s with { Start = v };
         return true;
@@ -209,7 +211,9 @@ public sealed class CutList : IEquatable<CutList>
         if (index < 0 || index >= _segments.Count) return false;
         var s = _segments[index];
         double hi = index < _segments.Count - 1 ? _segments[index + 1].Start : Duration;
-        double v = Math.Clamp(t, s.Start + MinimumSegment, hi);
+        double lo = s.Start + MinimumSegment;
+        if (hi < lo) return false;
+        double v = Math.Clamp(t, lo, hi);
         if (Math.Abs(v - s.End) <= Eps) return false;
         _segments[index] = s with { End = v };
         return true;
