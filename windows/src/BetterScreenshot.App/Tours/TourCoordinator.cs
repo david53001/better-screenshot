@@ -65,6 +65,9 @@ public sealed class TourCoordinator
 
     private static bool Visible(Window? w) => w is not null && w.IsVisible && w.WindowState != WindowState.Minimized;
 
+    /// <summary>Not yet closed (a closed window is no longer loaded); hidden or minimised still counts as open.</summary>
+    private static bool IsOpen(Window? w) => w is not null && w.IsLoaded;
+
     // ------------------------------------------------------------------ bus handlers
 
     public void SurfaceShown(TourSurface surface, Window window)
@@ -204,7 +207,7 @@ public sealed class TourCoordinator
                 other.Pause();
                 _settings.ToursPaused[other.Tour.Id.Raw()] = other.Current;
                 _interrupted.RemoveAll(i => i.Engine.Tour.Id == other.Tour.Id);
-                _interrupted.Add((other, _host!));
+                if (IsOpen(_host)) _interrupted.Add((other, _host!)); // a closed host must not be kept alive (round 2 #20)
                 _tag.Hide();
                 OnStepLeft?.Invoke();
             }
@@ -332,7 +335,7 @@ public sealed class TourCoordinator
         _settings.ToursPaused[engine.Tour.Id.Raw()] = engine.Current;
         _save();
         _interrupted.RemoveAll(i => i.Engine.Tour.Id == engine.Tour.Id);
-        if (_host is not null) _interrupted.Add((engine, _host));
+        if (IsOpen(_host)) _interrupted.Add((engine, _host!));
         _engine = null;
         _tag.Detach();
         OnStepLeft?.Invoke();
