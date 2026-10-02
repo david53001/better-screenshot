@@ -76,6 +76,10 @@ public sealed class SettingsStore
     public bool Save(string? path = null)
     {
         path ??= DefaultSettingsPath;
+        // A session running on defaults after an unreadable settings.json (round 2 #7) must not replace the user's file
+        // with those defaults from an automatic save — a pill move, an editor colour, a window position (round 3 #4).
+        // Only a change made in Settings writes, and then the user chose these values.
+        if (LoadFailed && !_userChanged) return false;
         string json = JsonSerializer.Serialize(ToDto(), JsonOptions);
         for (int attempt = 0; ; attempt++)
         {
@@ -100,6 +104,16 @@ public sealed class SettingsStore
     /// on defaults, a copy of the bad file was kept as <c>settings.json.bad-&lt;time&gt;</c>, and launch must not treat
     /// this as a first run or rewrite anything on its own.</summary>
     public bool LoadFailed { get; private set; }
+
+    private bool _userChanged;
+
+    /// <summary>Saves a change the user made in Settings. After a <see cref="LoadFailed"/> launch this is the first
+    /// write allowed, and every later save writes too.</summary>
+    public bool SaveUserChange(string? path = null)
+    {
+        _userChanged = true;
+        return Save(path);
+    }
 
     /// <summary>Reads settings.json. Missing → defaults (a first run). Present but unreadable (locked by AV at sign-in,
     /// a bad byte) → one retry, then defaults marked <see cref="LoadFailed"/>, with the file copied aside and logged.</summary>

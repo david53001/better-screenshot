@@ -678,7 +678,7 @@ public partial class EditorWindow
         box.LostKeyboardFocus += (_, e) =>
         {
             if (!ReferenceEquals(_textEdit?.Box, box)) return;
-            if (KeepsTextEditOpen(e.NewFocus)) return; // restyling from the inspector / a colour picker (round 2 #8)
+            if (KeepsTextEditOpen(e.NewFocus)) { ReturnFocusAfterList(e.NewFocus); return; } // restyling (round 2 #8)
             CommitText();
         };
         box.CaretIndex = box.Text.Length;
@@ -698,6 +698,21 @@ public partial class EditorWindow
         for (var d = newFocus as DependencyObject; d is not null; d = UpTree(d))
             if (ReferenceEquals(d, _panel)) return true;
         return false;
+    }
+
+    /// <summary>A font or size list closed without a pick (Esc, a click away) leaves no restyle to hand the keyboard back,
+    /// so the list itself does it when it closes — otherwise typing went to its type-ahead and every editor shortcut
+    /// was dead while the text stayed open (round 3 #3).</summary>
+    private void ReturnFocusAfterList(IInputElement? newFocus)
+    {
+        for (var d = newFocus as DependencyObject; d is not null; d = UpTree(d))
+        {
+            if (d is not System.Windows.Controls.ComboBox list) continue;
+            EventHandler? closed = null;
+            closed = (_, _) => { list.DropDownClosed -= closed; RefocusTextEdit(); };
+            list.DropDownClosed += closed;
+            return;
+        }
     }
 
     /// <summary>Up the visual tree, across a popup (a ComboBox drop-down) to the element that owns it.</summary>

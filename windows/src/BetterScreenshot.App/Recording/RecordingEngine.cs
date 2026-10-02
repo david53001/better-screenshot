@@ -322,24 +322,32 @@ public sealed class RecordingEngine
         process.Dispose();
     }
 
+    /// <summary>Joins into <c>OUTPUT.part</c> and renames it only once ffmpeg finished: a join cut short (the app quit
+    /// mid-join and the job object killed ffmpeg) leaves no half-written recording beside the one launch recovery
+    /// makes from the untouched segments (round 3 #5).</summary>
     private static async Task ConcatAsync(IReadOnlyList<string> segments, string output)
     {
         string list = Path.Combine(Path.GetTempPath(), $"bs_concat_{Guid.NewGuid():N}.txt");
+        string partial = output + PartialSuffix;
         await File.WriteAllLinesAsync(list, segments.Select(s => $"file '{s.Replace("'", "'\\''")}'"));
         try
         {
             var (ok, err) = await FfmpegRunner.RunAsync(new[]
             {
                 "-hide_banner", "-y", "-f", "concat", "-safe", "0", "-i", list, "-c", "copy",
-                "-movflags", "+faststart", output,
+                "-movflags", "+faststart", "-f", "mp4", partial,
             }, timeoutMs: 30 * 60 * 1000);
             if (!ok) throw new IOException("ffmpeg concat failed: " + err);
+            File.Move(partial, output, overwrite: true);
         }
         finally
         {
             TryDelete(list);
+            TryDelete(partial);
         }
     }
+
+    private const string PartialSuffix = ".part";
 
     private static string Tail(string text) => text.Length <= 2000 ? text : text[^2000..];
 
@@ -353,6 +361,9 @@ public sealed class RecordingEngine
         int recovered = 0;
         try
         {
+            // A join killed by a quit left only its .part (round 3 #5); the segments below rebuild that take.
+            if (Directory.Exists(recordingsDir))
+                foreach (var stale in Directory.GetFiles(recordingsDir, "*.mp4" + PartialSuffix)) TryDelete(stale);
             var files = Directory.GetFiles(searchDir ?? Path.GetTempPath(), "bs_rec_*_*.mp4");
             foreach (var session in files.GroupBy(f => Path.GetFileNameWithoutExtension(f).Split('_')[2]))
             {

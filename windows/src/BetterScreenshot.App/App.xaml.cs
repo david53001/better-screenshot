@@ -92,7 +92,7 @@ public partial class App : System.Windows.Application
         if (_settings.LoadFailed)
         {
             _settings.TourAudience = TourAudience.Store(TourAudienceKind.Existing);
-            Overlays.HudController.Show("Couldn't read your settings — using defaults (details in error.log)", Overlays.HudIcon.Warning);
+            Overlays.HudController.Show("Couldn't read your settings — using defaults; your file is kept until you change Settings (error.log)", Overlays.HudIcon.Warning);
         }
         else if (_settings.TourAudience is null)
         {

@@ -84,8 +84,11 @@ public class RecordingEngineTests
             Assert.True(RecordingEngine.HasRecordedMedia(seg));
 
             File.WriteAllBytes(Path.Combine(dir, $"bs_rec_{Guid.NewGuid():N}_0.mp4"), Array.Empty<byte>()); // nothing recorded
+            Directory.CreateDirectory(outDir);
+            File.WriteAllBytes(Path.Combine(outDir, "Recording 1.mp4.part"), new byte[64]); // a join a quit cut short (round 3 #5)
             Assert.Equal(1, await RecordingEngine.RecoverOrphansAsync(outDir, dir));
             Assert.Empty(Directory.GetFiles(dir, "bs_rec_*"));
+            Assert.Empty(Directory.GetFiles(outDir, "*.part"));
             var recovered = Assert.Single(Directory.GetFiles(outDir, "*.mp4"));
             await using var fs = File.OpenRead(recovered);
             Assert.True(BetterScreenshot.History.MediaInfo.Mp4Duration(fs) is { } d && d > TimeSpan.FromSeconds(0.5));

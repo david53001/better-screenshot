@@ -149,7 +149,7 @@ public partial class SettingsWindow : Window, Tours.ITourHost
     {
         if (_loading) return;
         _settings.FirstUseToursEnabled = ToursCheck.IsChecked == true;
-        _settings.Save();
+        _settings.SaveUserChange();
         if (ResetToursNote.Visibility == Visibility.Visible)
             ResetToursNote.Text = BetterScreenshot.Tours.TourRules.ResetConfirmation(_settings.FirstUseToursEnabled == true);
     }
@@ -159,7 +159,7 @@ public partial class SettingsWindow : Window, Tours.ITourHost
     {
         _settings.ToursSeen.Clear();
         _settings.ToursPaused.Clear();
-        _settings.Save();
+        _settings.SaveUserChange();
         ResetToursNote.Text = BetterScreenshot.Tours.TourRules.ResetConfirmation(_settings.FirstUseToursEnabled == true);
         ResetToursNote.Visibility = Visibility.Visible;
     }
@@ -417,7 +417,7 @@ public partial class SettingsWindow : Window, Tours.ITourHost
     /// <summary>Persist + re-register hotkeys after a rebind/clear, and let the app refresh the tray hints.</summary>
     private void ApplyHotkeys()
     {
-        _settings.Save();
+        _settings.SaveUserChange();
         _hotkeys.Apply(_settings.Hotkeys);
         HotkeysChanged?.Invoke();
     }
@@ -559,7 +559,7 @@ public partial class SettingsWindow : Window, Tours.ITourHost
         StartupRegistration.Reconcile(_settings.LaunchAtLogin);
         // Temp-file retention takes effect from the next capture on (already-scheduled deletions keep their delay).
         TempFiles.Configure(_settings.Capture.TempRetentionSeconds);
-        _settings.Save();
+        _settings.SaveUserChange();
     }
 
     protected override void OnClosed(EventArgs e)

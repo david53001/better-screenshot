@@ -73,6 +73,14 @@ public class SettingsStoreTests
             Assert.True(loaded.FirstRunComplete);
             Assert.Single(Directory.GetFiles(Path.GetDirectoryName(path)!, "*.bad-*")); // …and the bad file is kept
             Assert.Equal("{ this is not valid json ]", File.ReadAllText(path));     // and untouched
+
+            // Round 3 #4: automatic saves on those defaults don't replace it; a change made in Settings does.
+            loaded.RecordingPillCollapsed = true;
+            Assert.False(loaded.Save(path));
+            Assert.Equal("{ this is not valid json ]", File.ReadAllText(path));
+            Assert.True(loaded.SaveUserChange(path));
+            Assert.True(SettingsStore.Load(path).RecordingPillCollapsed);
+            Assert.True(loaded.Save(path)); // and from then on the session saves normally
         }
         finally
         {
