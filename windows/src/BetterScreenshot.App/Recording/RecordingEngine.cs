@@ -48,6 +48,7 @@ public sealed class RecordingEngine
     public event Action? SegmentDied;
 
     private readonly Dictionary<string, string> _segmentErrors = new();
+    private LoopbackPipe? _loopback;
     private int _startedSegments;
 
     /// <summary>Begin a recording session for <paramref name="region"/> → <paramref name="outputPath"/> (MP4). False if already active or ffmpeg is missing.</summary>
@@ -264,13 +265,24 @@ public sealed class RecordingEngine
     {
         string seg = Path.Combine(Path.GetTempPath(), $"bs_rec_{_sessionId}_{_segments.Count}.mp4");
         _segments.Add(seg);
+        // System audio by in-process WASAPI loopback: a fresh pipe per segment (muted segments read silence instead).
+        LoopbackPipe? loopback = _config.SystemAudio && _audio.SystemAudioLoopback && !_muteSystem ? LoopbackPipe.Create() : null;
         var args = FfmpegArgs.BuildRecording(_config, _region, seg, _audio, new SegmentOptions
         {
             OutputSize = _outputSize,
             MuteSystemAudio = _muteSystem,
             MuteMicrophone = _muteMic,
+            SystemAudioPipe = loopback?.Pipe,
         });
-        var process = FfmpegRunner.StartRecording(args);
+        Process process;
+        try { process = FfmpegRunner.StartRecording(args); }
+        catch
+        {
+            loopback?.Dispose();
+            throw;
+        }
+        _loopback = loopback;
+        if (loopback is not null) _ = loopback.StartAsync(); // connects once ffmpeg opens the pipe; logs its own failures
         _stderr = process.StandardError.ReadToEndAsync();
         _stdout = process.StandardOutput.ReadToEndAsync();
         _process = process;
@@ -298,6 +310,8 @@ public sealed class RecordingEngine
         string? segment = _segments.Count > 0 ? _segments[^1] : null;
 
         await FfmpegRunner.StopRecordingAsync(process);
+        _loopback?.Dispose(); // after ffmpeg has exited: nothing reads the pipe any more
+        _loopback = null;
         try { if (_stderr is not null) LastStdErr = await _stderr; } catch { /* pipe closed */ }
         if (segment is not null) _segmentErrors[segment] = LastStdErr;
         if (process.ExitCode is not 0 and not -1 && LastStdErr.Length > 0)

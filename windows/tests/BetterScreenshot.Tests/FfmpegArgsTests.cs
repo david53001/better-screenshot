@@ -59,6 +59,7 @@ public class FfmpegArgsTests
             "-f", "dshow", "-i", "audio=Stereo Mix",
             "-f", "dshow", "-i", "audio=Mic (USB)",
             "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-b:v", "3456000", "-r", "60", "-g", "30",
+            "-tune", "zerolatency",
             "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
             "-map", "0:v", "-map", "1:a", "-map", "2:a",
             "-movflags", "+frag_keyframe+empty_moov", "-flush_packets", "1", "-nostats",
@@ -162,5 +163,33 @@ public class FfmpegArgsTests
         var args = FfmpegArgs.BuildGifConversion(@"C:\a.mp4", @"C:\p.png", @"C:\b.gif");
         Assert.Equal(@"C:\b.gif", args[^1]);
         Assert.Equal(@"C:\a.mp4", ValueAfter(args, "-i"));
+    }
+
+    [Fact]
+    public void Loopback_system_audio_reads_the_pcm_pipe_as_the_first_input()
+    {
+        var pipe = new PcmPipe(@"\\.\pipe\bs_sys_x", "f32le", 48000, 2);
+        var args = FfmpegArgs.BuildRecording(RecordingConfig.Default with { SystemAudio = true, Microphone = false },
+            new PxRect(0, 0, 640, 400), @"C:\o.mp4", new AudioInputs { SystemAudioLoopback = true },
+            new SegmentOptions { SystemAudioPipe = pipe }).ToList();
+        int pipeAt = args.IndexOf(@"\\.\pipe\bs_sys_x");
+        Assert.True(pipeAt > 0 && pipeAt < args.IndexOf("gdigrab"));
+        Assert.Equal(new[] { "-f", "f32le", "-ar", "48000", "-ac", "2" }, args.Skip(args.IndexOf("f32le") - 1).Take(6));
+        Assert.Contains("1:v", args);
+        Assert.Contains("0:a", args);
+    }
+
+    [Fact]
+    public void Loopback_system_audio_without_a_pipe_or_muted_keeps_a_silent_slot()
+    {
+        foreach (var options in new[] { SegmentOptions.None, new SegmentOptions { MuteSystemAudio = true, SystemAudioPipe = new PcmPipe("p", "f32le", 48000, 2) } })
+        {
+            var args = FfmpegArgs.BuildRecording(RecordingConfig.Default with { SystemAudio = true, Microphone = false },
+                new PxRect(0, 0, 640, 400), @"C:\o.mp4", new AudioInputs { SystemAudioLoopback = true }, options).ToList();
+            Assert.Contains("anullsrc=r=48000:cl=stereo", args);
+            Assert.DoesNotContain("p", args);
+            Assert.Contains("0:v", args);
+            Assert.Contains("1:a", args);
+        }
     }
 }

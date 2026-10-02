@@ -16,6 +16,14 @@ public sealed record AudioInputs
     /// <summary>dshow device name for the microphone, or null.</summary>
     public string? MicrophoneDevice { get; init; }
 
+    /// <summary>System audio comes from an in-process WASAPI loopback of the default output (what you hear), fed to
+    /// ffmpeg through a pipe per segment (<see cref="SegmentOptions.SystemAudioPipe"/>) — works on any PC, no "Stereo
+    /// Mix" or virtual cable needed (review round 3 #1). Takes precedence over <see cref="SystemAudioDevice"/>.</summary>
+    public bool SystemAudioLoopback { get; init; }
+
+    /// <summary>Whether a system-audio track exists in this session.</summary>
+    public bool HasSystemAudio => SystemAudioLoopback || SystemAudioDevice is not null;
+
     /// <summary>No audio devices available — records video only.</summary>
     public static AudioInputs None => new();
 }
@@ -32,8 +40,15 @@ public sealed record SegmentOptions
     public bool MuteSystemAudio { get; init; }
     public bool MuteMicrophone { get; init; }
 
+    /// <summary>The raw-PCM pipe this segment's system audio arrives on (in-process WASAPI loopback); null = none.</summary>
+    public PcmPipe? SystemAudioPipe { get; init; }
+
     public static SegmentOptions None => new();
 }
+
+/// <summary>A named pipe carrying raw interleaved PCM: its Windows path, ffmpeg's raw format name (<c>f32le</c>,
+/// <c>s16le</c>…), sample rate and channel count.</summary>
+public sealed record PcmPipe(string Path, string SampleFormat, int SampleRate, int Channels);
 
 /// <summary>
 /// Builds the ffmpeg command-line arguments for a Windows screen recording (pure — deterministic strings, unit
@@ -59,7 +74,17 @@ public static class FfmpegArgs
 
         var args = new List<string> { "-hide_banner", "-y" };
 
+        bool includeSystem = config.SystemAudio && audio.HasSystemAudio;
+        bool includeMic = config.Microphone && audio.MicrophoneDevice is not null;
+        int nextInput = 0, systemInput = -1, micInput = -1;
+
+        // A live system-audio pipe is opened FIRST (round 3 #1): ffmpeg opens inputs in order and normalises each to
+        // start at 0, so a pipe opened after gdigrab's ~0.3 s probe would put the sound that much ahead of the picture.
+        var livePipe = includeSystem && !options.MuteSystemAudio && audio.SystemAudioLoopback ? options.SystemAudioPipe : null;
+        if (livePipe is not null) { args.AddRange(PipeInput(livePipe)); systemInput = nextInput++; }
+
         // Video input: gdigrab over the region (cursor drawn, per the mac recorder's showsCursor).
+        int videoInput = nextInput++;
         args.AddRange(new[]
         {
             "-f", "gdigrab",
@@ -72,13 +97,19 @@ public static class FfmpegArgs
         });
 
         // Audio inputs (system first, then mic) — only when requested AND a device is available.
-        bool includeSystem = config.SystemAudio && audio.SystemAudioDevice is not null;
-        bool includeMic = config.Microphone && audio.MicrophoneDevice is not null;
-        // A muted track keeps its slot (same index, same AAC shape) but reads silence, so the segments still concat.
-        if (includeSystem)
-            args.AddRange(options.MuteSystemAudio ? SilentInput : new[] { "-f", "dshow", "-i", $"audio={audio.SystemAudioDevice}" });
+        // A muted track keeps its slot (same track order, same AAC shape) but reads silence, so the segments still concat.
+        if (includeSystem && livePipe is null)
+        {
+            args.AddRange(options.MuteSystemAudio || audio.SystemAudioLoopback // loopback without a pipe: silent slot
+                ? SilentInput
+                : new[] { "-f", "dshow", "-i", $"audio={audio.SystemAudioDevice}" });
+            systemInput = nextInput++;
+        }
         if (includeMic)
+        {
             args.AddRange(options.MuteMicrophone ? SilentInput : new[] { "-f", "dshow", "-i", $"audio={audio.MicrophoneDevice}" });
+            micInput = nextInput++;
+        }
 
         // Fixed output size: scale to fit + centre with black bars (exactly LetterboxFit; small targets scale up).
         if (options.OutputSize is { } output)
@@ -110,11 +141,13 @@ public static class FfmpegArgs
         // Audio encode + explicit mapping (each audio input is its own 48kHz/2ch/128k AAC track, not pre-mixed).
         if (includeSystem || includeMic)
         {
+            // No x264 lookahead with live audio: ffmpeg paces each input to the encoded video, so a ~0.5 s encoder
+            // delay kept the audio reader that far behind and Stop ('q') cut the last ~0.35 s of sound off every segment.
+            args.AddRange(new[] { "-tune", "zerolatency" });
             args.AddRange(new[] { "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2" });
-            args.AddRange(new[] { "-map", "0:v" });
-            int audioIndex = 1;
-            if (includeSystem) { args.AddRange(new[] { "-map", $"{audioIndex}:a" }); audioIndex++; }
-            if (includeMic) { args.AddRange(new[] { "-map", $"{audioIndex}:a" }); }
+            args.AddRange(new[] { "-map", $"{videoInput}:v" });
+            if (includeSystem) args.AddRange(new[] { "-map", $"{systemInput}:a" });
+            if (includeMic) args.AddRange(new[] { "-map", $"{micInput}:a" });
         }
 
         // Fragmented MP4 (round 2 #2): the index is written up front and each fragment is playable on its own, so a
@@ -251,6 +284,16 @@ public static class FfmpegArgs
     private static string Num(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
 
     private static readonly string[] SilentInput = { "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo" };
+
+    /// <summary>Raw PCM from a pipe; a deep thread queue so a busy encoder never stalls the capture writing it.</summary>
+    private static string[] PipeInput(PcmPipe pipe) => new[]
+    {
+        "-f", pipe.SampleFormat,
+        "-ar", pipe.SampleRate.ToString(CultureInfo.InvariantCulture),
+        "-ac", pipe.Channels.ToString(CultureInfo.InvariantCulture),
+        "-thread_queue_size", "4096",
+        "-i", pipe.Path,
+    };
 
     /// <summary>A region's recorded frame size: H.264 needs even dimensions.</summary>
     public static PxSize EvenSize(PxRect region) => new(EvenFloor(region.Width), EvenFloor(region.Height));

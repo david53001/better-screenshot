@@ -405,8 +405,8 @@ public class TourTests
     [Fact]
     public void LintBitesOnBadSamples()
     {
-        Assert.False(AnchorRx.IsMatch("Editor.canvas"));
-        Assert.False(AnchorRx.IsMatch("editor"));
+        Assert.DoesNotMatch(AnchorRx, "Editor.canvas");
+        Assert.DoesNotMatch(AnchorRx, "editor");
         Assert.True(Words("This is a much too long title") > 4);
         Assert.Equal(1, Words("— {shortcut:captureArea} —"));
     }

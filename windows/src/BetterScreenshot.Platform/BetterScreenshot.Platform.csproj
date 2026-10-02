@@ -10,6 +10,8 @@
 
   <ItemGroup>
     <PackageReference Include="ZXing.Net" Version="0.16.11" />
+    <!-- WASAPI loopback for system audio (review round 3 #1); MIT, same version JVoice ships. -->
+    <PackageReference Include="NAudio.Wasapi" Version="2.3.0" />
   </ItemGroup>
 
   <ItemGroup>

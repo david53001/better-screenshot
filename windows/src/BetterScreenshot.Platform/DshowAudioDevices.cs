@@ -40,15 +40,15 @@ public static class DshowAudioDevices
     public static async Task<AudioInputs> ResolveAsync(RecordingConfig config)
     {
         if (!config.RecordsAudio) return AudioInputs.None;
-        var set = await EnumerateAsync().ConfigureAwait(false);
-        string? system = config.SystemAudio ? DshowDeviceList.PickSystemLoopback(set.Audio) : null;
+        // System audio is the in-process WASAPI loopback of the default output (round 3 #1): no "Stereo Mix" needed.
+        bool loopback = config.SystemAudio && LoopbackPipe.Available();
         string? mic = null;
         if (config.Microphone)
         {
             var mics = await MicrophonesAsync().ConfigureAwait(false);
             mic = mics.ResolvedId(config.MicrophoneDeviceId);
         }
-        return new AudioInputs { SystemAudioDevice = system, MicrophoneDevice = mic };
+        return new AudioInputs { SystemAudioLoopback = loopback, MicrophoneDevice = mic };
     }
 
     /// <summary>The Microphone menu: every dshow audio input except the system-audio loopback, with the Windows

@@ -310,7 +310,7 @@ public sealed class RecordingCoordinator
         Elapsed = _state.Elapsed(DateTime.Now),
         MicTrack = _config.Microphone && _audio.MicrophoneDevice is not null,
         MicMuted = _micMuted,
-        SystemTrack = _config.SystemAudio && _audio.SystemAudioDevice is not null,
+        SystemTrack = _config.SystemAudio && _audio.HasSystemAudio,
         SystemMuted = _systemMuted,
         Camera = _cameraState,
         Target = _target,

@@ -120,4 +120,40 @@ public class RecordingEngineTests
         Assert.NotNull(engine.LastFailure);
         Assert.False(File.Exists(path));
     }
+
+    [Fact]
+    [Trait("category", "hardware")]
+    public async Task System_audio_by_wasapi_loopback_records_a_track_in_step_with_the_video()
+    {
+        // Round 3 #1: no "Stereo Mix" needed. Nothing is played (silent), so the keep-alive alone drives the stream.
+        if (!LoopbackPipe.Available()) return; // no output device on this machine
+        string path = TempMp4();
+        var engine = new RecordingEngine();
+        try
+        {
+            var config = RecordingConfig.Default with { SystemAudio = true, Microphone = false };
+            Assert.True(engine.Start(config, new PxRect(0, 0, 320, 240), path, new AudioInputs { SystemAudioLoopback = true }));
+            await Task.Delay(2000);
+            await engine.PauseAsync();
+            engine.Resume(); // a second segment with its own pipe
+            await Task.Delay(2000);
+            Assert.Equal(path, await engine.StopAsync());
+            Assert.Null(engine.LastFailure);
+
+            var (_, info) = await FfmpegRunner.RunAsync(new[] { "-hide_banner", "-i", path });
+            Assert.Matches(@"Audio: aac", info);
+            static double Secs(Match m) => int.Parse(m.Groups[1].Value) * 60 + double.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
+            var (_, v) = await FfmpegRunner.RunAsync(new[] { "-hide_banner", "-i", path, "-map", "0:v", "-c", "copy", "-f", "null", "-" });
+            var (_, a) = await FfmpegRunner.RunAsync(new[] { "-hide_banner", "-i", path, "-map", "0:a", "-c", "copy", "-f", "null", "-" });
+            double video = Secs(Regex.Matches(v, @"time=00:(\d+):(\d+\.\d+)").Last());
+            double audio = Secs(Regex.Matches(a, @"time=00:(\d+):(\d+\.\d+)").Last());
+            Assert.InRange(video, 2.5, 6);
+            // ≤ 0.1 s: before -tune zerolatency, x264's lookahead held ffmpeg's audio reader back and Stop lost ~0.35 s.
+            Assert.True(Math.Abs(video - audio) <= 0.1, $"video {video:0.00} s vs audio {audio:0.00} s");
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
 }

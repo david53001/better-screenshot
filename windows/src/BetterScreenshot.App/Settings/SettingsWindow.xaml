@@ -261,7 +261,7 @@
                                 <TextBlock Style="{StaticResource FieldLabel}" Text="System audio" Margin="0" VerticalAlignment="Center"/>
                                 <ctl:InfoTip Margin="6,0,0,0"
                                     Title="System audio"
-                                    Explanation="The sound your PC plays &#8212; videos, calls, music, alerts &#8212; recorded along with the screen. Needs a loopback input such as &#8220;Stereo Mix&#8221; or a virtual audio cable. GIF recordings never have sound."
+                                    Explanation="The sound your PC plays &#8212; videos, calls, music, alerts &#8212; recorded along with the screen. Captured straight from your default speakers or headphones &#8212; no extra setup. GIF recordings never have sound."
                                     Example="All apps to capture a video call's audio along with the screen."/>
                             </StackPanel>
                             <ComboBox x:Name="SystemAudioCombo" SelectionChanged="DeviceChanged"/>
