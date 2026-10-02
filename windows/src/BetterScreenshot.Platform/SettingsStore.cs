@@ -96,19 +96,37 @@ public sealed class SettingsStore
         }
     }
 
+    /// <summary>True when settings.json existed but couldn't be read or parsed (review round 2 #7): the session runs
+    /// on defaults, a copy of the bad file was kept as <c>settings.json.bad-&lt;time&gt;</c>, and launch must not treat
+    /// this as a first run or rewrite anything on its own.</summary>
+    public bool LoadFailed { get; private set; }
+
+    /// <summary>Reads settings.json. Missing → defaults (a first run). Present but unreadable (locked by AV at sign-in,
+    /// a bad byte) → one retry, then defaults marked <see cref="LoadFailed"/>, with the file copied aside and logged.</summary>
     public static SettingsStore Load(string? path = null)
     {
         path ??= DefaultSettingsPath;
-        try
+        if (!File.Exists(path)) return new SettingsStore();
+        Exception? error = null;
+        for (int attempt = 0; attempt < 2; attempt++)
         {
-            if (!File.Exists(path)) return new SettingsStore();
-            var dto = JsonSerializer.Deserialize<Dto>(File.ReadAllText(path), JsonOptions);
-            return dto is null ? new SettingsStore() : FromDto(dto);
+            try
+            {
+                var dto = JsonSerializer.Deserialize<Dto>(File.ReadAllText(path), JsonOptions)
+                          ?? throw new JsonException("settings.json holds null");
+                return FromDto(dto);
+            }
+            catch (Exception ex) // anything — a bad value can fail deep in FromDto; it is logged below, never swallowed
+            {
+                error = ex;
+                if (attempt == 0) Thread.Sleep(150);
+            }
         }
-        catch
-        {
-            return new SettingsStore();
-        }
+        string kept = path + ".bad-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
+        try { File.Copy(path, kept, overwrite: true); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { kept = "(couldn't copy: " + ex.Message + ")"; }
+        ErrorLog.Write("Couldn't read " + path + " — running on defaults; the file was kept as " + kept, error);
+        return new SettingsStore { LoadFailed = true, FirstRunComplete = true };
     }
 
     private Dto ToDto() => new()

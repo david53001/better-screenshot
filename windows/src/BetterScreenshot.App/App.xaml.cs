@@ -82,7 +82,14 @@ public partial class App : System.Windows.Application
         // Who gets tours (§7.1 Step 1): classify once, before anything writes settings.json.
         var signals = SettingsStore.AudienceSignals();
         _settings = SettingsStore.Load();
-        if (_settings.TourAudience is null)
+        // An unreadable settings.json (round 2 #7) is not a new user and must not be overwritten at launch: no
+        // classification save, no Run-key reconcile from default values, no Welcome.
+        if (_settings.LoadFailed)
+        {
+            _settings.TourAudience = TourAudience.Store(TourAudienceKind.Existing);
+            Overlays.HudController.Show("Couldn't read your settings — using defaults (details in error.log)", Overlays.HudIcon.Warning);
+        }
+        else if (_settings.TourAudience is null)
         {
             var audience = TourAudience.Classify(new AudienceSignals(AppId, signals.Keys, signals.FolderHasContent, false), AppId);
             _settings.TourAudience = TourAudience.Store(audience);
@@ -90,7 +97,7 @@ public partial class App : System.Windows.Application
         }
         // Keep the Windows "run at sign-in" registration honest: refresh the Run key to this exe's current path
         // (repairs a stale entry after the app is moved/republished) or clear it if the flag was turned off.
-        StartupRegistration.Reconcile(_settings.LaunchAtLogin);
+        if (!_settings.LoadFailed) StartupRegistration.Reconcile(_settings.LaunchAtLogin);
         // How long clipboard/drag temp PNGs survive is a user setting; apply it before the first capture can run.
         TempFiles.Configure(_settings.Capture.TempRetentionSeconds);
         // v3 §4.2: the launch sweep removes expired payload folders a previous run left (off the UI thread).

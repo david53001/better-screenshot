@@ -69,6 +69,10 @@ public class SettingsStoreTests
         {
             var loaded = SettingsStore.Load(path);
             Assert.Equal(CaptureSettings.Default, loaded.Capture);
+            Assert.True(loaded.LoadFailed);          // not a first run…
+            Assert.True(loaded.FirstRunComplete);
+            Assert.Single(Directory.GetFiles(Path.GetDirectoryName(path)!, "*.bad-*")); // …and the bad file is kept
+            Assert.Equal("{ this is not valid json ]", File.ReadAllText(path));     // and untouched
         }
         finally
         {
