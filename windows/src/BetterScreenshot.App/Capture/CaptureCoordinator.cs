@@ -240,10 +240,31 @@ public sealed class CaptureCoordinator : IAppCommands
             OnCopy = Copy,
             OnSave = Save,
             OnAddToStack = KeepInStack,
-            StyleChanged = style => { _settings.EditorStyle = style; _settings.Save(); },
-            RecentColorsChanged = colors => { _settings.EditorRecentColors = colors.ToList(); _settings.Save(); },
+            StyleChanged = style => { _settings.EditorStyle = style; SaveSoon(); },
+            RecentColorsChanged = colors => { _settings.EditorRecentColors = colors.ToList(); SaveSoon(); },
         };
+        editor.Closed += (_, _) => FlushSave();
         editor.Show();
+    }
+
+    /// <summary>The editor's sticky style changes on every slider tick: write settings.json once it settles (500 ms)
+    /// instead of on the UI thread per tick (review round 2 #18); flushed when the editor closes.</summary>
+    private System.Windows.Threading.DispatcherTimer? _saveSoon;
+
+    private void SaveSoon()
+    {
+        if (_saveSoon is null)
+        {
+            _saveSoon = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+            _saveSoon.Tick += (_, _) => { _saveSoon.Stop(); _settings.Save(); };
+        }
+        _saveSoon.Stop();
+        _saveSoon.Start();
+    }
+
+    private void FlushSave()
+    {
+        if (_saveSoon is { IsEnabled: true } t) { t.Stop(); _settings.Save(); }
     }
 
     /// <summary>Editor "Stack" button: record the flattened edit in history and re-enter the Quick Access flow.</summary>
@@ -367,5 +388,5 @@ public sealed class CaptureCoordinator : IAppCommands
     public void StopRecordingForExit() => _recording.StopForExit();
 
     public void OpenSettings() => OnOpenSettings?.Invoke();
-    public void Quit() => _quit();
+    public void Quit() { FlushSave(); _quit(); }
 }
