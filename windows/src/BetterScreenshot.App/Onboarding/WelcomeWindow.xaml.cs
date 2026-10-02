@@ -25,6 +25,7 @@ public partial class WelcomeWindow : Window
     public WelcomeWindow(HotkeyBindings bindings, bool askQuestion)
     {
         InitializeComponent();
+        Controls.WindowPlacement.CentreUnderPointer(this);
         Controls.WindowThemer.ApplyDark(this);
         BuildShortcuts(bindings);
         // The tray icon is outside any window the tour can point into, so its step points at the line that says

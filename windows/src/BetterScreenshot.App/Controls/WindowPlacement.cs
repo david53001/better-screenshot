@@ -41,6 +41,25 @@ public static class WindowPlacement
     }
 
     /// <summary>
+    /// For a window that sizes to its content (Settings, Welcome — review round 2 #19): open centred in the work area
+    /// of the screen under the pointer, like every other window (row 24), not on the primary screen. Placed before the
+    /// first frame (measured at SourceInitialized), so it never jumps. Call before the window is shown.
+    /// </summary>
+    public static void CentreUnderPointer(Window window)
+    {
+        var work = WorkAreaUnderCursor();
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
+        window.SourceInitialized += (_, _) =>
+        {
+            window.Measure(new System.Windows.Size(double.IsNaN(window.Width) ? double.PositiveInfinity : window.Width,
+                                    double.IsNaN(window.Height) ? double.PositiveInfinity : window.Height));
+            var size = window.DesiredSize;
+            window.Left = work.X + Math.Max(0, (work.Width - size.Width) / 2);
+            window.Top = work.Y + Math.Max(0, (work.Height - size.Height) / 2);
+        };
+    }
+
+    /// <summary>
     /// Brings an already-open window forward on the desktop the user is looking at (§4.11): one left on another
     /// virtual desktop is moved here and re-centred under the pointer; then it's activated.
     /// </summary>

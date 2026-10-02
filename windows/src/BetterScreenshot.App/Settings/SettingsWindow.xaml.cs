@@ -44,6 +44,7 @@ public partial class SettingsWindow : Window, Tours.ITourHost
         _settings = settings;
         _hotkeys = hotkeys;
         InitializeComponent();
+        Controls.WindowPlacement.CentreUnderPointer(this);
         LoadGeneral();
         LoadRecording();
         BuildShortcutRows();
