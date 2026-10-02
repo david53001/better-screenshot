@@ -121,28 +121,37 @@ public static class FfmpegArgs
         return args;
     }
 
-    /// <summary>
-    /// Args to convert a recorded MP4 into a looping GIF (mac <c>GIFExporter</c>): downscale to ≤<see cref="RecordingConfig.GifMaxWidth"/>px
-    /// (never upscaling — <c>min(W,iw)</c>) at <see cref="RecordingConfig.GifFps"/>fps with lanczos, then a single-pass
-    /// palettegen/paletteuse for good colors, looping forever (<c>-loop 0</c>). The comma inside <c>min()</c> is
-    /// escaped so the filtergraph parser doesn't treat it as a filter separator.
-    /// </summary>
-    public static IReadOnlyList<string> BuildGifConversion(string inputMp4, string outputGif)
-    {
-        string filter =
-            $"fps={RecordingConfig.GifFps}," +
-            $"scale=min({RecordingConfig.GifMaxWidth}\\,iw):-1:flags=lanczos," +
-            "split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse";
+    /// <summary>The GIF frame filter (mac <c>GIFExporter</c>): <see cref="RecordingConfig.GifFps"/>fps, downscaled to
+    /// ≤<see cref="RecordingConfig.GifMaxWidth"/>px with lanczos, never upscaling (<c>min(W,iw)</c>; the comma is
+    /// escaped so the filtergraph parser doesn't treat it as a filter separator).</summary>
+    private static string GifFrames =>
+        $"fps={RecordingConfig.GifFps},scale=min({RecordingConfig.GifMaxWidth}\\,iw):-1:flags=lanczos";
 
-        return new List<string>
-        {
-            "-hide_banner", "-y",
-            "-i", inputMp4,
-            "-vf", filter,
-            "-loop", "0",
-            outputGif,
-        };
-    }
+    /// <summary>
+    /// GIF pass 1: the palette for good colours, written to <paramref name="palettePng"/>. Two passes instead of a
+    /// single <c>split</c>+<c>palettegen</c> graph, which holds every frame in memory until the end (review round 1 #17:
+    /// a minute-long GIF buffered ~1 GB).
+    /// </summary>
+    public static IReadOnlyList<string> BuildGifPalette(string inputMp4, string palettePng) => new List<string>
+    {
+        "-hide_banner", "-y",
+        "-i", inputMp4,
+        "-vf", GifFrames + ",palettegen",
+        palettePng,
+    };
+
+    /// <summary>GIF pass 2: map the frames through the palette, looping forever (<c>-loop 0</c>), with
+    /// <c>-progress pipe:1</c> so the export can show real progress.</summary>
+    public static IReadOnlyList<string> BuildGifConversion(string inputMp4, string palettePng, string outputGif) => new List<string>
+    {
+        "-hide_banner", "-y",
+        "-i", inputMp4,
+        "-i", palettePng,
+        "-lavfi", GifFrames + "[x];[x][1:v]paletteuse",
+        "-loop", "0",
+        "-progress", "pipe:1", "-nostats",
+        outputGif,
+    };
 
     /// <summary>
     /// Lossless start/end trim (v3 A.3 / Part 6 passthrough): stream copy, starting on the keyframe at or before

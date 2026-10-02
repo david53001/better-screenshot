@@ -62,7 +62,7 @@ public static class VideoExporter
         {
             if (!await RenderAsync(source, cuts, info, muteAll: true, temp, f => progress(f is { } v ? v / 2 : 0.25))) return null;
             progress(0.5);
-            var gif = await GifExporter.ConvertAsync(temp, target);
+            var gif = await GifExporter.ConvertAsync(temp, target, f => progress(0.5 + f / 2));
             progress(1);
             return gif;
         }
