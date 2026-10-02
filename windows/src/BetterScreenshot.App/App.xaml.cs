@@ -63,6 +63,10 @@ public partial class App : System.Windows.Application
         // Dev-only UI gallery (see UiPreview): no mutex/tray/hotkeys, coexists with a live instance.
         if (e.Args.Length >= 1 && e.Args[0] == "--ui-preview")
         {
+            // A throwaway profile, so a gallery window that saves (Settings, the strip) never touches the real one.
+            if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable(Platform.SettingsStore.DirectoryOverrideVariable)))
+                Environment.SetEnvironmentVariable(Platform.SettingsStore.DirectoryOverrideVariable,
+                    System.IO.Path.Combine(System.IO.Path.GetTempPath(), "BetterScreenshot-preview-" + Environment.ProcessId));
             UiPreview.Show(e.Args.Length > 1 ? e.Args[1] : "settings");
             return;
         }
