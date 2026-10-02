@@ -51,7 +51,11 @@ public partial class SettingsWindow : Window, Tours.ITourHost
         InfoSlot.Content = new Tours.InfoButton(BetterScreenshot.Tours.TourId.Settings, SettingsShortcuts);
         _loading = false;
         ContentRendered += (_, _) => Tours.TourEvents.SurfaceShown(BetterScreenshot.Tours.TourSurface.Settings, this);
-        Closed += (_, _) => StopOpacityDemo();
+        Closed += (_, _) =>
+        {
+            StopOpacityDemo();
+            if (_opacitySave is { IsEnabled: true } pending) { pending.Stop(); Apply(); } // a pending Opacity save
+        };
         Surfaces.UseMica(this); // v3 Part 9: Mica + the Opacity layer (dark title bar included)
         // The card layout sizes to content (SizeToContent=Height); clamp just under the work area so a
         // genuinely oversized window can't run past it (keeps the title-bar ✕ reachable) while leaving the
@@ -94,14 +98,28 @@ public partial class SettingsWindow : Window, Tours.ITourHost
         OpacityDefaultBtn.IsEnabled = Math.Abs(c.UiOpacity - UiOpacity.Default) > 0.001;
     }
 
-    /// <summary>Opacity (v3 §4.9): live while dragging — every window, panel and HUD re-tints at once — then saved.</summary>
+    /// <summary>Saves the Opacity choice once the slider settles (review round 1 #7: a drag fires ValueChanged dozens
+    /// of times a second; each used to rewrite settings.json and touch the Run key).</summary>
+    private System.Windows.Threading.DispatcherTimer? _opacitySave;
+
+    /// <summary>Opacity (v3 §4.9): live while dragging — every window, panel and HUD re-tints at once — then saved
+    /// 300 ms after the last change.</summary>
     private void OpacitySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (OpacityDefaultBtn is null) return;
         OpacityDefaultBtn.IsEnabled = Math.Abs(OpacitySlider.Value - UiOpacity.Default) > 0.001;
         if (_loading) return;
         Surfaces.Set(OpacitySlider.Value);
-        Apply();
+        _opacitySave ??= NewOpacitySaveTimer();
+        _opacitySave.Stop();
+        _opacitySave.Start();
+    }
+
+    private System.Windows.Threading.DispatcherTimer NewOpacitySaveTimer()
+    {
+        var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
+        t.Tick += (_, _) => { t.Stop(); Apply(); };
+        return t;
     }
 
     private void OpacityDefault_Click(object sender, RoutedEventArgs e)
@@ -505,7 +523,8 @@ public partial class SettingsWindow : Window, Tours.ITourHost
             HistoryCap = Cap10.IsChecked == true ? 10 : Cap100.IsChecked == true ? 100 : 50,
             FreezeScreen = FreezeScreenCheck.IsChecked == true,
             TempRetentionSeconds = TempRetentionScale.PositionToSeconds(TempRetentionSlider.Value),
-            UiOpacity = Math.Round(OpacitySlider.Value, 3),
+            // While the tour's demo owns the slider it shows a preview; the saved value is the user's (round 1 #14).
+            UiOpacity = Math.Round(_opacityDemo is not null ? _opacityDemoUser : OpacitySlider.Value, 3),
         };
 
         var recording = _settings.Recording;
