@@ -30,8 +30,8 @@ public class OverlayDismissScaleTests
         Assert.Equal(expectedSeconds, OverlayDismissScale.PositionToSeconds(position));
 
     [Theory]
-    [InlineData(0, "Never")]
-    [InlineData(-1, "Never")]
+    [InlineData(0, "∞")]
+    [InlineData(-1, "∞")]
     [InlineData(6, "6s")]
     [InlineData(30, "30s")]
     public void Label_reads_never_or_seconds(int seconds, string expected) =>

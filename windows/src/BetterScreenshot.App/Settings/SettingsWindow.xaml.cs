@@ -479,7 +479,7 @@ public partial class SettingsWindow : Window, Tours.ITourHost
         Apply();
     }
 
-    /// <summary>Refresh the text beside the slider to match its current position ("6s" … "30s", or "Never").
+    /// <summary>Refresh the text beside the slider to match its current position ("6s" … "30s", or "∞").
     /// Null-guarded because the slider can coerce its value (and raise ValueChanged) during XAML parse, before
     /// the label field is assigned.</summary>
     private void UpdateDismissLabel()

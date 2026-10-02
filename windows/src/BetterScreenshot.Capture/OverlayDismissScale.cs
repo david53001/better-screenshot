@@ -36,6 +36,6 @@ public static class OverlayDismissScale
             ? NeverSeconds
             : Math.Clamp((int)Math.Round(position, MidpointRounding.AwayFromZero), MinSeconds, MaxSeconds);
 
-    /// <summary>Human-readable label for a persisted seconds value: "Never" for 0, otherwise e.g. "6s".</summary>
-    public static string Label(int seconds) => seconds <= 0 ? "Never" : $"{seconds}s";
+    /// <summary>Human-readable label for a persisted seconds value: "∞" for never, otherwise e.g. "6s".</summary>
+    public static string Label(int seconds) => seconds <= 0 ? "∞" : $"{seconds}s"; // the Mac's "∞" (v2.6.1)
 }
