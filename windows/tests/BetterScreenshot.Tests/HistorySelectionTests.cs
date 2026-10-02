@@ -205,10 +205,30 @@ public class HistorySelectionTests
     {
         var groups = BetterScreenshot.App.History.HistoryService.RevealGroups(new[]
         {
-            @"C:\Shots.png", @"D:\Videos.mp4", @"c:\shots.png",
+            @"C:\Shots.png", @"D:\Videos
+.mp4", @"c:\shots.png",
         }).ToList();
         Assert.Equal(2, groups.Count);
         Assert.Equal(new[] { @"C:\Shots.png", @"c:\shots.png" }, groups[0].ToArray());
-        Assert.Equal(new[] { @"D:\Videos.mp4" }, groups[1].ToArray());
+        Assert.Equal(new[] { @"D:\Videos
+.mp4" }, groups[1].ToArray());
+    }
+
+    [Fact]
+    public void Malformed_media_headers_read_as_unknown_never_throw()
+    {
+        // A huge mvhd duration (would overflow TimeSpan) and a timescale of 0.
+        var huge = Box("ftyp", new byte[8]).Concat(Box("moov", Mvhd(1, 1, ulong.MaxValue / 2))).ToArray();
+        Assert.Null(MediaInfo.Mp4Duration(new MemoryStream(huge)));
+        Assert.Null(MediaInfo.Mp4Duration(new MemoryStream(Box("moov", Mvhd(0, 0, 100)))));
+        // A 64-bit box size that wraps negative.
+        var wrap = new byte[24];
+        BinaryPrimitives.WriteUInt32BigEndian(wrap, 1);
+        "mdat"u8.CopyTo(wrap.AsSpan(4));
+        BinaryPrimitives.WriteUInt64BigEndian(wrap.AsSpan(8), ulong.MaxValue - 4);
+        Assert.Null(MediaInfo.Mp4Duration(new MemoryStream(wrap)));
+        // A GIF cut off mid-block.
+        var gif = Gif(50, 50);
+        Assert.Null(MediaInfo.GifDuration(new MemoryStream(gif.Take(gif.Length - 9).ToArray())));
     }
 }

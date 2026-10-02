@@ -35,8 +35,12 @@ public sealed class RecordingEngine
     /// <summary>True while a recording session exists (recording or paused), from <see cref="Start"/> to <see cref="StopAsync"/>.</summary>
     public bool IsRecording => _finalPath is not null;
 
-    /// <summary>ffmpeg's captured stderr from the most recent finished segment (diagnostics).</summary>
+    /// <summary>ffmpeg's captured stderr from the most recent finished segment (written to error.log on a failure).</summary>
     public string LastStdErr { get; private set; } = "";
+
+    /// <summary>Why the last <see cref="StopAsync"/> returned no file, in words for a HUD; null when it succeeded or
+    /// nothing was recorded.</summary>
+    public string? LastFailure { get; private set; }
 
     /// <summary>Begin a recording session for <paramref name="region"/> → <paramref name="outputPath"/> (MP4). False if already active or ffmpeg is missing.</summary>
     public bool Start(RecordingConfig config, PxRect region, string outputPath, AudioInputs? audio = null)
@@ -109,37 +113,104 @@ public sealed class RecordingEngine
             StartSegment();
     }
 
-    /// <summary>Stop the session, concatenate the active-span segments into the final MP4, and return its path (or null).</summary>
+    /// <summary>
+    /// Stop the session, concatenate the active-span segments into the final MP4, and return its path (or null, with
+    /// <see cref="LastFailure"/> saying why). Unreadable segments — an ffmpeg that died on a busy mic or a rejected
+    /// region, or one force-killed at stop — are left out of the join (review round 1 #2); if the join still fails, the
+    /// readable parts are moved next to the final file instead of being lost in %TEMP%.
+    /// </summary>
     public async Task<string?> StopAsync()
     {
+        LastFailure = null;
         if (_finalPath is null) return null;
         string final = _finalPath;
         _finalPath = null;
 
         await StopSegmentAsync();
 
-        var segments = _segments.Where(s => File.Exists(s) && new FileInfo(s).Length > 0).ToList();
+        var written = _segments.Where(s => File.Exists(s) && new FileInfo(s).Length > 0).ToList();
         _segments.Clear();
-        if (segments.Count == 0) return null;
+        var readable = written.Where(IsReadableMp4).ToList();
+        foreach (var bad in written.Except(readable))
+        {
+            ErrorLog.Write($"Recording segment unreadable, left out: {bad}\n{LastStdErr}");
+            TryDelete(bad);
+        }
+        if (readable.Count == 0)
+        {
+            if (written.Count > 0) LastFailure = "Recording failed — ffmpeg couldn't write the video (details in error.log)";
+            return null;
+        }
 
         try
         {
-            if (segments.Count == 1)
+            if (readable.Count == 1)
             {
                 if (File.Exists(final)) File.Delete(final);
-                File.Move(segments[0], final);
+                File.Move(readable[0], final);
             }
             else
             {
-                await ConcatAsync(segments, final);
-                foreach (var s in segments) TryDelete(s);
+                await ConcatAsync(readable, final);
+                foreach (var s in readable) TryDelete(s);
             }
         }
-        catch
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
+            ErrorLog.Write("Couldn't join the recording's parts", ex);
+            int saved = RescueParts(readable, final);
+            LastFailure = saved > 0
+                ? $"Couldn't join the recording — its {saved} parts were saved next to it"
+                : "Recording failed — couldn't save the video (details in error.log)";
             return null;
         }
         return File.Exists(final) ? final : null;
+    }
+
+    /// <summary>True once the current segment's ffmpeg is still running <paramref name="after"/> its start — false when
+    /// it exited early (a region it rejects, a device it can't open). Used to undo a Switch onto a bad target.</summary>
+    public async Task<bool> SegmentAliveAsync(TimeSpan after)
+    {
+        var process = _process;
+        if (process is null) return false;
+        await Task.Delay(after);
+        try { return !process.HasExited; }
+        catch (InvalidOperationException) { return false; }
+    }
+
+    /// <summary>An MP4 that ffmpeg finished: its <c>moov/mvhd</c> header is present (a killed segment has none).</summary>
+    private static bool IsReadableMp4(string path)
+    {
+        try
+        {
+            using var fs = File.OpenRead(path);
+            return BetterScreenshot.History.MediaInfo.Mp4Duration(fs) is not null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or OverflowException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Moves the parts beside the final file as <c>name-part1.mp4</c>…; returns how many were saved.</summary>
+    private static int RescueParts(IReadOnlyList<string> parts, string final)
+    {
+        int saved = 0;
+        string dir = Path.GetDirectoryName(final) ?? Path.GetTempPath();
+        string stem = Path.GetFileNameWithoutExtension(final);
+        for (int i = 0; i < parts.Count; i++)
+        {
+            try
+            {
+                File.Move(parts[i], Path.Combine(dir, $"{stem}-part{i + 1}.mp4"), overwrite: true);
+                saved++;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                ErrorLog.Write("Couldn't rescue recording part " + parts[i], ex);
+            }
+        }
+        return saved;
     }
 
     private void StartSegment()

@@ -385,7 +385,10 @@ public sealed class RecordingCoordinator
     /// <summary>Camera off at start (or first show): create the bubble — same size setting, same corner rule as at start.</summary>
     private async Task ShowNewCameraAsync()
     {
+        int generation = _overlayGeneration;
         var cameras = await CameraDevices.ListAsync();
+        // Stopped / discarded / cancelled while the cameras were listed: never turn the webcam on (round 1 #5).
+        if (generation != _overlayGeneration) return;
         if (cameras.ResolvedId(_config.CameraDeviceId) is not { } deviceId)
         {
             _cameraState = PillCamera.NoCamera;
@@ -446,6 +449,13 @@ public sealed class RecordingCoordinator
             try
             {
                 var previous = _region;
+                // A window partly off-screen: record the part ffmpeg can grab (gdigrab rejects rects past the desktop).
+                var desktop = System.Windows.Forms.SystemInformation.VirtualScreen;
+                if (picked is { } raw)
+                {
+                    var clamped = raw.Region.Intersection(new PxRect(desktop.X, desktop.Y, desktop.Width, desktop.Height));
+                    picked = clamped.IsEmpty ? null : (clamped, raw.Hwnd);
+                }
                 if (picked is { } pick)
                 {
                     _engine.Retarget(pick.Region);
@@ -453,16 +463,27 @@ public sealed class RecordingCoordinator
                 }
                 if (pausedByUs && _state.Phase == RecorderPhase.Paused)
                 {
-                    try { ResumeCore(); }
-                    catch
+                    bool started;
+                    try { ResumeCore(); started = picked is null || await _engine.SegmentAliveAsync(TimeSpan.FromSeconds(1.2)); }
+                    catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or IOException)
                     {
-                        // Keep recording the old target.
+                        ErrorLog.Write("Switch target failed to start", ex);
+                        started = false;
+                    }
+                    if (!started)
+                    {
+                        // ffmpeg rejected the new target (it fails asynchronously, round 1 #3): keep the old one.
+                        await _engine.PauseAsync();
                         _engine.Retarget(previous);
                         _region = previous;
                         HudController.Show(_target == PillTarget.Window
                             ? "Couldn't switch — still recording the previous window"
                             : "Couldn't switch — still recording the previous area", HudIcon.Warning);
-                        try { _engine.Resume(); } catch { /* the stop path reports it */ }
+                        try { _engine.Resume(); }
+                        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or IOException)
+                        {
+                            ErrorLog.Write("Couldn't resume the previous target", ex);
+                        }
                     }
                 }
             }
@@ -485,6 +506,7 @@ public sealed class RecordingCoordinator
         await _gate.WaitAsync();
         try
         {
+            if (!IsRecording) return; // stopped while we waited for the gate (round 1 #4): nothing to restart
             _timer.Stop();
             await _engine.DiscardAsync();
             _state = RecorderState.Idle;
@@ -503,6 +525,7 @@ public sealed class RecordingCoordinator
         await _gate.WaitAsync();
         try
         {
+            if (!IsRecording) return; // already stopped and saved while we waited (round 1 #4): don't claim a discard
             _timer.Stop();
             _state.Transition(RecorderEvent.Finish);
             TearDownOverlays();
@@ -515,8 +538,12 @@ public sealed class RecordingCoordinator
         HudController.Show("Recording discarded");
     }
 
+    /// <summary>Bumped whenever the overlays are torn down, so an await that started before can tell it's stale.</summary>
+    private int _overlayGeneration;
+
     private void TearDownOverlays()
     {
+        _overlayGeneration++;
         _clicks?.Stop();
         _clicks = null;
         _keystrokes?.Stop();
@@ -567,7 +594,11 @@ public sealed class RecordingCoordinator
             _onStateChange(false, null);
             _onPauseStateChange(false, false);
 
-            if (path is null) return;
+            if (path is null)
+            {
+                if (_engine.LastFailure is { } why) HudController.Show(why, HudIcon.Warning); // never vanish silently (round 1 #2)
+                return;
+            }
 
             // GIF: convert the finished MP4 (skipped when quitting — keep the MP4 so nothing is lost).
             if (!_exiting && _format == RecordingFormat.Gif)

@@ -50,7 +50,8 @@ public static class MediaInfo
                 headerLen = 16;
             }
             else if (size == 0) size = end - pos;
-            if (size < headerLen || pos + size > end) return null;
+            // A 64-bit size past long.MaxValue reads negative; never let pos + size wrap (round 1 #15).
+            if (size < headerLen || size > end - pos) return null;
 
             if (type == "moov" && depth == 0) return FindMvhd(s, pos + headerLen, pos + size, depth + 1);
             if (type == "mvhd" && depth == 1)
@@ -70,7 +71,9 @@ public static class MediaInfo
                     timescale = BinaryPrimitives.ReadUInt32BigEndian(body[12..16]);
                     duration = BinaryPrimitives.ReadUInt32BigEndian(body[16..20]);
                 }
-                return timescale > 0 ? TimeSpan.FromSeconds((double)duration / timescale) : null;
+                if (timescale <= 0 || duration < 0) return null;
+                double seconds = (double)duration / timescale;
+                return seconds < TimeSpan.MaxValue.TotalSeconds / 2 ? TimeSpan.FromSeconds(seconds) : null;
             }
             pos += size;
         }
@@ -79,6 +82,12 @@ public static class MediaInfo
 
     /// <summary>A GIF's length: the sum of its Graphic Control Extension delays (hundredths of a second), or null.</summary>
     public static TimeSpan? GifDuration(Stream s)
+    {
+        try { return GifDurationCore(s); }
+        catch (Exception ex) when (ex is IOException or ArgumentException or OverflowException) { return null; }
+    }
+
+    private static TimeSpan? GifDurationCore(Stream s)
     {
         var r = new BinaryReader(s);
         try
