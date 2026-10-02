@@ -579,43 +579,69 @@ public sealed class RecordingCoordinator
         Tours.TourEvents.Post(BetterScreenshot.Tours.TourEvent.Action("recording.stopped"));
         if (_stopping) return;
         _stopping = true;
+        string? path = null;
+        BitmapSource? thumb = null;
+        bool toGif = false;
         await _gate.WaitAsync();
         try
         {
-            if (!IsRecording) return; // discarded / restarted meanwhile
+            if (!IsRecording)
+            {
+                // A Restart held the gate and is now counting down again: this Stop was meant for it (round 2 #13).
+                if (_state.Phase == RecorderPhase.Armed) CancelStrip();
+                return; // discarded / restarted meanwhile
+            }
             _timer.Stop();
             _state.Transition(RecorderEvent.Finish);
             TearDownOverlays();
 
-            var thumb = CaptureThumb(_region);
-            string? path = await _engine.StopAsync();
-
-            _state = RecorderState.Idle;
-            _onStateChange(false, null);
-            _onPauseStateChange(false, false);
+            thumb = CaptureThumb(_region);
+            try { path = await _engine.StopAsync(); }
+            catch (Exception ex)
+            {
+                // Never leave the recorder stuck in Finishing (round 2 #9): log, tell, and fall through to Idle.
+                ErrorLog.Write("Stopping the recording failed", ex);
+                HudController.Show("Recording failed — details in error.log", HudIcon.Warning);
+                return;
+            }
+            finally
+            {
+                _state = RecorderState.Idle;
+                _onStateChange(false, null);
+                _onPauseStateChange(false, false);
+            }
 
             if (path is null)
             {
                 if (_engine.LastFailure is { } why) HudController.Show(why, HudIcon.Warning); // never vanish silently (round 1 #2)
                 return;
             }
-
-            // GIF: convert the finished MP4 (skipped when quitting — keep the MP4 so nothing is lost).
-            if (!_exiting && _format == RecordingFormat.Gif)
-            {
-                HudController.Show("Converting to GIF…");
-                string gifPath = Path.ChangeExtension(path, ".gif");
-                path = await GifExporter.ConvertAsync(path, gifPath) ?? path;
-            }
-
-            if (!_exiting)
-                _onFinished(path, thumb);
+            toGif = !_exiting && _format == RecordingFormat.Gif;
         }
         finally
         {
+            // Released BEFORE the GIF conversion (round 2 #6): it can take minutes, and a new take started meanwhile
+            // must be stoppable, pausable and switchable.
             _gate.Release();
             _stopping = false;
         }
+        if (path is null) return;
+
+        // GIF: convert the finished MP4 (skipped when quitting — keep the MP4 so nothing is lost).
+        if (toGif)
+        {
+            var hud = HudController.ShowProgress("Converting to GIF…");
+            try
+            {
+                string gifPath = Path.ChangeExtension(path, ".gif");
+                path = await GifExporter.ConvertAsync(path, gifPath,
+                    f => hud.Update($"Converting to GIF… {f * 100:0}%")) ?? path;
+            }
+            finally { hud.Close(); }
+        }
+
+        if (!_exiting)
+            _onFinished(path, thumb!);
     }
 
     private static BitmapSource CaptureThumb(PxRect region)

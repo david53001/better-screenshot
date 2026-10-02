@@ -9,8 +9,11 @@ public enum HudIcon { None, Copy, Text, Warning, Done }
 /// <summary>A transient bottom-center toast (auto-dismisses after 1.5s), e.g. the Capture-Text result message.</summary>
 public partial class HudWindow : Window
 {
-    public HudWindow(string message, HudIcon icon = HudIcon.None)
+    private readonly bool _autoClose;
+
+    public HudWindow(string message, HudIcon icon = HudIcon.None, bool autoClose = true)
     {
+        _autoClose = autoClose;
         InitializeComponent();
         Message.Text = message;
         if (IconKey(icon) is { } key)
@@ -35,6 +38,8 @@ public partial class HudWindow : Window
         var work = SystemParameters.WorkArea;
         Left = work.X + (work.Width - ActualWidth) / 2;
         Top = work.Bottom - ActualHeight - 80;
+        SizeChanged += (_, _) => Left = work.X + (work.Width - ActualWidth) / 2; // stays centred as the text changes
+        if (!_autoClose) return;
 
         var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.5) };
         timer.Tick += (_, _) => { timer.Stop(); Close(); };
@@ -46,4 +51,22 @@ public partial class HudWindow : Window
 public static class HudController
 {
     public static void Show(string message, HudIcon icon = HudIcon.None) => new HudWindow(message, icon).Show();
+
+    /// <summary>A toast that stays up until closed, for a long job (GIF conversion) whose text updates as it runs.</summary>
+    public static HudProgress ShowProgress(string message)
+    {
+        var w = new HudWindow(message, HudIcon.None, autoClose: false);
+        w.Show();
+        return new HudProgress(w);
+    }
+}
+
+/// <summary>A persistent toast from <see cref="HudController.ShowProgress"/>.</summary>
+public sealed class HudProgress
+{
+    private readonly HudWindow _window;
+    internal HudProgress(HudWindow window) => _window = window;
+    /// <summary>Safe from any thread (ffmpeg progress arrives on the thread pool).</summary>
+    public void Update(string message) => _window.Dispatcher.BeginInvoke(() => _window.Message.Text = message);
+    public void Close() => _window.Close();
 }
