@@ -107,7 +107,7 @@ Priority P1 (do first) / P2 / P3.
 | 24 | Windows open centred on the screen in use, reopen as last closed | **DONE af873aa** — centred in the pointer screen's work area, shrunk to fit; editor / video editor / History reopen as last closed (size or maximised); settings key windowPlacement | P2 | v3 "Window placement" |
 | 25 | Guided tours + ⓘ on every window + Help & Tours + Welcome question | **DONE** 6cf5ae8 (+5594d33 engine) | P1 | v3 Part 7 |
 | 26 | Tours review fixes (colours #C62D22, counter, placement, shorter tours) | **DONE** 6cf5ae8 (leader obstacle routing simplified) | — | v3 §7.3–§7.8 |
-| 27 | Native look (MacStats design language) v3.1.0 | DONE b91c187 | P1 | v3 Part 9 |
+| 27 | Native look (MacStats design language) v3.1.0 | DONE b91c187 (light mode daf33c3) | P1 | v3 Part 9 |
 | 28 | **Opacity setting** (2026-09-30) | DONE b91c187 | P1 | §4.9 |
 | 29 | Tour outline follows each control's shape; Settings tour **Opacity** step with live demo | **DONE e07e40c** (+6cf5ae8) — outline = control radius + 4 / 6 square, capsule-clamped; Settings tour Opacity step with the live OpacityDemoPath demo | P2 | §4.10 |
 | 30 | Windows open on the current desktop (Spaces → Windows virtual desktops) | **DONE d968b0a** — IVirtualDesktopManager: an open window on another desktop is moved here and re-centred under the pointer | P2 | §4.11 |
