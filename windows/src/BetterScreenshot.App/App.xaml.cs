@@ -112,7 +112,7 @@ public partial class App : System.Windows.Application
                     : $"Recovered {t.Result} interrupted recordings to your Recordings folder", Overlays.HudIcon.Done);
         }, TaskScheduler.FromCurrentSynchronizationContext());
         Controls.Surfaces.Set(_settings.Capture.UiOpacity);
-        _commands = new CaptureCoordinator(_settings, Shutdown);
+        _commands = new CaptureCoordinator(_settings, () => { Onboarding.WelcomeWindow.AppIsQuitting = true; Shutdown(); });
         _tray = new TrayIcon(_commands, _settings.Hotkeys);
         _hotkeys = new HotkeyController(_commands);
         _hotkeys.Apply(_settings.Hotkeys);

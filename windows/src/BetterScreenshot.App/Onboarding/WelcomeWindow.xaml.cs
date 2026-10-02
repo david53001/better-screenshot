@@ -105,10 +105,14 @@ public partial class WelcomeWindow : Window
 
     private void NoThanks_Click(object sender, RoutedEventArgs e) => Close();
 
+    /// <summary>Set when the app is quitting, so the window closing with it isn't taken as "No Thanks" — the
+    /// question is asked again next launch (review round 2 #21).</summary>
+    public static bool AppIsQuitting { get; set; }
+
     protected override void OnClosing(CancelEventArgs e)
     {
         base.OnClosing(e);
-        if (!e.Cancel && _asking)
+        if (!e.Cancel && _asking && !AppIsQuitting)
         {
             _asking = false;
             Answered?.Invoke(false);
