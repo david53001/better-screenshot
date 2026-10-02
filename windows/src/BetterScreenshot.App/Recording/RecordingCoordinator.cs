@@ -486,6 +486,8 @@ public sealed class RecordingCoordinator
                 {
                     var clamped = raw.Region.Intersection(new PxRect(desktop.X, desktop.Y, desktop.Width, desktop.Height));
                     picked = clamped.IsEmpty ? null : (clamped, raw.Hwnd);
+                    if (picked is null) // not a silent Esc (round 2 #12)
+                        HudController.Show("That window is off-screen — still recording the previous one", HudIcon.Warning);
                 }
                 if (picked is { } pick)
                 {
