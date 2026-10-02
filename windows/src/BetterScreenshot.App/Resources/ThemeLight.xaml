@@ -1,0 +1,59 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- The light palette (review round 3 #2, v3 Part 9 "Settings follows the system theme"). Same keys as the
+         palette in Theme.xaml; SystemTheme merges this into a window's own resources when Windows apps are in light
+         mode, and the controls' DynamicResource references pick it up. Only Settings and History follow the system:
+         HUDs, the editor and the video editor stay dark (spec). Monochrome inverted: black is the accent, and the
+         "ink" washes are black at the same alphas the dark palette uses in white. -->
+    <SolidColorBrush x:Key="Theme.WindowBrush" Color="#F3F3F3"/>
+    <SolidColorBrush x:Key="Theme.ChromeBrush" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="Theme.CardBrush" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="Theme.ControlBrush" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="Theme.ControlHoverBrush" Color="#F5F5F5"/>
+    <SolidColorBrush x:Key="Theme.ControlPressedBrush" Color="#EBEBEB"/>
+    <SolidColorBrush x:Key="Theme.SubtleHoverBrush" Color="#12000000"/>
+    <SolidColorBrush x:Key="Theme.SubtlePressedBrush" Color="#1F000000"/>
+    <SolidColorBrush x:Key="Theme.BorderBrush" Color="#DCDCDC"/>
+    <SolidColorBrush x:Key="Theme.TextBrush" Color="#1C1C1E"/>
+    <SolidColorBrush x:Key="Theme.SecondaryTextBrush" Color="#6C6C70"/>
+    <SolidColorBrush x:Key="Theme.AccentBrush" Color="#1C1C1E"/>
+    <SolidColorBrush x:Key="Theme.AccentHoverBrush" Color="#3A3A3C"/>
+    <SolidColorBrush x:Key="Theme.AccentPressedBrush" Color="#545456"/>
+    <SolidColorBrush x:Key="Theme.DangerBrush" Color="#D70015"/>
+    <SolidColorBrush x:Key="Theme.ScrollThumbBrush" Color="#40000000"/>
+    <SolidColorBrush x:Key="Theme.SegmentTrackBrush" Color="#1A000000"/>
+
+    <SolidColorBrush x:Key="Theme.TextStrongBrush" Color="#000000"/>
+    <SolidColorBrush x:Key="Theme.TextW85" Color="#2C2C2E"/>
+    <SolidColorBrush x:Key="Theme.SubtleTextBrush" Color="#6C6C70"/>
+    <SolidColorBrush x:Key="Theme.FaintTextBrush" Color="#8E8E93"/>
+
+    <SolidColorBrush x:Key="Theme.SelectedFillBrush" Color="#1F000000"/>
+    <SolidColorBrush x:Key="Theme.SelectedBorderBrush" Color="#3D000000"/>
+
+    <SolidColorBrush x:Key="Theme.Ink06Brush" Color="#0F000000"/>
+    <SolidColorBrush x:Key="Theme.Ink07Brush" Color="#12000000"/>
+    <SolidColorBrush x:Key="Theme.Ink08Brush" Color="#14000000"/>
+    <SolidColorBrush x:Key="Theme.Ink10Brush" Color="#1A000000"/>
+    <SolidColorBrush x:Key="Theme.Ink12Brush" Color="#1F000000"/>
+    <SolidColorBrush x:Key="Theme.Ink13Brush" Color="#22000000"/>
+    <SolidColorBrush x:Key="Theme.Ink16Brush" Color="#29000000"/>
+    <SolidColorBrush x:Key="Theme.Ink17Brush" Color="#2B000000"/>
+    <SolidColorBrush x:Key="Theme.Ink18Brush" Color="#2E000000"/>
+    <SolidColorBrush x:Key="Theme.Ink20Brush" Color="#33000000"/>
+    <SolidColorBrush x:Key="Theme.Ink22Brush" Color="#38000000"/>
+    <SolidColorBrush x:Key="Theme.Ink23Brush" Color="#3A000000"/>
+    <SolidColorBrush x:Key="Theme.Ink24Brush" Color="#3D000000"/>
+    <SolidColorBrush x:Key="Theme.Ink40Brush" Color="#66000000"/>
+    <SolidColorBrush x:Key="Theme.Ink55Brush" Color="#8C000000"/>
+    <SolidColorBrush x:Key="Theme.OnAccentBrush" Color="#FFFFFF"/>
+    <!-- OFF switch: a dark knob on the outlined track, as Windows' own light-mode toggles draw it. -->
+    <SolidColorBrush x:Key="Theme.SwitchKnobOffBrush" Color="#5C5C5F"/>
+    <SolidColorBrush x:Key="Theme.InfoGlyphBrush" Color="#5C5C5F"/>
+
+    <SolidColorBrush x:Key="History.CellBrush" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="History.CellHoverBrush" Color="#F0F0F2"/>
+    <SolidColorBrush x:Key="History.ThumbBrush" Color="#E9E9EB"/>
+    <SolidColorBrush x:Key="History.SelectedBrush" Color="#1C1C1E"/>
+    <SolidColorBrush x:Key="History.BadgeBrush" Color="#6C6C70"/>
+</ResourceDictionary>

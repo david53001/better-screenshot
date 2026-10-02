@@ -26,7 +26,6 @@ public sealed class InfoButton : Border
 {
     private static readonly FontFamily IconFont = new("Segoe Fluent Icons, Segoe MDL2 Assets");
     private static readonly FontFamily UiFont = new("Segoe UI Variable Text, Segoe UI");
-    private static readonly Brush Glyph = Frozen(Color.FromRgb(0xC8, 0xC8, 0xCC));
     private static readonly Brush HoverFill = Frozen(Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF));
     private static readonly Brush MenuFill = Frozen(Color.FromRgb(0x1C, 0x1C, 0x1E));
     private static readonly Brush MenuBorder = Frozen(Color.FromRgb(0x3A, 0x3A, 0x3C));
@@ -48,17 +47,19 @@ public sealed class InfoButton : Border
         Cursor = Cursors.Hand;
         ToolTip = "Tour & Keyboard Shortcuts";
         AutomationProperties.SetName(this, "Tour & Keyboard Shortcuts");
-        Child = new TextBlock
+        var glyph = new TextBlock
         {
-            Text = "", FontFamily = IconFont, FontSize = 14, Foreground = Glyph,
+            Text = "", FontFamily = IconFont, FontSize = 14,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         };
+        glyph.SetResourceReference(TextBlock.ForegroundProperty, "Theme.InfoGlyphBrush"); // light-mode windows too
+        Child = glyph;
         _popup = new Popup
         {
             PlacementTarget = this, Placement = PlacementMode.Bottom, VerticalOffset = 4, StaysOpen = false,
             AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade,
         };
-        MouseEnter += (_, _) => Background = HoverFill;
+        MouseEnter += (_, _) => SetResourceReference(BackgroundProperty, "Theme.Ink12Brush");
         MouseLeave += (_, _) => Background = Brushes.Transparent;
         MouseLeftButtonDown += (_, e) =>
         {

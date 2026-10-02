@@ -58,6 +58,7 @@ public partial class SettingsWindow : Window, Tours.ITourHost
             if (_opacitySave is { IsEnabled: true } pending) { pending.Stop(); Apply(); } // a pending Opacity save
         };
         Surfaces.UseMica(this); // v3 Part 9: Mica + the Opacity layer (dark title bar included)
+        SystemTheme.Follow(this); // round 3 #2: light in Windows light mode (the editor and HUDs stay dark)
         // The card layout sizes to content (SizeToContent=Height); clamp just under the work area so a
         // genuinely oversized window can't run past it (keeps the title-bar ✕ reachable) while leaving the
         // normal ~970px settings comfortably unclamped — no spurious outer scrollbar. The ScrollViewer only
@@ -289,13 +290,12 @@ public partial class SettingsWindow : Window, Tours.ITourHost
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             var titleRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            titleRow.Children.Add(new TextBlock
+            titleRow.Children.Add(Themed(new TextBlock
             {
                 Text = action.Title(),
                 FontSize = 12.5,
                 VerticalAlignment = VerticalAlignment.Center,
-                Foreground = (Brush)FindResource("Theme.TextW85"),
-            });
+            }, (TextBlock.ForegroundProperty, "Theme.TextW85")));
             var (explanation, example) = ShortcutHelp(action);
             titleRow.Children.Add(new InfoTip
             {
@@ -314,21 +314,19 @@ public partial class SettingsWindow : Window, Tours.ITourHost
                 FontSize = 12,
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Foreground = (Brush)FindResource("Theme.TextBrush"),
             };
+            Themed(label, (TextBlock.ForegroundProperty, "Theme.TextBrush"));
             _shortcutLabels[action] = label;
-            var chip = new Border
+            var chip = Themed(new Border
             {
                 Child = label,
                 MinWidth = 118,
                 Padding = new Thickness(10, 4, 10, 4),
                 CornerRadius = new CornerRadius(6),
-                Background = (Brush)FindResource("Theme.ChromeBrush"),
-                BorderBrush = (Brush)FindResource("Theme.BorderBrush"),
                 BorderThickness = new Thickness(1),
                 Margin = new Thickness(0, 0, 8, 0),
                 VerticalAlignment = VerticalAlignment.Center,
-            };
+            }, (Border.BackgroundProperty, "Theme.ChromeBrush"), (Border.BorderBrushProperty, "Theme.BorderBrush"));
             Grid.SetColumn(chip, 1);
             row.Children.Add(chip);
 
@@ -391,6 +389,13 @@ public partial class SettingsWindow : Window, Tours.ITourHost
              "Pause to skip a distraction mid-recording, then resume where you left off."),
         _ => ("Runs this command.", ""),
     };
+
+    /// <summary>Palette brushes by resource reference, so code-built rows repaint with the window's light/dark mode.</summary>
+    private static T Themed<T>(T element, params (DependencyProperty Property, string Key)[] brushes) where T : FrameworkElement
+    {
+        foreach (var (property, key) in brushes) element.SetResourceReference(property, key);
+        return element;
+    }
 
     private void StartRecording(object sender, RoutedEventArgs e)
     {

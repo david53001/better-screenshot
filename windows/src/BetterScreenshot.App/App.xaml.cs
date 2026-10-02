@@ -38,11 +38,15 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
         InstallCrashGuards();
-        // An accent change in Windows Settings arrives as ImmersiveColorSet (General): re-read it on next use.
+        // An accent or light/dark change in Windows Settings arrives as ImmersiveColorSet (General): re-read them.
         Microsoft.Win32.SystemEvents.UserPreferenceChanged += (_, a) =>
         {
             if (a.Category is Microsoft.Win32.UserPreferenceCategory.General or Microsoft.Win32.UserPreferenceCategory.Color)
+            {
                 Controls.SystemAccent.Invalidate();
+                // Light/dark mode flips arrive the same way; repaint Settings/History on the UI thread.
+                Dispatcher.InvokeAsync(Controls.SystemTheme.Invalidate);
+            }
         };
         Controls.Surfaces.Set(Core.UiOpacity.Default); // surface brushes exist before any window loads
 

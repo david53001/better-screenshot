@@ -43,11 +43,8 @@ public sealed record HistoryWindowActions(Action<BitmapSource> Annotate, Action<
 /// </summary>
 public partial class HistoryWindow : Window
 {
-    private static readonly Brush CellBg = Frozen(Color.FromRgb(0x16, 0x16, 0x18));
-    private static readonly Brush CellHoverBg = Frozen(Color.FromRgb(0x22, 0x22, 0x25));
-    private static readonly Brush ThumbBg = Frozen(Color.FromRgb(0x0E, 0x0E, 0x0E));
-    private static readonly Brush SelectedBorder = Frozen(Color.FromRgb(0xFF, 0xFF, 0xFF)); // monochrome selection
-    private static readonly Brush BadgeBrush = Frozen(Color.FromRgb(0xB0, 0xB0, 0xB5));
+    // Cell surfaces are palette keys (History.* in Theme.xaml / ThemeLight.xaml), set by resource reference so the
+    // grid follows the window's light/dark mode (round 3 #2).
     private static readonly Brush WarnBrush = Frozen(Color.FromRgb(0xFF, 0x9F, 0x0A));
     private static readonly Brush PlayDisc = Frozen(Color.FromArgb(0x99, 0x00, 0x00, 0x00));
 
@@ -64,6 +61,7 @@ public partial class HistoryWindow : Window
     {
         InitializeComponent();
         Controls.Surfaces.UseMica(this); // v3 Part 9 + §4.9: History uses the window material too
+        Controls.SystemTheme.Follow(this); // round 3 #2: light in Windows light mode
         _history = history;
         _actions = actions;
         InfoSlot.Content = new Tours.InfoButton(BetterScreenshot.Tours.TourId.History, () => new (string, string)[]
@@ -153,29 +151,32 @@ public partial class HistoryWindow : Window
             });
             thumbGrid.Children.Add(play);
         }
-        var thumbHost = new Border { Background = ThumbBg, CornerRadius = new CornerRadius(8), Height = 110, Child = thumbGrid };
+        var thumbHost = new Border { CornerRadius = new CornerRadius(8), Height = 110, Child = thumbGrid };
+        thumbHost.SetResourceReference(Border.BackgroundProperty, "History.ThumbBrush");
 
         var badgeRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(2, 4, 0, 0) };
-        badgeRow.Children.Add(new IconPresenter
+        var badge = new IconPresenter
         {
             IconKey = entry.Kind == HistoryKind.Recording ? "film" : "camera",
-            Brush = BadgeBrush,
             Width = 15,
             Height = 15,
             VerticalAlignment = VerticalAlignment.Center,
-        });
+        };
+        badge.SetResourceReference(IconPresenter.BrushProperty, "History.BadgeBrush");
+        badgeRow.Children.Add(badge);
         string text = HistoryDateFormat.Relative(DateTime.UtcNow, entry.Date);
         if (Info(entry) is { } info) text += "  ·  " + info;
-        badgeRow.Children.Add(new TextBlock
+        var when = new TextBlock
         {
             Text = text,
-            Foreground = BadgeBrush,
             FontSize = 11,
             Margin = new Thickness(5, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
             MaxWidth = 146,
-        });
+        };
+        when.SetResourceReference(TextBlock.ForegroundProperty, "History.BadgeBrush");
+        badgeRow.Children.Add(when);
         if (entry.Kind == HistoryKind.Recording && !_history.SavedFileExists(entry))
         {
             badgeRow.Children.Add(new TextBlock
@@ -197,15 +198,15 @@ public partial class HistoryWindow : Window
             Margin = new Thickness(6),
             Padding = new Thickness(6),
             CornerRadius = new CornerRadius(12), // §4.10: the tour outline is concentric with it (12 + 4)
-            Background = CellBg,
             BorderThickness = new Thickness(2),
-            BorderBrush = _selection.IsSelected(entry.Id) ? SelectedBorder : Brushes.Transparent,
             Cursor = Cursors.Hand,
             Child = stack,
         };
+        cell.SetResourceReference(Border.BackgroundProperty, "History.CellBrush");
+        ShowSelected(cell, _selection.IsSelected(entry.Id));
         System.Windows.Automation.AutomationProperties.SetName(cell, (entry.Kind == HistoryKind.Recording ? "Recording, " : "Screenshot, ") + text);
-        cell.MouseEnter += (_, _) => cell.Background = CellHoverBg;
-        cell.MouseLeave += (_, _) => cell.Background = CellBg;
+        cell.MouseEnter += (_, _) => cell.SetResourceReference(Border.BackgroundProperty, "History.CellHoverBrush");
+        cell.MouseLeave += (_, _) => cell.SetResourceReference(Border.BackgroundProperty, "History.CellBrush");
         cell.ContextMenu = BuildContextMenu(entry);
         cell.MouseRightButtonDown += (_, _) =>
         {
@@ -294,9 +295,15 @@ public partial class HistoryWindow : Window
     private void Apply(HistorySelectionState state)
     {
         _selection = state;
-        foreach (var (id, cell) in _cells)
-            cell.BorderBrush = _selection.IsSelected(id) ? SelectedBorder : Brushes.Transparent;
+        foreach (var (id, cell) in _cells) ShowSelected(cell, _selection.IsSelected(id));
         UpdateButtons();
+    }
+
+    /// <summary>Monochrome selection ring: the palette's strongest ink (white in dark mode, near-black in light).</summary>
+    private static void ShowSelected(Border cell, bool selected)
+    {
+        if (selected) cell.SetResourceReference(Border.BorderBrushProperty, "History.SelectedBrush");
+        else cell.BorderBrush = Brushes.Transparent;
     }
 
     // ------------------------------------------------------------------ H2 cell info

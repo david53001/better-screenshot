@@ -5,26 +5,26 @@
         Title="BetterScreenshot Settings"
         Width="960" SizeToContent="Height" ResizeMode="CanMinimize"
         WindowStartupLocation="CenterScreen"
-        Background="{StaticResource Theme.WindowBrush}" FontFamily="Segoe UI"
-        Foreground="{StaticResource Theme.TextBrush}">
+        Background="{DynamicResource Theme.WindowBrush}" FontFamily="Segoe UI"
+        Foreground="{DynamicResource Theme.TextBrush}">
     <Window.Resources>
         <!-- Field caption above a segmented control -->
         <Style x:Key="FieldLabel" TargetType="TextBlock">
             <Setter Property="FontSize" Value="11.5"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Foreground" Value="{StaticResource Theme.TextW85}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Theme.TextW85}"/>
             <Setter Property="Margin" Value="0,0,0,6"/>
         </Style>
         <!-- Primary label in a label+switch row -->
         <Style x:Key="RowTitle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="12.5"/>
             <Setter Property="FontWeight" Value="Medium"/>
-            <Setter Property="Foreground" Value="{StaticResource Theme.TextW85}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Theme.TextW85}"/>
         </Style>
         <!-- Secondary sub-label under a row title -->
         <Style x:Key="RowSub" TargetType="TextBlock">
             <Setter Property="FontSize" Value="10.5"/>
-            <Setter Property="Foreground" Value="{StaticResource Theme.SubtleTextBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Theme.SubtleTextBrush}"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
             <Setter Property="Margin" Value="0,2,0,0"/>
         </Style>
@@ -44,7 +44,7 @@
                 <ContentPresenter x:Name="InfoSlot" DockPanel.Dock="Right" VerticalAlignment="Top" Margin="12,-4,0,0"/>
                 <TextBlock Text="Capture &amp; recording preferences — hover the &#8505; next to any setting for a plain-language explanation and example."
                            FontSize="11.5" TextWrapping="Wrap"
-                           Foreground="{StaticResource Theme.SecondaryTextBrush}" Margin="0,0,0,0"/>
+                           Foreground="{DynamicResource Theme.SecondaryTextBrush}" Margin="0,0,0,0"/>
             </DockPanel>
 
             <!-- Three-column card body — matches JVoice's 960-wide settings: wider (three columns)
@@ -156,7 +156,7 @@
                                 <TextBlock x:Name="DismissValueLabel" Grid.Column="1" MinWidth="46"
                                            Margin="12,0,0,0" VerticalAlignment="Center" TextAlignment="Right"
                                            FontSize="12" FontWeight="SemiBold"
-                                           Foreground="{StaticResource Theme.TextW85}"/>
+                                           Foreground="{DynamicResource Theme.TextW85}"/>
                             </Grid>
                         </StackPanel>
                     </ctl:DarkSection>
@@ -247,7 +247,7 @@
                                 <RadioButton x:Name="Cd10" Content="10s" GroupName="Countdown" Style="{StaticResource Theme.SegmentRight}" Checked="Changed"/>
                             </UniformGrid>
 
-                            <Rectangle Height="1" Fill="{StaticResource Theme.BorderBrush}" Margin="0,14,0,12"/>
+                            <Rectangle Height="1" Fill="{DynamicResource Theme.BorderBrush}" Margin="0,14,0,12"/>
 
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                 <TextBlock Style="{StaticResource FieldLabel}" Text="Microphone" Margin="0" VerticalAlignment="Center"/>
@@ -309,7 +309,7 @@
                             </StackPanel>
                             <CheckBox x:Name="LaunchAtLoginCheck" Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource Theme.MonoSwitch}" Checked="Changed" Unchecked="Changed"/>
                         </Grid>
-                        <Rectangle Height="1" Fill="{StaticResource Theme.BorderBrush}" Margin="0,14,0,12"/>
+                        <Rectangle Height="1" Fill="{DynamicResource Theme.BorderBrush}" Margin="0,14,0,12"/>
                         <!-- Tours & tips (Mac v3 §7.8): firstUseToursEnabled (absent = off) + Reset All Tours. -->
                         <Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -357,7 +357,7 @@
                                 <TextBlock x:Name="TempRetentionValueLabel" Grid.Column="1" MinWidth="52"
                                            Margin="12,0,0,0" VerticalAlignment="Center" TextAlignment="Right"
                                            FontSize="12" FontWeight="SemiBold"
-                                           Foreground="{StaticResource Theme.TextW85}"/>
+                                           Foreground="{DynamicResource Theme.TextW85}"/>
                             </Grid>
                         </StackPanel>
                     </ctl:DarkSection>
@@ -486,8 +486,8 @@
                                     IsMoveToPointEnabled="True" Style="{StaticResource Theme.Slider}" ValueChanged="OpacitySlider_ValueChanged"
                                     AutomationProperties.Name="Opacity"/>
                             <Grid Margin="0,2,0,0">
-                                <TextBlock Text="Transparent" FontSize="10.5" Foreground="{StaticResource Theme.SecondaryTextBrush}" HorizontalAlignment="Left"/>
-                                <TextBlock Text="Opaque" FontSize="10.5" Foreground="{StaticResource Theme.SecondaryTextBrush}" HorizontalAlignment="Right"/>
+                                <TextBlock Text="Transparent" FontSize="10.5" Foreground="{DynamicResource Theme.SecondaryTextBrush}" HorizontalAlignment="Left"/>
+                                <TextBlock Text="Opaque" FontSize="10.5" Foreground="{DynamicResource Theme.SecondaryTextBrush}" HorizontalAlignment="Right"/>
                             </Grid>
                             <TextBlock Style="{StaticResource RowSub}" Margin="0,6,0,0" Text="How much of what's behind the app shows through its windows and panels."/>
                         </StackPanel>
@@ -506,7 +506,7 @@
 
             <!-- Footer note -->
             <TextBlock Grid.Row="3" Text="Changes apply immediately." FontSize="11"
-                       Foreground="{StaticResource Theme.SubtleTextBrush}" Margin="2,4,0,0"/>
+                       Foreground="{DynamicResource Theme.SubtleTextBrush}" Margin="2,4,0,0"/>
         </Grid>
     </ScrollViewer>
 </Window>

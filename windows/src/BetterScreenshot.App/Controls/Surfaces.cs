@@ -48,6 +48,39 @@ public static class Surfaces
         res["Window.LayerBrush"] = Frozen(Color.FromArgb(A(layer), 0x1C, 0x1C, 0x1E));
         res["Editor.LayerBrush"] = Frozen(Color.FromArgb(A(layer), 0x1C, 0x1C, 0x1E));
         res["Card.FillBrush"] = Frozen(Color.FromArgb(A(UiOpacity.CardFillAlpha(_value)), 0xFF, 0xFF, 0xFF));
+        SystemTheme.Refresh(); // light-mode windows carry their own layer + card brushes
+    }
+
+    /// <summary>
+    /// A system-theme follower's surfaces (<see cref="SystemTheme"/>): in light mode its own resources shadow the app's
+    /// dark <c>Window.LayerBrush</c> / <c>Card.FillBrush</c> with the light layer (#F3F3F3 at the same alpha) and the
+    /// text colour (black) at the card alpha; the title bar follows. Dark removes the shadows.
+    /// </summary>
+    internal static void ApplyMode(Window window, bool light)
+    {
+        var res = window.Resources;
+        if (light)
+        {
+            double layer = MicaSupported ? UiOpacity.WindowLayerAlpha(_value) : 1;
+            res["Window.LayerBrush"] = Frozen(Color.FromArgb(A(layer), 0xF3, 0xF3, 0xF3));
+            res["Card.FillBrush"] = Frozen(Color.FromArgb(A(UiOpacity.CardFillAlpha(_value)), 0x00, 0x00, 0x00));
+        }
+        else
+        {
+            res.Remove("Window.LayerBrush");
+            res.Remove("Card.FillBrush");
+        }
+        void Title()
+        {
+            var hwnd = new WindowInteropHelper(window).Handle;
+            if (hwnd == IntPtr.Zero) return;
+            int dark = light ? 0 : 1;
+            try { _ = DwmSetWindowAttribute(hwnd, DwmwaUseImmersiveDarkMode, ref dark, sizeof(int)); }
+            catch (DllNotFoundException) { }
+            catch (EntryPointNotFoundException) { }
+        }
+        if (new WindowInteropHelper(window).Handle != IntPtr.Zero) Title();
+        else window.SourceInitialized += (_, _) => Title();
     }
 
     /// <summary>Windows 11 22H2+ (build 22621) can put a system backdrop behind a window.</summary>

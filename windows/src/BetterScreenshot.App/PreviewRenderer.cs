@@ -119,6 +119,18 @@ internal static class PreviewRenderer
         yield return ("toast-warning", () => new HudWindow("No text found", HudIcon.Warning));
         yield return ("history-empty", () => new HistoryWindow(PreviewHistory(0), new HistoryWindowActions(_ => { }, _ => { }) { CaptureAreaChord = () => "Ctrl+Shift+4" }));
         yield return ("history-filled", () => new HistoryWindow(PreviewHistory(6), new HistoryWindowActions(_ => { }, _ => { })));
+        // Windows light mode (round 3 #2): the two windows that follow the system theme.
+        yield return ("settings-light", () => Light(() => new SettingsWindow(new SettingsStore(), new HotkeyController(commands))));
+        yield return ("history-filled-light", () => Light(() => new HistoryWindow(PreviewHistory(6), new HistoryWindowActions(_ => { }, _ => { }))));
+        yield return ("history-empty-light", () => Light(() => new HistoryWindow(PreviewHistory(0), new HistoryWindowActions(_ => { }, _ => { }) { CaptureAreaChord = () => "Ctrl+Shift+4" })));
+    }
+
+    /// <summary>Builds a window as Windows light mode would show it (whatever this PC is set to).</summary>
+    private static Window Light(Func<Window> make)
+    {
+        Controls.SystemTheme.PreviewOverride = true;
+        try { return make(); }
+        finally { Controls.SystemTheme.PreviewOverride = null; }
     }
 
     /// <summary>A screenshot-like sample for the editor: a light page with rows of text.</summary>

@@ -54,8 +54,6 @@ public sealed class InfoTip : Border
     private static readonly Brush HoverFill = Frozen(Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
     private static readonly Brush RingBrush = Frozen(Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
     private static readonly Brush GlyphBrush = Frozen(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF));
-    private static readonly Brush SecondaryGlyph = Frozen(Color.FromRgb(0x8E, 0x8E, 0x93));
-    private static readonly Brush PrimaryGlyph = Frozen(Color.FromRgb(0xF5, 0xF5, 0xF7));
 
     public InfoTip()
     {
@@ -72,11 +70,13 @@ public sealed class InfoTip : Border
         // The "i" is drawn as a filled vector path (not a TextBlock): this avoids ClearType subpixel colour
         // fringing on the dark circle and lets us centre by the glyph's *exact ink bounds* so every instance
         // is pixel-identical and perfectly centred.
-        var glyph = new IconPresenter { IconKey = "info", Width = 15, Height = 15, Brush = SecondaryGlyph };
+        // Palette brushes by reference, so the glyph follows a light-mode window (round 3 #2).
+        var glyph = new IconPresenter { IconKey = "info", Width = 15, Height = 15 };
+        glyph.SetResourceReference(IconPresenter.BrushProperty, "Theme.SecondaryTextBrush");
         Child = glyph;
 
-        MouseEnter += (_, _) => glyph.Brush = PrimaryGlyph;
-        MouseLeave += (_, _) => glyph.Brush = SecondaryGlyph;
+        MouseEnter += (_, _) => glyph.SetResourceReference(IconPresenter.BrushProperty, "Theme.TextBrush");
+        MouseLeave += (_, _) => glyph.SetResourceReference(IconPresenter.BrushProperty, "Theme.SecondaryTextBrush");
 
         // Fast to appear, generous time to read, and re-openable without the WPF re-show delay.
         ToolTipService.SetInitialShowDelay(this, 120);
@@ -133,46 +133,47 @@ public sealed class InfoTip : Border
 
         if (!string.IsNullOrWhiteSpace(Title))
         {
-            panel.Children.Add(new TextBlock
+            panel.Children.Add(Themed(new TextBlock
             {
                 Text = Title,
                 FontWeight = FontWeights.SemiBold,
                 FontSize = 12.5,
-                Foreground = TextBrush("Theme.TextBrush", Color.FromRgb(0xF5, 0xF5, 0xF7)),
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 4),
-            });
+            }, "Theme.TextBrush"));
         }
 
-        panel.Children.Add(new TextBlock
+        panel.Children.Add(Themed(new TextBlock
         {
             Text = Explanation,
             FontSize = 11.5,
-            Foreground = TextBrush("Theme.TextW85", Color.FromRgb(0xD9, 0xD9, 0xD9)),
             TextWrapping = TextWrapping.Wrap,
             LineHeight = 16,
-        });
+        }, "Theme.TextW85"));
 
         if (!string.IsNullOrWhiteSpace(Example))
         {
-            panel.Children.Add(new TextBlock
+            panel.Children.Add(Themed(new TextBlock
             {
                 Text = "e.g. " + Example,
                 FontSize = 11,
                 FontStyle = FontStyles.Italic,
-                Foreground = TextBrush("Theme.SubtleTextBrush", Color.FromRgb(0x8E, 0x8E, 0x93)),
                 TextWrapping = TextWrapping.Wrap,
                 LineHeight = 15,
                 Margin = new Thickness(0, 6, 0, 0),
-            });
+            }, "Theme.SubtleTextBrush"));
         }
 
         tip.Content = panel;
     }
 
-    /// <summary>Theme brush if present (so the tip tracks the app palette), else a literal fallback.</summary>
-    private Brush TextBrush(string resourceKey, Color fallback)
-        => TryFindResource(resourceKey) as Brush ?? Frozen(fallback);
+    /// <summary>The palette brush by reference: it resolves where the tip's own chrome does, so text and background
+    /// always come from the same (light or dark) palette.</summary>
+    private static TextBlock Themed(TextBlock text, string resourceKey)
+    {
+        text.SetResourceReference(TextBlock.ForegroundProperty, resourceKey);
+        return text;
+    }
 
     private static Brush Frozen(Color c)
     {
