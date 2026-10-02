@@ -349,7 +349,8 @@
 
     <!-- ===== ComboBox ===== -->
     <ControlTemplate x:Key="Theme.ComboBoxToggle" TargetType="ToggleButton">
-        <Border x:Name="Bd" Background="{DynamicResource Theme.ControlBrush}"
+        <!-- Input fill (6 %), like JVoice's dropdowns; buttons keep the 8 % control fill. -->
+        <Border x:Name="Bd" Background="{DynamicResource Theme.ChromeBrush}"
                 BorderBrush="{DynamicResource Theme.BorderBrush}" BorderThickness="1" CornerRadius="6">
             <Path HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0"
                   Data="M0,0 L4,4 L8,0" Stroke="{DynamicResource Theme.SecondaryTextBrush}" StrokeThickness="1.6"
