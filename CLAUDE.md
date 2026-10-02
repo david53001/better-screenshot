@@ -180,7 +180,11 @@ app but not redistribute, modify or sell it. Don't call the project "open source
 release asset is ever published, switch the README's Windows section to a
 `releases/latest/download/<asset>` link.
 
-Later (no spec yet): scrolling capture · self-timer/repeat-area (freeze screen shipped 2026-09-30: area + Capture Text selections draw over a still `FrozenScreen` grabbed at the hotkey and crop from it — `CaptureCoordinator.presentFrozenSelection`) · small quick wins (Repeat Previous Area, editor ⌘D/⌘⇧S bindings, capture sound, JPG-quality + filename settings; details in the local `CODEBASE-SCAN.md` if present) · P5 `betterscreenshot://` URL automation.
+**Performance pass (planned 2026-10-01, not started):** `docs/PERF-PLAN-2026-10-01.md`. Lower RAM/CPU
+without losing snappiness: baseline, ranked fixes with file:line, measurement commands, and two items
+that need the owner's decision first.
+
+Later (no spec yet): scrolling capture · self-timer/repeat-area (freeze screen shipped 2026-09-30: area + Capture Text selections draw over a still `FrozenScreen` grabbed at the hotkey and crop from it — `CaptureCoordinator.presentFrozenSelection`; the overlay goes up first and the grab runs behind it with our app excluded, see `docs/PROGRESS-2026-09-30-tours-freeze.md` follow-ups) · small quick wins (Repeat Previous Area, editor ⌘D/⌘⇧S bindings, capture sound, JPG-quality + filename settings; details in the local `CODEBASE-SCAN.md` if present) · P5 `betterscreenshot://` URL automation.
 
 ## Executing the plans
 Plans use checkbox steps. Execute task-by-task with the **superpowers:subagent-driven-development** (fresh subagent per task) or **superpowers:executing-plans** skill. Each task ends in a commit; each plan ends in a git tag (`v0.1-capture-core`, `v0.2-quick-access`, `v1.0`). Plan 1 Task 1 runs `git init` and `brew install xcodegen` (prerequisite).
