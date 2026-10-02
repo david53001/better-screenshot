@@ -38,6 +38,12 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
         InstallCrashGuards();
+        // An accent change in Windows Settings arrives as ImmersiveColorSet (General): re-read it on next use.
+        Microsoft.Win32.SystemEvents.UserPreferenceChanged += (_, a) =>
+        {
+            if (a.Category is Microsoft.Win32.UserPreferenceCategory.General or Microsoft.Win32.UserPreferenceCategory.Color)
+                Controls.SystemAccent.Invalidate();
+        };
         Controls.Surfaces.Set(Core.UiOpacity.Default); // surface brushes exist before any window loads
 
         // Perf harness workload (REVAMP section 6.1): 20 off-screen capture/card/editor cycles, then exit.

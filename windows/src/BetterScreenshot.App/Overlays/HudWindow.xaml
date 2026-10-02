@@ -8,7 +8,7 @@
     <!-- Review X5: the shared dark HUD surface + an optional leading icon (copy / text / warning). -->
     <Border CornerRadius="20" Background="{DynamicResource Hud.SurfaceBrush}" BorderBrush="#1AFFFFFF" BorderThickness="1" Padding="16,10,18,10">
         <StackPanel Orientation="Horizontal">
-            <c:IconPresenter x:Name="Icon" Width="15" Height="15" Margin="0,0,8,0" Brush="White"
+            <c:IconPresenter x:Name="IconGlyph" Width="15" Height="15" Margin="0,0,8,0" Brush="White"
                              VerticalAlignment="Center" Visibility="Collapsed"/>
             <TextBlock x:Name="Message" Foreground="White" FontSize="13" FontWeight="Medium" VerticalAlignment="Center"/>
         </StackPanel>

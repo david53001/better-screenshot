@@ -31,9 +31,6 @@ public static class Surfaces
 
     public static double Value => _value;
 
-    /// <summary>Raised after <see cref="Set"/> changed the value (brushes are already updated).</summary>
-    public static event Action? Changed;
-
     /// <summary>Sets the app-wide opacity (0 = Transparent … 1 = Opaque) and refreshes every surface brush.</summary>
     public static void Set(double value)
     {
@@ -51,7 +48,6 @@ public static class Surfaces
         res["Window.LayerBrush"] = Frozen(Color.FromArgb(A(layer), 0x1C, 0x1C, 0x1E));
         res["Editor.LayerBrush"] = Frozen(Color.FromArgb(A(layer), 0x1C, 0x1C, 0x1E));
         res["Card.FillBrush"] = Frozen(Color.FromArgb(A(UiOpacity.CardFillAlpha(_value)), 0xFF, 0xFF, 0xFF));
-        Changed?.Invoke();
     }
 
     /// <summary>Windows 11 22H2+ (build 22621) can put a system backdrop behind a window.</summary>

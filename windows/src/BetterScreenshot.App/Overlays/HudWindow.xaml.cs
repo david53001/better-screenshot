@@ -15,8 +15,8 @@ public partial class HudWindow : Window
         Message.Text = message;
         if (IconKey(icon) is { } key)
         {
-            Icon.IconKey = key;
-            Icon.Visibility = Visibility.Visible;
+            IconGlyph.IconKey = key;
+            IconGlyph.Visibility = Visibility.Visible;
         }
         Loaded += OnLoaded;
     }

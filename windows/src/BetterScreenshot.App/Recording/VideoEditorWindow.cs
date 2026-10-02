@@ -66,7 +66,7 @@ public sealed class VideoEditorWindow : Window
     private MediaInfo? _info;
     private int _selected;
     private double _playhead;
-    private bool _playing, _exporting, _replaced, _broken, _updating;
+    private bool _playing, _exporting, _broken, _updating;
     private int _playIndex;
     private string? _note;
     private string? _framesDir;
@@ -144,7 +144,7 @@ public sealed class VideoEditorWindow : Window
         // 1. transport / edit row
         var row = new DockPanel { Height = 28, LastChildFill = false };
         _playButton.Content = _playIcon;
-        Style(_playButton, borderless: true, width: 29);
+        StyleButton(_playButton, borderless: true, width: 29);
         _playButton.Click += (_, _) => TogglePlay();
         Dock(row, _playButton);
         _time.FontFamily = new System.Windows.Media.FontFamily("Segoe UI Variable Text, Segoe UI");
@@ -328,7 +328,7 @@ public sealed class VideoEditorWindow : Window
         return bar;
     }
 
-    private void Style(Button b, bool borderless, double width = 0)
+    private void StyleButton(Button b, bool borderless, double width = 0)
     {
         if (borderless) b.Style = (Style)FindResource("Theme.SubtleButton");
         if (width > 0) b.Width = width;
@@ -747,7 +747,6 @@ public sealed class VideoEditorWindow : Window
         _history.Reset(new CutList(_info.Duration));
         _selected = 0;
         _muteAll.IsChecked = false;
-        _replaced = true;
         _note = "Edited ✓ original replaced · " + TrimRange.Timestamp(_info.Duration);
         _cancel.Content = "Done";
         _cancel.ToolTip = "Close the editor";

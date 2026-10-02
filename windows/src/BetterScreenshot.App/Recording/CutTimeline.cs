@@ -100,7 +100,7 @@ public sealed class CutTimeline : FrameworkElement
         double w = ActualWidth, h = ActualHeight;
         if (w <= 2 * Inset || _cuts.Duration <= 0) return;
         double scale = Scale, trackBottom = h - 6, trackH = trackBottom - TrackTop;
-        var items = _drag == Drag.Edge && _frozenItems is not null ? _cuts.Timeline : _cuts.Timeline;
+        var items = _cuts.Timeline;
 
         dc.DrawRoundedRectangle(TrackBack, null, new Rect(2, TrackTop - 3, w - 4, trackH + 6), 8, 8);
         DrawRuler(dc, items, scale, w);
@@ -309,6 +309,21 @@ public sealed class CutTimeline : FrameworkElement
 
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
     {
+        EndDrag();
+        ReleaseMouseCapture();
+        e.Handled = true;
+    }
+
+    /// <summary>Alt+Tab or a dialog mid-drag takes the capture away: finish the drag there, or the timeline would stay
+    /// in edge-drag mode with nothing holding the mouse (review round 1 #20).</summary>
+    protected override void OnLostMouseCapture(MouseEventArgs e)
+    {
+        base.OnLostMouseCapture(e);
+        EndDrag();
+    }
+
+    private void EndDrag()
+    {
         if (_drag == Drag.Edge && _dragBase is not null)
         {
             var final = _cuts;
@@ -317,8 +332,6 @@ public sealed class CutTimeline : FrameworkElement
             EdgeDragged?.Invoke(final, _dragIndex, _dragStart);
         }
         _drag = Drag.None;
-        ReleaseMouseCapture();
-        e.Handled = true;
     }
 
     protected override void OnMouseRightButtonUp(MouseButtonEventArgs e)
