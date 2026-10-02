@@ -4,13 +4,14 @@
         xmlns:ctl="clr-namespace:BetterScreenshot.App.Controls"
         Title="BetterScreenshot Settings"
         Width="960" SizeToContent="Height" ResizeMode="CanMinimize"
-        WindowStartupLocation="CenterScreen"
         Background="{DynamicResource Theme.WindowBrush}" FontFamily="Segoe UI"
         Foreground="{DynamicResource Theme.TextBrush}">
     <Window.Resources>
         <!-- Field caption above a segmented control -->
+        <!-- Type ramp (round 3 #10): 12.5 row titles and field captions, 11.5 secondary (was 10.5 — hard to read).
+             Row titles stay 12.5: at 13 the longest ones push their ⓘ under the switch in a 300 px column. -->
         <Style x:Key="FieldLabel" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="FontSize" Value="12.5"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Foreground" Value="{DynamicResource Theme.TextW85}"/>
             <Setter Property="Margin" Value="0,0,0,6"/>
@@ -23,7 +24,7 @@
         </Style>
         <!-- Secondary sub-label under a row title -->
         <Style x:Key="RowSub" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="FontSize" Value="11.5"/>
             <Setter Property="Foreground" Value="{DynamicResource Theme.SubtleTextBrush}"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
             <Setter Property="Margin" Value="0,2,0,0"/>
@@ -462,6 +463,7 @@
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <TextBox x:Name="SaveDirBox" Grid.Column="0" VerticalContentAlignment="Center" LostFocus="Changed"
+                                         Background="{DynamicResource Theme.ControlBrush}"
                                          ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" TextChanged="SaveDirBox_TextChanged"/>
                                 <Button x:Name="BrowseBtn" Grid.Column="1" Content="Browse&#8230;" Style="{StaticResource Theme.PillButton}" Margin="8,0,0,0" Click="Browse_Click"/>
                             </Grid>

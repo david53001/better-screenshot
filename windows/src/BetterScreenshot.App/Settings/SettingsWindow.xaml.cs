@@ -90,6 +90,10 @@ public partial class SettingsWindow : Window, Tours.ITourHost
         UpdateTempRetentionLabel();
         SaveDirBox.Text = _settings.SaveDirectory;
         SaveDirBox.Loaded += (_, _) => ShowPathEnd();
+        SaveDirBox.GotKeyboardFocus += (_, _) =>
+        {
+            if (SaveDirBox.Template?.FindName("PART_ContentHost", SaveDirBox) is UIElement text) text.OpacityMask = null;
+        };
         PinRadiusCombo.SelectedIndex = Math.Max(0, Array.IndexOf(PinRadii, c.PinCornerRadius));
         PinShadowCheck.IsChecked = c.PinShadow;
         HistoryEnabledCheck.IsChecked = c.HistoryEnabled;
@@ -310,7 +314,8 @@ public partial class SettingsWindow : Window, Tours.ITourHost
             var label = new TextBlock
             {
                 Text = _settings.Hotkeys.Combo(action)?.DisplayString ?? "(unbound)",
-                FontFamily = new FontFamily("Cascadia Mono, Consolas"),
+                FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI"), // the chord font Welcome uses (round 3 #11)
+                FontWeight = FontWeights.SemiBold,
                 FontSize = 12,
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -579,5 +584,34 @@ public partial class SettingsWindow : Window, Tours.ITourHost
     {
         SaveDirBox.CaretIndex = SaveDirBox.Text.Length;
         SaveDirBox.ScrollToHorizontalOffset(double.MaxValue);
+        // A path longer than the box shows its end; fade the cut-off start so it reads as trimmed, not as a folder
+        // named "ive\Pictures…" (round 3 #10). Editing shows it plain.
+        // After layout: the extent is only known once the text has been measured.
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (SaveDirBox.IsKeyboardFocused) return;
+            if (SaveDirBox.Template?.FindName("PART_ContentHost", SaveDirBox) is not FrameworkElement text) return;
+            var width = new FormattedText(SaveDirBox.Text, System.Globalization.CultureInfo.CurrentUICulture, System.Windows.FlowDirection.LeftToRight,
+                new Typeface(SaveDirBox.FontFamily, SaveDirBox.FontStyle, SaveDirBox.FontWeight, SaveDirBox.FontStretch),
+                SaveDirBox.FontSize, System.Windows.Media.Brushes.Black, VisualTreeHelper.GetDpi(SaveDirBox).PixelsPerDip).WidthIncludingTrailingWhitespace;
+            text.OpacityMask = width > text.ActualWidth - 4 ? LeftFade : null; // the text's host, not the box
+        }, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private static readonly Brush LeftFade = CreateLeftFade();
+
+    private static Brush CreateLeftFade()
+    {
+        // Absolute: the host's bounding box spans the whole scrolled text, so relative stops would sit off to the left.
+        var fade = new LinearGradientBrush
+        {
+            MappingMode = BrushMappingMode.Absolute,
+            StartPoint = new System.Windows.Point(0, 0),
+            EndPoint = new System.Windows.Point(22, 0),
+        };
+        fade.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromArgb(0x00, 0, 0, 0), 0.0));
+        fade.GradientStops.Add(new GradientStop(Colors.Black, 1.0));
+        fade.Freeze();
+        return fade;
     }
 }

@@ -22,6 +22,9 @@ public partial class HudWindow : Window
             IconGlyph.Visibility = Visibility.Visible;
         }
         Loaded += OnLoaded;
+        // Toasts are the app talking, not content: keep them out of screenshots and recordings (round 3 #6 — a take
+        // started during a GIF conversion recorded its progress toast).
+        SourceInitialized += (_, _) => Controls.FloatingPanel.ExcludeFromCapture(this, true);
     }
 
     internal static string? IconKey(HudIcon icon) => icon switch

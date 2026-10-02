@@ -27,7 +27,11 @@ public static class GifExporter
                 if (seconds > 0 && FfmpegArgs.ProgressFraction(line, seconds) is { } f) progress?.Invoke(0.2 + 0.8 * f);
             }
             var (ok, _) = await FfmpegRunner.RunWithProgressAsync(FfmpegArgs.BuildGifConversion(mp4Path, palette, gifPath), OnLine, cancel);
-            if (!ok || cancel.IsCancellationRequested || !File.Exists(gifPath)) return null;
+            if (!ok || cancel.IsCancellationRequested || !File.Exists(gifPath))
+            {
+                TryDelete(gifPath); // a stopped or failed conversion leaves no half-written GIF (round 3 #6)
+                return null;
+            }
             try { File.Delete(mp4Path); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* leave the mp4 if it can't be removed */ }
             return gifPath;
@@ -37,6 +41,12 @@ public static class GifExporter
             try { File.Delete(palette); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* a temp file; Windows cleans %TEMP% */ }
         }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try { File.Delete(path); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { BetterScreenshot.Platform.ErrorLog.Write("Couldn't remove a partial GIF", ex); }
     }
 
     private static double Duration(string mp4Path)

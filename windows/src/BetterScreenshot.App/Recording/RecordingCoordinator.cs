@@ -591,8 +591,26 @@ public sealed class RecordingCoordinator
     /// (so the async stop's continuations can run on this thread) up to a ~3s deadline. GIF conversion and the
     /// Quick Access card are skipped — the MP4 is saved by the engine, which is the important part.
     /// </summary>
+    /// <summary>The GIF conversion after a take, if one is running (cancelled on quit).</summary>
+    private CancellationTokenSource? _gifCts;
+    private Task<string?>? _gifTask;
+
     public void StopForExit()
     {
+        // A GIF conversion still running (round 3 #6): stop ffmpeg and let the converter delete its partial .gif
+        // before the process goes; the finished MP4 is kept.
+        if (_gifTask is { IsCompleted: false } converting)
+        {
+            _exiting = true;
+            _gifCts?.Cancel();
+            var done = new DispatcherFrame();
+            _ = converting.ContinueWith(_ => done.Continue = false, TaskScheduler.FromCurrentSynchronizationContext());
+            var limit = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+            limit.Tick += (_, _) => { limit.Stop(); done.Continue = false; };
+            limit.Start();
+            Dispatcher.PushFrame(done);
+            limit.Stop();
+        }
         if (!IsRecording) return;
         _exiting = true;
 
@@ -662,13 +680,20 @@ public sealed class RecordingCoordinator
         if (toGif)
         {
             var hud = HudController.ShowProgress("Converting to GIF…");
+            using var cts = _gifCts = new CancellationTokenSource();
             try
             {
                 string gifPath = Path.ChangeExtension(path, ".gif");
-                path = await GifExporter.ConvertAsync(path, gifPath,
-                    f => hud.Update($"Converting to GIF… {f * 100:0}%")) ?? path;
+                var convert = GifExporter.ConvertAsync(path, gifPath,
+                    f => hud.Update($"Converting to GIF… {f * 100:0}%"), cts.Token);
+                _gifTask = convert;
+                path = await convert ?? path; // stopped or failed: the MP4 stays, the partial GIF is gone
             }
-            finally { hud.Close(); }
+            finally
+            {
+                _gifCts = null;
+                hud.Close();
+            }
         }
 
         if (!_exiting)

@@ -7,7 +7,7 @@
         Background="{StaticResource Theme.WindowBrush}" FontFamily="Segoe UI"
         Foreground="{StaticResource Theme.TextBrush}">
     <Grid>
-    <StackPanel Margin="36,32,36,28">
+    <StackPanel Margin="36,32,36,28" VerticalAlignment="Center">
 
         <!-- App icon: charcoal rounded square with a white camera glyph (hand-authored vector) -->
         <Border Width="72" Height="72" CornerRadius="16" Background="#1C1C1C"

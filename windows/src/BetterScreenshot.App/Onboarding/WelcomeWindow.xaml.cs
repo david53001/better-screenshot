@@ -99,6 +99,9 @@ public partial class WelcomeWindow : Window
 
     private void ShowMe_Click(object sender, RoutedEventArgs e)
     {
+        // One page size (§4.7 O2, round 3 #11): the window keeps its height as the question goes, instead of jumping
+        // shorter just as the tour starts pointing into it; the content centres in the space.
+        SizeToContent = SizeToContent.Manual;
         SetAsking(false);
         UpdateLayout(); // re-render first, so the tour's anchors are the final views
         Answered?.Invoke(true);

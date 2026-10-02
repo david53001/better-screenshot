@@ -78,7 +78,7 @@ public partial class CameraBubbleWindow : Window
                              s.Info.SourceKind == MediaFrameSourceKind.Color &&
                              s.Info.MediaStreamType == MediaStreamType.VideoPreview)
                          ?? _capture.FrameSources.Values.FirstOrDefault(s => s.Info.SourceKind == MediaFrameSourceKind.Color);
-            if (source is null) { Stop(); return StartResult.NoCamera; }
+            if (source is null) { Fail(); return StartResult.NoCamera; } // a pill re-show keeps the window for a retry
 
             _reader = await _capture.CreateFrameReaderAsync(source, MediaEncodingSubtypes.Bgra8);
             _reader.FrameArrived += OnFrameArrived;
