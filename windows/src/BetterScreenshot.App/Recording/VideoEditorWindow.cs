@@ -379,6 +379,7 @@ public sealed class VideoEditorWindow : Window
         SetEnabled(false);
         if (!File.Exists(_path)) { ShowError(missing: true); return; }
         _info = await VideoExporter.ProbeAsync(_path);
+        if (_closed) return; // closed while probing (round 2 #16)
         if (_info is null) { ShowError(missing: false); return; }
         _history = new CutHistory(new CutList(_info.Duration));
         _timeline.Aspect = _info.Height > 0 ? _info.Width / (double)_info.Height : 16.0 / 9;
@@ -392,13 +393,34 @@ public sealed class VideoEditorWindow : Window
         _ = LoadFramesAsync();
     }
 
-    private async Task LoadFramesAsync()
+    /// <summary>The filmstrip ffmpeg in flight: cancelled (and awaited, so it lets go of the source) before Replace
+    /// Original swaps the file, before a reload, and on close (review round 2 #5).</summary>
+    private CancellationTokenSource? _framesCts;
+    private Task _framesTask = Task.CompletedTask;
+
+    private async Task StopFramesAsync()
+    {
+        _framesCts?.Cancel();
+        try { await _framesTask; } catch (OperationCanceledException) { }
+    }
+
+    private Task LoadFramesAsync() => _framesTask = LoadFramesCoreAsync();
+
+    private async Task LoadFramesCoreAsync()
     {
         if (_info is null) return;
+        await StopFramesAsync();
+        if (_closed) return;
+        var cts = _framesCts = new CancellationTokenSource();
         double tile = Math.Clamp((CutTimeline.ViewHeight - 24 - 8) * _timeline.Aspect, 24, 160);
         int count = FilmstripFrames.Count(_info.Duration, SystemParameters.PrimaryScreenWidth * 12, tile);
-        _framesDir = Path.Combine(Path.GetTempPath(), "bs-filmstrip-" + Guid.NewGuid().ToString("N"));
-        var files = await VideoExporter.FilmstripAsync(_path, _info.Duration, count, _framesDir);
+        // Each load has its own folder, deleted by that load — a later load can never delete an earlier one's or leak its own.
+        string dir = Path.Combine(Path.GetTempPath(), "bs-filmstrip-" + Guid.NewGuid().ToString("N"));
+        _framesDir = dir;
+        IReadOnlyList<string> files;
+        try { files = await VideoExporter.FilmstripAsync(_path, _info.Duration, count, dir, cts.Token); }
+        finally { if (cts.IsCancellationRequested) TryDeleteDir(dir); }
+        if (cts.IsCancellationRequested) return;
         var frames = new List<BitmapSource?>();
         foreach (var f in files)
         {
@@ -416,7 +438,7 @@ public sealed class VideoEditorWindow : Window
             catch { frames.Add(null); }
         }
         if (IsLoaded) _timeline.Frames = frames;
-        TryDeleteFrames();
+        TryDeleteDir(dir);
         FramesReady.TrySetResult();
     }
 
@@ -737,6 +759,7 @@ public sealed class VideoEditorWindow : Window
         var cuts = Cuts;
         bool muteAll = _muteAll.IsChecked == true;
         _player.Source = null; // release the file so it can be swapped
+        await StopFramesAsync(); // …and the filmstrip ffmpeg's handle on it
         bool ok = await RunExport(async p => await VideoExporter.ReplaceAsync(_path, cuts, _info, muteAll, p) ? "ok" : null) is not null;
         var info = ok ? await VideoExporter.ProbeAsync(_path) : _info;
         _info = info ?? _info;
@@ -861,8 +884,12 @@ public sealed class VideoEditorWindow : Window
 
     // ------------------------------------------------------------------ close
 
+    private bool _closed;
+
     private void OnClosedOnce()
     {
+        _closed = true;
+        _framesCts?.Cancel();
         _tick.Stop();
         _player.Stop();
         _player.Source = null;
@@ -875,7 +902,13 @@ public sealed class VideoEditorWindow : Window
 
     private void TryDeleteFrames()
     {
-        try { if (_framesDir is not null && Directory.Exists(_framesDir)) Directory.Delete(_framesDir, recursive: true); } catch { }
+        if (_framesDir is not null) TryDeleteDir(_framesDir);
+    }
+
+    private static void TryDeleteDir(string dir)
+    {
+        try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* %TEMP%; Windows cleans it */ }
     }
 
     private static SolidColorBrush Frozen(Color c)

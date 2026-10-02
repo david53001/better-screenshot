@@ -98,7 +98,8 @@ public static class FfmpegRunner
     }
 
     /// <summary>Runs ffmpeg to completion (e.g. MP4→GIF). Returns success + captured stderr for diagnostics.</summary>
-    public static async Task<(bool Success, string StdErr)> RunAsync(IEnumerable<string> args, int timeoutMs = 300000)
+    public static async Task<(bool Success, string StdErr)> RunAsync(IEnumerable<string> args, int timeoutMs = 300000,
+        CancellationToken cancel = default)
     {
         var psi = new ProcessStartInfo(ExecutablePath)
         {
@@ -115,14 +116,17 @@ public static class FfmpegRunner
         var errTask = process.StandardError.ReadToEndAsync();
         var outTask = process.StandardOutput.ReadToEndAsync();
 
-        using var cts = new CancellationTokenSource(timeoutMs);
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancel);
+        cts.CancelAfter(timeoutMs);
         try
         {
             await process.WaitForExitAsync(cts.Token);
         }
         catch (OperationCanceledException)
         {
-            try { process.Kill(entireProcessTree: true); } catch { }
+            // Timed out or cancelled: end it and wait, so its input file is released when this returns.
+            try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { /* already gone */ }
+            try { await process.WaitForExitAsync(); } catch (InvalidOperationException) { }
         }
 
         string stderr = await errTask;

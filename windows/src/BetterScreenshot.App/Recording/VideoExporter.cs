@@ -122,11 +122,13 @@ public static class VideoExporter
     }
 
     /// <summary>Extracts <paramref name="count"/> filmstrip thumbnails (100 px tall) into a temp folder; returns the files in time order.</summary>
-    public static async Task<IReadOnlyList<string>> FilmstripAsync(string path, double duration, int count, string folder)
+    public static async Task<IReadOnlyList<string>> FilmstripAsync(string path, double duration, int count, string folder,
+        CancellationToken cancel = default)
     {
         Directory.CreateDirectory(folder);
-        var (ok, _) = await FfmpegRunner.RunAsync(FfmpegArgs.BuildFilmstrip(path, duration, count, Path.Combine(folder, "f%04d.jpg")), 180000);
-        return ok ? Directory.GetFiles(folder, "f*.jpg").OrderBy(f => f, StringComparer.Ordinal).ToList() : Array.Empty<string>();
+        var (ok, _) = await FfmpegRunner.RunAsync(FfmpegArgs.BuildFilmstrip(path, duration, count, Path.Combine(folder, "f%04d.jpg")),
+            180000, cancel);
+        return ok && !cancel.IsCancellationRequested ? Directory.GetFiles(folder, "f*.jpg").OrderBy(f => f, StringComparer.Ordinal).ToList() : Array.Empty<string>();
     }
 
     private static void TryDelete(string path)
