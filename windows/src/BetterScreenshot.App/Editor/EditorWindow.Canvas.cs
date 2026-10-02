@@ -299,9 +299,9 @@ public partial class EditorWindow
 
     private void OnUp(object sender, MouseButtonEventArgs e)
     {
-        InteractionLayer.ReleaseMouseCapture();
         var kind = _drag;
-        _drag = DragKind.None;
+        _drag = DragKind.None; // before the release, so OnLostCapture sees a finished drag, not an interrupted one
+        InteractionLayer.ReleaseMouseCapture();
         var p = Pos(e);
         var frame = SelectionMath.Normalize(_dragStart, p);
         var before = _beforeDrag;
@@ -408,18 +408,28 @@ public partial class EditorWindow
         _dragChanged = false;
     }
 
+    /// <summary>Alt+Tab, a dialog or a lost window mid-drag takes the mouse away (round 2 #17): cancel the drag like
+    /// Esc does, so no marquee is left on the canvas and no live resize stays without its undo step.</summary>
+    private void OnLostCapture(object sender, MouseEventArgs e)
+    {
+        if (_drag != DragKind.None) CancelDrag();
+    }
+
     private void CancelDrag()
     {
+        var kind = _drag;
+        _drag = DragKind.None;
         InteractionLayer.ReleaseMouseCapture();
-        if (_beforeDrag != null && _drag is DragKind.Resize or DragKind.TextScale or DragKind.TextSide)
+        if (_beforeDrag != null && kind is DragKind.Resize or DragKind.TextScale or DragKind.TextSide)
         {
             _document = _beforeDrag.Document;
         }
-        _drag = DragKind.None;
         _beforeDrag = null;
         _moveOriginals.Clear();
         _moveBackground = null;
         _spotBackground = null;
+        _hlPoints.Clear();
+        _dragChanged = false;
         ClearPreview();
         EndMarquee();
         Redraw();

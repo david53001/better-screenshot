@@ -81,6 +81,7 @@ public partial class EditorWindow : Window
         InteractionLayer.MouseLeftButtonDown += OnDown;
         InteractionLayer.MouseMove += OnMove;
         InteractionLayer.MouseLeftButtonUp += OnUp;
+        InteractionLayer.LostMouseCapture += OnLostCapture;
         InteractionLayer.MouseLeave += (_, _) => { if (_drag == DragKind.None) InteractionLayer.Cursor = null; };
         PreviewKeyDown += OnKeyDown;
         Scroller.PreviewMouseWheel += OnWheel;
