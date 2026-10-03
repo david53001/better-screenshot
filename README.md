@@ -18,17 +18,15 @@ Or download `BetterScreenshot.app.zip` from the [latest release](https://github.
 
 ### Windows
 
-There is no download for Windows yet; you build it once on your PC. Install [Git](https://git-scm.com/downloads/win), the [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0) and [PowerShell 7](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows), then run in PowerShell:
+Needs Windows 10 version 2004 or newer (64-bit). Paste this into PowerShell:
 
 ```powershell
-git clone -b windows-port https://github.com/david53001/better-screenshot.git
-cd better-screenshot
-pwsh windows/scripts/publish-app.ps1
+irm https://raw.githubusercontent.com/david53001/better-screenshot/main/scripts/install.ps1 | iex
 ```
 
-This builds the app and puts a BetterScreenshot shortcut on your Desktop.
+The same command installs and updates. It puts the latest release in your user folder (no admin needed), sets up ffmpeg for screen recording if your PC doesn't have it, and keeps your settings and history. You can read the script first: [`scripts/install.ps1`](scripts/install.ps1).
 
-To update: quit BetterScreenshot (right-click the tray icon, then Quit), run `git pull` in the same folder, and run the last command again. Your settings and history are kept. More detail: [Windows guide](https://github.com/david53001/better-screenshot/blob/windows-port/windows/README-win.md).
+Or download [`BetterScreenshot-win-x64.zip`](https://github.com/david53001/better-screenshot/releases/download/windows-v1.0.0/BetterScreenshot-win-x64.zip), unzip it and run `BetterScreenshot.App.exe`. Screen recording then also needs [ffmpeg](https://ffmpeg.org/download.html) on your PATH.
 
 ## Uninstall
 
@@ -38,16 +36,25 @@ On macOS, paste this into Terminal:
 curl -fsSL https://raw.githubusercontent.com/david53001/better-screenshot/main/scripts/uninstall.sh | bash
 ```
 
-It quits BetterScreenshot and removes the app, its settings, capture history and caches, and its Screen Recording permission. Screenshots and recordings you saved are kept. You can read the script first: [`scripts/uninstall.sh`](scripts/uninstall.sh).
+On Windows, paste this into PowerShell:
 
-## Unverified developer (macOS)
+```powershell
+irm https://raw.githubusercontent.com/david53001/better-screenshot/main/scripts/uninstall.ps1 | iex
+```
 
-The app is not notarized (checked and approved) by Apple. The Terminal command handles this for you. If you downloaded it by hand, macOS blocks the first launch: open **System Settings > Privacy & Security** and click **Open Anyway**.
+Each quits BetterScreenshot and removes the app, its settings, capture history and caches; on macOS also its Screen Recording permission, on Windows also its shortcuts, launch at login and the ffmpeg it set up. Screenshots and recordings you saved are kept. You can read the scripts first: [`scripts/uninstall.sh`](scripts/uninstall.sh), [`scripts/uninstall.ps1`](scripts/uninstall.ps1).
+
+## Unverified developer
+
+The app is not signed with a paid developer certificate. The install commands handle this for you. If you downloaded it by hand:
+
+- **macOS** blocks the first launch: open **System Settings > Privacy & Security** and click **Open Anyway**.
+- **Windows** may show "Windows protected your PC": click **More info > Run anyway**.
 
 ## Requirements
 
 - macOS 14 (Sonoma) or newer, Apple Silicon or Intel.
-- Windows 10 version 2004 (build 19041) or newer. Screen recording on Windows also needs [ffmpeg](https://ffmpeg.org/download.html) on your PATH.
+- Windows 10 version 2004 (build 19041) or newer. Screen recording on Windows uses [ffmpeg](https://ffmpeg.org/download.html), which the install command sets up for you.
 
 ## Features
 
@@ -69,6 +76,18 @@ cd better-screenshot
 ./scripts/build-app.sh    # creates dist/BetterScreenshot.app
 ./scripts/test.sh         # runs the tests
 ```
+
+## Build from source (Windows)
+
+Needs [Git](https://git-scm.com/downloads/win) and the [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0). The Windows app lives on the `windows-port` branch:
+
+```powershell
+git clone -b windows-port https://github.com/david53001/better-screenshot.git
+cd better-screenshot
+pwsh windows/scripts/publish-app.ps1   # builds windows/dist/BetterScreenshot and adds a Desktop shortcut
+```
+
+More detail: [Windows guide](https://github.com/david53001/better-screenshot/blob/windows-port/windows/README-win.md).
 
 ## License
 

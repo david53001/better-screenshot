@@ -176,9 +176,19 @@ rewritten short and emoji-free, with **Install and update** at the very top for 
 `windows-port` branch and run `pwsh windows/scripts/publish-app.ps1`; update = quit, `git pull`, rerun). Keep it
 that way: short, plain, no emojis, install/update first. The project license changed from **MIT** to
 **PolyForm Strict 1.0.0** (`LICENSE`, with a `Required Notice:` copyright line) — people may view and use the
-app but not redistribute, modify or sell it. Don't call the project "open source" anymore. If a Windows
-release asset is ever published, switch the README's Windows section to a
-`releases/latest/download/<asset>` link.
+app but not redistribute, modify or sell it. Don't call the project "open source" anymore.
+
+**Windows one-line install** (2026-10-03, at the owner's request: "make the Windows one like the Mac one"): the
+README's Windows section now leads with `irm https://raw.githubusercontent.com/david53001/better-screenshot/main/scripts/install.ps1 | iex`
+(install + update, the twin of `install.sh`) and Uninstall has `scripts/uninstall.ps1`. The installer takes the
+newest release carrying `BetterScreenshot-win-x64.zip` (a self-contained `windows-port` publish whose zip has a
+top-level `BetterScreenshot\` folder), installs to `%LOCALAPPDATA%\Programs\BetterScreenshot`, makes shortcuts + an
+Apps & features entry, and when no ffmpeg is on PATH fetches gyan.dev's essentials build once into `toolsfmpeg.exe`
+(downloaded from gyan.dev by the user's machine, so we never redistribute the GPL binary; it survives updates). First
+Windows release: **`windows-v1.0.0`** (version in `windows/Directory.Build.props`). **A Windows release must be
+published with `--latest=false`:** `scripts/install.sh` downloads `releases/latest/download/BetterScreenshot.app.zip`,
+so a Windows release marked Latest would break every Mac install. For the same reason the README's Windows manual
+link is versioned (`releases/download/windows-vX.Y.Z/...`), not `latest`; bump it with each Windows release.
 
 **Performance pass (planned 2026-10-01, not started):** `docs/PERF-PLAN-2026-10-01.md`. Lower RAM/CPU
 without losing snappiness: baseline, ranked fixes with file:line, measurement commands, and two items
