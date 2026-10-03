@@ -182,7 +182,7 @@ README's Windows section now leads with `irm https://raw.githubusercontent.com/d
 (install + update, the twin of `install.sh`) and Uninstall has `scripts/uninstall.ps1`. The installer takes the
 newest release carrying `BetterScreenshot-win-x64.zip` (a self-contained `windows-port` publish whose zip has a
 top-level `BetterScreenshot\` folder), installs to `%LOCALAPPDATA%\Programs\BetterScreenshot`, makes shortcuts + an
-Apps & features entry, and when no ffmpeg is on PATH fetches gyan.dev's essentials build once into `toolsfmpeg.exe`
+Apps & features entry, and when no ffmpeg is on PATH fetches gyan.dev's essentials build once into `tools\ffmpeg.exe`
 (downloaded from gyan.dev by the user's machine, so we never redistribute the GPL binary; it survives updates). First
 Windows release: **`windows-v1.0.0`** (version in `windows/Directory.Build.props`). **A Windows release must be
 published with `--latest=false`:** `scripts/install.sh` downloads `releases/latest/download/BetterScreenshot.app.zip`,
