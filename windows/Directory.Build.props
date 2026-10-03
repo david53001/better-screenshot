@@ -7,5 +7,7 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <Authors>BetterScreenshot</Authors>
     <Product>BetterScreenshot</Product>
+    <!-- The Windows release version (tag windows-vX.Y.Z); scripts/install.ps1 compares it to tell "up to date". -->
+    <Version>1.0.0</Version>
   </PropertyGroup>
 </Project>
