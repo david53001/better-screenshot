@@ -172,8 +172,7 @@ never be prompted. Every part must also update `docs/MAC-TO-WINDOWS-PARITY-v3.md
 
 **README simplified + license changed** (2026-09-30, docs only, at the owner's request): `README.md` was
 rewritten short and emoji-free, with **Install and update** at the very top for **macOS** (the
-`scripts/install.sh` one-liner, which also updates) and **Windows** (no prebuilt download exists — clone the
-`windows-port` branch and run `pwsh windows/scripts/publish-app.ps1`; update = quit, `git pull`, rerun). Keep it
+`scripts/install.sh` one-liner, which also updates) and **Windows** (since 2026-10-03 the `scripts/install.ps1` one-liner — see below; building from the `windows-port` branch is the fallback). Keep it
 that way: short, plain, no emojis, install/update first. The project license changed from **MIT** to
 **PolyForm Strict 1.0.0** (`LICENSE`, with a `Required Notice:` copyright line) — people may view and use the
 app but not redistribute, modify or sell it. Don't call the project "open source" anymore.
