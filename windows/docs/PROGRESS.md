@@ -828,6 +828,22 @@ Review loop in `REVAMP-2026-10\` (round 4: BS 8/10, 0 blockers, 0 majors; tests 
   
   The dark palette now uses JVoice's Windows 11 values: `#202020` layer, white / 77 % / 53 % text, 8/12/16 % white control fills, 6 % input and dropdown fill, `#2C2C2C` popups. Settings titles and sub-labels use the primary and secondary text. Re-measured on screen: identical window (32) and card (41) pixels in both apps.
 
+## First Windows release + one-line install (2026-10-03) — owner: "make the Windows one like the Mac one"
+
+- Release **`windows-v1.0.0`** (`--latest=false`; the Mac `install.sh` downloads `releases/latest/...`, so a
+  Windows release must never be Latest): `BetterScreenshot-win-x64.zip` (76 MB; a self-contained
+  `dotnet publish -r win-x64 --self-contained -p:PublishSingleFile=false` of commit `d85b498`, zipped with a
+  top-level `BetterScreenshot\` folder) + `LICENSE.txt`. Version comes from `windows/Directory.Build.props`.
+- On `main`: `scripts/install.ps1` / `scripts/uninstall.ps1` (`irm ... | iex`), the README's Windows section now
+  mirrors the macOS one. The installer fetches gyan.dev's ffmpeg essentials build into `tools\ffmpeg.exe` only when
+  no ffmpeg is on PATH, and carries it across updates.
+- Verified in sandboxes (every side effect redirected by the `BETTERSCREENSHOT_*` overrides): fresh install from
+  GitHub 7.8 s (33.5 s including the 115 MB ffmpeg, whose build has libx264), re-run "already the latest" in 1.9 s,
+  the installed exe boots (`--ui-preview settings`), and both the one-liner uninstaller and the Apps & features
+  uninstall string remove everything. The owner's own dev copy in `windows/dist/` was not replaced.
+- Next Windows release: bump `<Version>`, publish + zip as above, `gh release create windows-vX.Y.Z --latest=false`,
+  and update the versioned manual-download link in `README.md` on `main`.
+
 ## Known issues / TODO discovered during build (append as you find them)
 - Git warns LF→CRLF on the C# files (autocrlf). Harmless; could add a `.gitattributes` to normalize.
 - **Republish `dist/` after runtime-visible changes.** `dist/` is a manual publish snapshot; a plain build/commit

@@ -8,6 +8,19 @@ capture history. **No cloud, no accounts, no uploads, ever.**
 > This is the Windows port (`.NET 9 + WPF`, C#). The macOS original (Swift, under `App/` and `Packages/` at the
 > repo root) is the behavioral source of truth. Everything for the port lives under `windows/`.
 
+## Install
+
+Paste this into PowerShell (it installs, and later updates):
+
+```powershell
+irm https://raw.githubusercontent.com/david53001/better-screenshot/main/scripts/install.ps1 | iex
+```
+
+It installs the newest `windows-v*` release to `%LOCALAPPDATA%\Programs\BetterScreenshot` (no admin), adds Start
+menu + Desktop shortcuts and an Apps & features entry, fetches ffmpeg once when the PC has none, and starts the app.
+Uninstall: `irm https://raw.githubusercontent.com/david53001/better-screenshot/main/scripts/uninstall.ps1 | iex`.
+Building from source (below) is only needed for development.
+
 ## What you get
 
 - **Capture** — area (`Ctrl+Shift+4`), full screen (`Ctrl+Shift+6`), a specific window (`Ctrl+Shift+8`), and
