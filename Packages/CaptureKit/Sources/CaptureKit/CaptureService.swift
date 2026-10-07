@@ -63,9 +63,13 @@ public struct CaptureService {
     /// sometimes missing from `SCShareableContent` — excluded by ID only, its dim was baked into the shot.
     /// So our own app is excluded as a whole (applied at grab time, listed or not) and only our *listed*
     /// windows outside `excludingWindowIDs` are let back in.
+    ///
+    /// The query lists off-screen windows too (~8 ms more): `applications` only holds apps with a listed
+    /// window, and on macOS 26 our menu-bar icon belongs to Control Centre, so when the overlay is the
+    /// unlisted window our app was missing too and the ID-only fallback leaked the dim (2026-10-07).
     public func freezeDisplays(excludingWindowIDs: Set<CGWindowID> = []) async throws -> [FrozenScreen] {
         let content = try await SCShareableContent.excludingDesktopWindows(
-            false, onScreenWindowsOnly: true)
+            false, onScreenWindowsOnly: false)
         let hidden = content.windows.filter { excludingWindowIDs.contains($0.windowID) }
         let pid = ProcessInfo.processInfo.processIdentifier
         let me = content.applications.first { $0.processID == pid }

@@ -88,3 +88,26 @@ appear in the shot. Falls back to the old window-ID filter if our app isn't list
 menu-bar item is a window). CaptureKit 122/122 passed, installed to `/Applications`. Committed and pushed 2026-10-02 together with the lag
 fix (not tagged, no CHANGELOG entry, same as the rest of this note). The owner needs to check it by hand: take a
 few area shots of a white page, and none of them should come out grey.
+
+## Follow-up 2026-10-07 — dark screenshots again (owner: the screenshot is dim like the overlay)
+The 10-02 fix didn't hold: 3 of the 4 History shots at 16:48–16:50 on 10-07 had white at exactly 166 (the
+overlay's 35 % dim), and 1 of the 6 on 10-02 after that install. Root cause: `freezeDisplays` found our app in
+`SCShareableContent(onScreenWindowsOnly: true).applications`, but that list only holds apps with a *listed*
+on-screen window. On macOS 26 our menu-bar icon is a **Control Centre** window, not ours (checked with
+`CGWindowListCopyWindowInfo`: our process has 0 on-screen windows when idle). So our only on-screen window is the
+overlay. When it was too new to be listed, our app was missing too, `me` was nil, and the code fell back to
+the window-ID filter, which leaks the dim. The 10-02 note's "it always is, because the menu-bar item is a window"
+was wrong.
+Probe (scratchpad app signed with the project identity, bundle id `com.betterscreenshot.mac`, launched with
+`open -n`, windows kept at desktop level behind everything): with no windows the app is in neither list. Right
+after a window is ordered, in the case where the on-screen list missed it, the app was also missing from the
+on-screen apps but present in the `onScreenWindowsOnly: false` list. An app-based filter built from that app
+still captured the unlisted window, so app filters are resolved at grab time. The full query costs ~12 ms vs
+~4 ms.
+Fix: `freezeDisplays` queries with `onScreenWindowsOnly: false` (`CaptureService.swift`). CaptureKit 122/122.
+Installed to `/Applications` (same signing identity). **Build note:** the Command Line Tools now default to
+the macOS 27 SDK, which has no SwiftUI macro plugin (`external macro implementation type
+'SwiftUIMacros.StateMacro' could not be found`). Build with
+`SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk scripts/build-app.sh release`.
+Owner check: take ~10 area shots of a white page; none should come out grey. Quick check of the newest History
+shots: max pixel value 166 on a white page means the dim got in.

@@ -13,6 +13,9 @@ text recognition. Imported by the `App/` target (mainly `App/Capture`).
   **already up**, so it excludes **our whole app** (`excludingApplications:` + `exceptingWindows:` our listed
   windows minus the excluded IDs). Don't go back to excluding by window ID alone: a window that was just ordered
   front can be missing from `SCShareableContent`, and the overlay's dim then gets baked into the shot (2026-10-02).
+  The content query must use `onScreenWindowsOnly: false`: on macOS 26 our menu-bar icon is Control Centre's
+  window, so with the overlay unlisted our app wasn't in `applications` either and the ID-only fallback leaked
+  the dim again (2026-10-07).
 - `CaptureTarget.swift`, `CaptureSettings.swift` — what/how to capture.
 - `CaptureGeometry.swift`, `ImageCropper.swift` — geometry + crop math (pure).
 - `ImageEncoder.swift` — PNG/JPEG encode; `FileNamer.swift` — output filename rules.
