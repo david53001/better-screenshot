@@ -38,6 +38,19 @@ public struct HotkeyBindings: Equatable {
         map.first { $0.key != action && $0.value == combo }?.key
     }
 
+    /// One-time upgrade (2026-10-14): full screen moved to ⌘⇧3 (was ⌘⇧6), and the app now takes
+    /// ⌘⇧3 from macOS. Saved bindings store every combo, so older installs would keep their old
+    /// key and ⌘⇧3 would do nothing. Moves full screen to ⌘⇧3 unless it was unbound or another
+    /// action already has ⌘⇧3. Returns whether it changed.
+    @discardableResult
+    public mutating func moveFullscreenToCommandShift3() -> Bool {
+        let new = HotkeyCombo(keyCode: 20, modifiers: HotkeyCombo.commandMask | HotkeyCombo.shiftMask)
+        guard let current = map[.captureFullscreen], current != new,
+              conflictingAction(for: new, excluding: .captureFullscreen) == nil else { return false }
+        set(new, for: .captureFullscreen)
+        return true
+    }
+
     /// All bound pairs in stable HotkeyAction.allCases order.
     public var bound: [(action: HotkeyAction, combo: HotkeyCombo)] {
         HotkeyAction.allCases.compactMap { a in map[a].map { (a, $0) } }

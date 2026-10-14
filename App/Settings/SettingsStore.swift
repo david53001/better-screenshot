@@ -31,7 +31,15 @@ final class SettingsStore: ObservableObject {
             self.saveDirectory = SettingsStore.systemScreenshotLocation()
         }
         if let dict = defaults.dictionary(forKey: "hotkeyBindings") as? [String: String] {
-            self.bindings = HotkeyBindings(dictionary: dict)
+            var bindings = HotkeyBindings(dictionary: dict)
+            // Once per install, so a user who later picks ⌘⇧6 again keeps it.
+            if !defaults.bool(forKey: "didMoveFullscreenToCmdShift3") {
+                if bindings.moveFullscreenToCommandShift3() {
+                    defaults.set(bindings.dictionary, forKey: "hotkeyBindings")
+                }
+                defaults.set(true, forKey: "didMoveFullscreenToCmdShift3")
+            }
+            self.bindings = bindings
         } else {
             self.bindings = .defaults
         }

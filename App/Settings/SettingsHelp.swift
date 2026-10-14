@@ -199,7 +199,7 @@ enum SettingsHelp {
     static let captureFullscreen = HelpText(
         "Capture Full Screen",
         "Captures the entire screen in one shot.",
-        example: "Default ⇧⌘6 — grabs everything currently on your display."
+        example: "Default ⇧⌘3 (same as macOS) — grabs everything currently on your display."
     )
 
     static let captureText = HelpText(

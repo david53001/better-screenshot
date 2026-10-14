@@ -58,7 +58,7 @@ let hotkeyBindingsTests: [TestCase] = [
         let b = HotkeyBindings.defaults
         t.equal(b.combo(for: .captureArea), HotkeyCombo(keyCode: 21, modifiers: cmdShift))       // ⌘⇧4
         t.equal(b.combo(for: .captureWindow), HotkeyCombo(keyCode: 28, modifiers: cmdShift))     // ⌘⇧8
-        t.equal(b.combo(for: .captureFullscreen), HotkeyCombo(keyCode: 22, modifiers: cmdShift)) // ⌘⇧6
+        t.equal(b.combo(for: .captureFullscreen), HotkeyCombo(keyCode: 20, modifiers: cmdShift)) // ⌘⇧3
         t.equal(b.combo(for: .captureText), HotkeyCombo(keyCode: 26, modifiers: cmdShift))       // ⌘⇧7
         t.isNil(b.combo(for: .pinFromClipboard))
         // ⌘⇧5 (keyCode 23) is now record's default — only non-record actions must not default to it.
@@ -139,5 +139,30 @@ let hotkeyBindingsTests: [TestCase] = [
                                               "captureFullscreen": "22,768", "captureText": "26,768"])
         t.equal(v14.combo(for: .record), HotkeyCombo(keyCode: 23, modifiers: cmdShift))
         t.equal(v14.combo(for: .captureArea), HotkeyCombo(keyCode: 21, modifiers: 768))
+    },
+    TestCase("fullscreenMovesFromOldDefaultToCmdShift3") { t in
+        let cmdShift3 = HotkeyCombo(keyCode: 20, modifiers: cmdShift)
+        // A pre-2026-10-14 install stored ⌘⇧6 explicitly → moved to ⌘⇧3.
+        var old = HotkeyBindings(dictionary: ["captureFullscreen": "22,768"])
+        t.isTrue(old.moveFullscreenToCommandShift3())
+        t.equal(old.combo(for: .captureFullscreen), cmdShift3)
+        t.equal(old.dictionary["captureFullscreen"], "20,768")
+        // A custom combo moves too (⌘⇧3 would otherwise do nothing); the old key is freed.
+        var custom = HotkeyBindings(dictionary: ["captureFullscreen": "26,768", "captureText": "22,768"])
+        t.isTrue(custom.moveFullscreenToCommandShift3())
+        t.equal(custom.combo(for: .captureFullscreen), cmdShift3)
+        t.isNil(custom.conflictingAction(for: HotkeyCombo(keyCode: 26, modifiers: cmdShift),
+                                         excluding: .captureFullscreen))
+        // Already on ⌘⇧3 → no change.
+        var fresh = HotkeyBindings.defaults
+        t.isTrue(!fresh.moveFullscreenToCommandShift3())
+        // ⌘⇧3 already taken by another action → leave both alone.
+        var taken = HotkeyBindings(dictionary: ["captureFullscreen": "22,768", "captureText": "20,768"])
+        t.isTrue(!taken.moveFullscreenToCommandShift3())
+        t.equal(taken.combo(for: .captureFullscreen), HotkeyCombo(keyCode: 22, modifiers: cmdShift))
+        // Explicitly unbound stays unbound.
+        var unbound = HotkeyBindings(dictionary: ["captureFullscreen": "unbound"])
+        t.isTrue(!unbound.moveFullscreenToCommandShift3())
+        t.isNil(unbound.combo(for: .captureFullscreen))
     },
 ]

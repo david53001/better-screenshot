@@ -14,7 +14,7 @@ against the diff-level security checklist, and never weaken or bypass a permissi
 - `ShortcutRecorderField.swift` — custom keybind-capture UI (records a new combo; suspends global
   hotkeys while recording so currently-bound combos can be re-typed).
 - `SystemScreenshotShortcuts.swift` — disables/restores the **user's** native macOS screenshot
-  shortcuts (⌘⇧4 / ⌘⇧5) by editing the `com.apple.symbolichotkeys` preferences domain and reloading
+  shortcuts (⌘⇧3 / ⌘⇧4 / ⌘⇧5) by editing the `com.apple.symbolichotkeys` preferences domain and reloading
   via a private `activateSettings` helper. Restore is crash-safe (removes our entries to revert to
   defaults).
 - `LaunchAtLogin.swift` — login-item (launch-at-login) registration.

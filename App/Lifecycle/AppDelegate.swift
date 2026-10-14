@@ -144,7 +144,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             UserDefaults.standard.set(true, forKey: "didRegisterLaunchAtLogin")
         }
         applyBindings()
-        // Stop macOS's native ⌘⇧4/⌘⇧5 from also firing (double screenshot/recording). Restored on quit.
+        // Stop macOS's native ⌘⇧3/⌘⇧4/⌘⇧5 from also firing (double screenshot/recording). Restored on quit.
         SystemScreenshotShortcuts.disableNativeShortcuts()
     }
 

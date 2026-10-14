@@ -2,15 +2,17 @@ import Foundation
 
 /// Disables/restores native macOS screenshot shortcuts so they don't fire alongside
 /// BetterScreenshot's own hotkeys. Edits the user-level `com.apple.symbolichotkeys`
-/// domain (symbolic-hotkey ids 30, 184) and reloads via the private `activateSettings`
+/// domain (symbolic-hotkey ids 28, 30, 184) and reloads via the private `activateSettings`
 /// helper so the change applies without a logout.
 enum SystemScreenshotShortcuts {
     private static let domain = "com.apple.symbolichotkeys" as CFString
     private static let topKey = "AppleSymbolicHotKeys" as CFString
-    /// Native shortcuts we shadow: id 30 = "Save picture of selected area as a
-    /// file" (⌘⇧4), id 184 = "Screenshot and recording options" (⌘⇧5).
+    /// Native shortcuts we shadow: id 28 = "Save picture of screen as a file" (⌘⇧3),
+    /// id 30 = "Save picture of selected area as a file" (⌘⇧4), id 184 = "Screenshot
+    /// and recording options" (⌘⇧5).
     /// parameters = [ASCII code, virtual key code, modifier mask].
     private static let shadowed: [(id: String, parameters: [Int])] = [
+        ("28",  [51, 20, 1_179_648]),  // '3', keycode 20, ⌘⇧
         ("30",  [52, 21, 1_179_648]),  // '4', keycode 21, ⌘⇧
         ("184", [53, 23, 1_179_648]),  // '5', keycode 23, ⌘⇧
     ]

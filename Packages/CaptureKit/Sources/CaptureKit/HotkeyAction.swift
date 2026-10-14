@@ -19,14 +19,14 @@ public enum HotkeyAction: String, CaseIterable, Hashable {
         }
     }
 
-    /// Defaults: ⌘⇧4 area · ⌘⇧6 fullscreen · ⌘⇧7 text · ⌘⇧8 window · ⌘⇧5 record ·
+    /// Defaults: ⌘⇧4 area · ⌘⇧3 fullscreen (macOS's own; ⌘⇧6 before 2026-10-14) · ⌘⇧7 text · ⌘⇧8 window · ⌘⇧5 record ·
     /// pin/history/restore unbound (bindable in the Shortcuts tab).
     public var defaultCombo: HotkeyCombo? {
         let cmdShift = HotkeyCombo.commandMask | HotkeyCombo.shiftMask
         switch self {
         case .captureArea:       return HotkeyCombo(keyCode: 21, modifiers: cmdShift) // ⌘⇧4
         case .captureWindow:     return HotkeyCombo(keyCode: 28, modifiers: cmdShift) // ⌘⇧8
-        case .captureFullscreen: return HotkeyCombo(keyCode: 22, modifiers: cmdShift) // ⌘⇧6
+        case .captureFullscreen: return HotkeyCombo(keyCode: 20, modifiers: cmdShift) // ⌘⇧3
         case .captureText:       return HotkeyCombo(keyCode: 26, modifiers: cmdShift) // ⌘⇧7
         case .pinFromClipboard:  return nil
         case .record:            return HotkeyCombo(keyCode: 23, modifiers: cmdShift) // ⌘⇧5

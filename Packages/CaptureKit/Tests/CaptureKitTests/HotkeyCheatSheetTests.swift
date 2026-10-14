@@ -5,7 +5,7 @@ import Foundation
 let hotkeyCheatSheetTests: [TestCase] = [
     TestCase("defaultsListFiveShortcutsInMenuOrderAndAppleModifierOrder") { t in
         let rows = HotkeyCheatSheet.rows(for: .defaults)
-        t.equal(rows.map(\.keys), ["⇧⌘4", "⇧⌘8", "⇧⌘6", "⇧⌘7", "⇧⌘5"])
+        t.equal(rows.map(\.keys), ["⇧⌘4", "⇧⌘8", "⇧⌘3", "⇧⌘7", "⇧⌘5"])
         t.equal(rows.map(\.description), ["Capture an area", "Capture a window",
                                           "Capture the full screen", "Copy text from the screen",
                                           "Record the screen"])
