@@ -3447,3 +3447,27 @@ Settings: window 960 wide, three columns `(960 − 2·20 − 2·12) / 3 = 298` w
 macOS: `swift build`, `scripts/test.sh` (DesignKitTests: HUD tint/hairline/continuous corners, continuous
 paths). By eye: Settings in light and dark, HUDs over a bright and a dark wallpaper. Windows: the same by eye,
 plus re-measure white text on each HUD over a white page (≥ 4.5:1).
+
+## Part 10 — Auto-updates + one-time "open at login?" card (macOS, 2026-10-18, branch `feat/sparkle-updates`)
+
+Full macOS write-up: `docs/sparkle-updates/README.md`. What a Windows port would mirror:
+
+- **Launch at login** is never turned on silently any more. Count completed screenshots (area, window, full
+  screen, Capture Text that produced an image; not cancelled or failed ones). After the 5th, wait for a calm
+  moment — ≥ 3 s since the capture, ≥ 2 s since a key press, no mouse button down, no selection / countdown /
+  record strip / recording, none of the app's windows in front; give up after 120 s and retry after the next
+  capture — then show a card once. Never if already enabled, already asked, or the old one-time
+  auto-enable flag (`didRegisterLaunchAtLogin`) is set. A choice in Settings counts as answered. Keys:
+  `launchAtLoginPromptUses` (int, stops at 5), `launchAtLoginPromptAsked` (bool).
+- **Card**: top-right of the screen under the pointer, 12 px from the work area (bottom-right when Quick Access
+  uses the top-right corner); 360 px wide, radius 16, padding 14; the app icon 36 px, then title (13 semibold)
+  and line (12 regular), all white, on the dark HUD surface held at least at the default opacity; buttons 24 px
+  tall, radius 6, 12 px semibold: secondary = white outline (55 %) + white text, primary = white fill + near-black
+  text. Never takes focus; left out of screenshots and recordings. Strings: "Open BetterScreenshot at login?" /
+  "Your capture shortcuts keep working after a restart. You can change this any time in Settings." /
+  **No Thanks** · **Open at Login** → "BetterScreenshot will open at login." (1.6 s) · approval needed: "One more
+  step" / "Allow BetterScreenshot in Login Items to finish." · **Done** · **Open Login Items** · error:
+  "Couldn't turn it on." / "You can try again in Settings → Launch at login." · **Done**.
+- **Updates**: Settings card "UPDATES" (Check automatically switch, sub "Look for a new version once a day";
+  **Check for Updates…** / **Show Update…** button; "You have BetterScreenshot X." / "Version X is available.")
+  and a tray-menu item. Windows releases stay `--latest=false` (the Mac feed reads the Latest release).

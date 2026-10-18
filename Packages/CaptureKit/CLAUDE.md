@@ -26,6 +26,8 @@ text recognition. Imported by the `App/` target (mainly `App/Capture`).
   10s…1h/∞ setting scale, driven from `App/Capture/TempFileService`.
 - `HotkeyAction.swift`, `HotkeyBindings.swift`, `HotkeyCombo.swift` — the hotkey **model** (binding
   data; registration itself lives in `App/SystemIntegration/HotKeyManager`).
+- `LaunchAtLoginPrompt.swift` — the one-time "open at login?" rules: 5 completed captures, never if already
+  enabled / already asked / a ≤ 3.1.0 user (`didRegisterLaunchAtLogin`), and `isCalmMoment` (pure, tested).
 
 ## Conventions / invariants
 - Coordinate convention (project-wide): annotations/regions are in base-image pixel space, **top-left

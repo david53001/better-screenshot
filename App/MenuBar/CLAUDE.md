@@ -21,6 +21,13 @@
   the tour's body names (`welcome.shortcuts`, added in `shortcutGrid`) — and Capture Area's keys label
   (`welcome.captureArea`); steps in `docs/MAC-TO-WINDOWS-PARITY-v3.md` §7.4.
   `render(_:askTourQuestion:)` is internal so probes can draw a page without showing the window.
+- **Check for Updates…** (above Settings…) → `Updates.shared.checkForUpdates()`; menu validation renames it
+  "Update Available (X)…" while a background find waits to be seen.
+- `LaunchAtLoginPromptController.swift` — "Open BetterScreenshot at login?", once, after the 5th completed
+  screenshot (`CaptureCoordinator.onCaptureCompleted`), at a calm moment (CaptureKit
+  `LaunchAtLoginPrompt.isCalmMoment`), on OverlayKit's `PromptCardController` card (top-right; bottom-right
+  when Quick Access uses top-right). Left out of screenshots (`windowIDs` in `CaptureCoordinator.tourTagWindowIDs`)
+  and recordings (registered with `TourTagRecordingGate`). Rules and keys: `docs/sparkle-updates/README.md`.
 
 This is the app's primary always-on UI entry point. Verify by launching the built app and exercising
 the menu.
