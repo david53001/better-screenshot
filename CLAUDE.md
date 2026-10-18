@@ -204,7 +204,9 @@ override = a dry run into `dist/dry-run/*-DRYRUN.*` with no command). The silent
 enable is gone: after the 5th completed screenshot a non-activating card asks (CaptureKit
 `LaunchAtLoginPrompt`, `App/MenuBar/LaunchAtLoginPromptController.swift`); answered once ever, an ignored card
 hides after 25 s; only a showing the user could see counts (visible + user active), it returns after a capture
-≥ 24 h later or after a relaunch, ≤ 3 counted showings; users of the old auto-enable
+≥ 24 h later (relaunches don't shorten that), ≤ 3 counted showings; never while something is full screen (AppKit
+*does* put the card on full-screen Spaces; on a notched MacBook a full-screen window starts below the notch);
+while due, the menu-bar menu has **Open at Login…** (an alert: the keyboard path); users of the old auto-enable
 (`didRegisterLaunchAtLogin`) are never asked. Builds pin the 26.5 SDK via `scripts/sdk-env.sh`.
 
 **Performance pass (planned 2026-10-01, not started):** `docs/PERF-PLAN-2026-10-01.md`. Lower RAM/CPU

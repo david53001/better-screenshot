@@ -10,13 +10,16 @@ import OverlayKit
 /// After a capture makes it due (`afterCapture`), it checks once a second (`waitStep`, for up to
 /// `giveUpSeconds`) for a calm moment — the capture settled for 3 s, no key pressed for 2 s, no
 /// mouse button down, the menu-bar menu closed, no selection / countdown / record strip /
-/// recording, none of our windows in front, nothing full-screen in front — then shows a card in
+/// recording, none of our windows in front, nothing full-screen in front (AppKit would put the
+/// card on a full-screen Space; `LaunchAtLoginPrompt.fullScreenInFront`) — then shows a card in
 /// the top-right screen corner (bottom-right when Quick Access uses the top-right corner). The card
 /// never takes focus, is left out of every screenshot (`windowIDs`) and recording (its window is
 /// registered with `TourTagRecordingGate`). Unanswered, it goes away after `unansweredHideSeconds`
 /// (not while the pointer is on it); if the user could have seen it (`LaunchAtLoginPrompt.Showing`)
-/// that counts as one of `maxShowings`, and it comes back after a later capture a day later or
-/// after a relaunch; if not, after a capture at least 10 minutes later. Answers: **No Thanks**, or
+/// that counts as one of `maxShowings`, and it comes back after a later capture at least a day later
+/// (relaunches included); if not, after a capture at least 10 minutes later. While the question is
+/// due, the menu-bar menu also has **Open at Login…** (`askFromMenu`): the same question in a
+/// standard alert, the card's keyboard path. Answers: **No Thanks**, or
 /// **Open at Login** → `SMAppService.mainApp.register()`, then "will open at login" (closes after
 /// 1.6 s), "One more step" + **Open Login Items** (`.requiresApproval`) or "Couldn't turn it on."
 /// (error); those two also go away after `unansweredHideSeconds`. The Settings switch re-reads the
@@ -35,8 +38,6 @@ final class LaunchAtLoginPromptController {
     private var resultShownAt: Date?
     private var lastHideTick = Date()
     private var hideTimer: Timer?
-    /// A counted showing ended in this launch (for `LaunchAtLoginPrompt.reshowAfterSeconds`).
-    private var shownThisLaunch = false
     /// When the last showing that didn't count ended (`LaunchAtLoginPrompt.reshowAfterUnseenSeconds`).
     private var unseenShowingEndedAt: Date?
     private var settingsObserver: NSObjectProtocol?
@@ -68,7 +69,7 @@ final class LaunchAtLoginPromptController {
     /// selections and failed captures never get here.
     func captureCompleted() {
         lastCaptureAt = Date()
-        let step = rules.afterCapture(cardVisible: card?.isVisible ?? false, shownThisLaunch: shownThisLaunch,
+        let step = rules.afterCapture(cardVisible: card?.isVisible ?? false,
                                       unseenShowingEndedAt: unseenShowingEndedAt,
                                       isEnabled: { LaunchAtLogin.isEnabled })
         if step == .startWaiting { startWaiting() }   // the rest needs nothing here (`afterCapture` marks asked)
@@ -117,7 +118,8 @@ final class LaunchAtLoginPromptController {
         }
         return LaunchAtLoginPrompt.fullScreenInFront(
             frontmostPID: NSWorkspace.shared.frontmostApplication?.processIdentifier,
-            windows: windows, screenFrames: NSScreen.screens.map(\.frame))
+            windows: windows,
+            screens: NSScreen.screens.map { .init(frame: $0.frame, topInset: $0.safeAreaInsets.top) })
     }
 
     private func ask() {
@@ -165,7 +167,7 @@ final class LaunchAtLoginPromptController {
             lastHideTick = now
             guard LaunchAtLoginPrompt.shouldHideUnanswered(secondsShown: current.secondsShown,
                                                            pointerOnCard: pointerOnCard) else { return }
-            if rules.cardHidUnanswered(current, now: now) { shownThisLaunch = true } else { unseenShowingEndedAt = now }
+            if !rules.cardHidUnanswered(current, now: now) { unseenShowingEndedAt = now }
             close()
         } else if let resultShownAt,
                   LaunchAtLoginPrompt.shouldHideUnanswered(secondsShown: now.timeIntervalSince(resultShownAt),
@@ -176,6 +178,45 @@ final class LaunchAtLoginPromptController {
 
     /// `kCGAnyInputEventType` (not imported into Swift): any key, click, scroll or mouse move.
     private static let anyInputEvent = CGEventType(rawValue: ~0)!
+
+    // MARK: The menu-bar path (keyboard)
+
+    /// Whether the menu-bar menu shows **Open at Login…** (`LaunchAtLoginPrompt.offersMenuItem`).
+    var offersMenuItem: Bool { rules.offersMenuItem(isEnabled: { LaunchAtLogin.isEnabled }) }
+
+    /// **Open at Login…** in the menu-bar menu: the same question as the card, in a standard alert
+    /// that takes focus — the user asked for it — so Return and Escape answer it and Full Keyboard
+    /// Access and VoiceOver reach it. Closes the card if it's up (not counted as a showing).
+    func askFromMenu() {
+        close()
+        stopWaiting()
+        NSApp.activate(ignoringOtherApps: true)   // an accessory app: else the alert opens behind
+        let question = NSAlert()
+        question.messageText = "Open BetterScreenshot at login?"
+        question.informativeText = "Your capture shortcuts keep working after a restart. You can change this any time in Settings."
+        question.addButton(withTitle: "Open at Login")
+        question.addButton(withTitle: "No Thanks").keyEquivalent = "\u{1b}"   // Escape
+        guard question.runModal() == .alertFirstButtonReturn else {
+            rules.markAsked()
+            return
+        }
+        let result = NSAlert()
+        switch LaunchAtLogin.setEnabled(true) {   // also marks it asked
+        case .enabled:
+            return
+        case .requiresApproval:
+            result.messageText = "One more step"
+            result.informativeText = "Allow BetterScreenshot in Login Items to finish."
+            result.addButton(withTitle: "Open Login Items")
+            result.addButton(withTitle: "Done").keyEquivalent = "\u{1b}"
+            if result.runModal() == .alertFirstButtonReturn { LaunchAtLogin.openSystemSettings() }
+        default:
+            result.messageText = "Couldn't turn it on."
+            result.informativeText = "You can try again in Settings → Launch at login."
+            result.addButton(withTitle: "Done")
+            result.runModal()
+        }
+    }
 
     private func openAtLogin() {
         showing = nil

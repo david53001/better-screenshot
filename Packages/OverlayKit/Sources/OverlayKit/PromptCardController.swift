@@ -9,9 +9,11 @@ import DesignKit
 /// It never takes focus: a borderless `.nonactivatingPanel` that can't become key, whose buttons
 /// take the first click — so typing in the frontmost app is never interrupted. That also means no
 /// keyboard path (Return/Escape have no focus to reach); VoiceOver announces it and can reach the
-/// buttons, and the Settings switch is the full keyboard alternative. It joins every Space but, per
-/// AppKit, not full-screen ones (no `.fullScreenAuxiliary`); the app also waits while anything
-/// full-screen is in front, so it isn't put over a presentation.
+/// buttons, and the app offers the same question from its menu-bar menu as the keyboard path. It
+/// joins every Space. Without `.fullScreenAuxiliary` AppKit was expected to keep it off full-screen
+/// Spaces, but it doesn't: checked 2026-10-18 on macOS 26.7.1, such a panel from an accessory app
+/// stays visible on another app's full-screen Space. What keeps it off a full-screen app or a
+/// presentation is the app, which doesn't show it while anything full-screen is in front.
 /// All text is white on a surface held at least at the default opacity (`minimumOpacity`),
 /// ≥ 4.86:1 over a white page; the primary button is white with near-black text, the secondary one
 /// an outline (the tour tag's button pair — a filled secondary would lower its white text's
@@ -60,7 +62,8 @@ public final class PromptCardController {
         panel.hasShadow = true   // the one soft system shadow of a floating element
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
-        // Not `.fullScreenAuxiliary`: not on full-screen Spaces (a presentation, a shared screen).
+        // No `.fullScreenAuxiliary`. That does NOT keep it off another app's full-screen Space (checked
+        // 2026-10-18, macOS 26.7.1): the caller must not show it while something is full screen.
         panel.collectionBehavior = [.canJoinAllSpaces]
         panel.becomesKeyOnlyIfNeeded = true
         surface.minimumOpacity = UIOpacity.defaultValue

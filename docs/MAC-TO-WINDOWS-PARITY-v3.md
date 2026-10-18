@@ -3456,14 +3456,20 @@ Full macOS write-up: `docs/sparkle-updates/README.md`. What a Windows port would
   screen, Capture Text that produced an image; not cancelled or failed ones). After the 5th, wait for a calm
   moment — ≥ 3 s since the capture, ≥ 2 s since a key press, no mouse button down, the tray menu closed, no
   selection / countdown / record strip / recording, none of the app's windows in front, and the frontmost app
-  has no window covering a whole screen (full-screen app, presentation, game); give up after 120 s and retry
+  has no window covering a whole screen (full-screen app, presentation, game; on a MacBook with a notch a
+  full-screen window starts just below the notch row: full width, down to the bottom edge, top within the
+  safe-area inset + 2; the card must not rely on the OS keeping it off full-screen desktops — macOS doesn't);
+  give up after 120 s and retry
   after the next capture — then show the card. Never if already enabled (found enabled → mark asked), already
   asked, or the old one-time auto-enable flag (`didRegisterLaunchAtLogin`) is set. A choice in Settings counts as
   answered. **Unanswered**, the card hides itself after 25 s (not while the pointer is on it). That showing
   **counts** only if the user could have seen it: ≥ 5 s during which the card was visible on the current
   desktop and the user had used the mouse or keyboard since it appeared (not a locked screen or an empty desk;
   one tick adds at most 2 s, so a sleep doesn't count). A counted showing comes back after a capture ≥ 24 h
-  later or after a relaunch; after the 3rd counted showing it counts as "no". An uncounted one comes back after
+  later, relaunches included (an update relaunch must not bring it back the same day); after the 3rd counted
+  showing it counts as "no". While it is due, the tray menu has **Open at Login…**: the same question in a
+  standard focus-taking dialog (Enter = Open at Login, Esc = No Thanks; then "One more step" with **Open Login
+  Items** / **Done**, or "Couldn't turn it on." with **Done**), the card's keyboard path. An uncounted showing comes back after
   a capture ≥ 10 min later (kept in memory only). The "One more step" and "Couldn't turn it on" cards also hide
   after 25 s (not counted). Keys: `launchAtLoginPromptUses` (int, stops at 5), `launchAtLoginPromptAsked` (bool),
   `launchAtLoginPromptUnansweredShowings` (int), `launchAtLoginPromptLastShownAt` (double, seconds since 1970).

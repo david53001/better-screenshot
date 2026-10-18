@@ -30,7 +30,9 @@ text recognition. Imported by the `App/` target (mainly `App/Capture`).
   enabled / already asked / a ≤ 3.1.0 user (`didRegisterLaunchAtLogin`), `isCalmMoment`, the flow as pure
   steps that apply their own side effects (`afterCapture` records the capture and marks asked when found
   enabled, `waitStep`, `shouldHideUnanswered`: an ignored card hides after 25 s; `Showing` + `cardHidUnanswered`:
-  only a showing the user could have seen counts, ≤ 3, spaced ≥ 24 h or a relaunch apart; `fullScreenInFront`)
+  only a showing the user could have seen counts, ≤ 3, spaced ≥ 24 h apart even across relaunches;
+  `fullScreenInFront`, which also knows a notched display's full-screen window starts below the notch row;
+  `offersMenuItem` for the menu-bar **Open at Login…** item)
   and a storage protocol (`UserDefaults` in the app, an in-memory store in tests, so tests write no plist).
 
 ## Conventions / invariants

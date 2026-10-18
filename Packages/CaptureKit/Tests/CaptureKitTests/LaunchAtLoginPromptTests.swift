@@ -149,26 +149,64 @@ let launchAtLoginPromptTests: [TestCase] = [
     },
     TestCase("fullScreenInFrontMeansTheFrontmostAppCoversAWholeScreen") { t in
         typealias W = Prompt.WindowInfo
-        // Primary 1512×982 at the origin; a second 1920×1080 screen above it, starting at x = -200.
-        let screens = [CGRect(x: 0, y: 0, width: 1512, height: 982), CGRect(x: -200, y: 982, width: 1920, height: 1080)]
+        // Primary 1512×982 without a notch at the origin; a second 1920×1080 screen above it, at x = -200.
+        let screens = [Prompt.Screen(frame: CGRect(x: 0, y: 0, width: 1512, height: 982)),
+                       Prompt.Screen(frame: CGRect(x: -200, y: 982, width: 1920, height: 1080))]
         let front: Int32 = 42
         let full = W(ownerPID: front, layer: 0, bounds: CGRect(x: 0, y: 0, width: 1512, height: 982))
-        t.isTrue(Prompt.fullScreenInFront(frontmostPID: front, windows: [full], screenFrames: screens))
+        t.isTrue(Prompt.fullScreenInFront(frontmostPID: front, windows: [full], screens: screens))
         // The second screen's frame in window coordinates: top-left origin, y grows downwards.
         let fullOnSecond = W(ownerPID: front, layer: 0, bounds: CGRect(x: -200, y: -1080, width: 1920, height: 1080))
-        t.isTrue(Prompt.fullScreenInFront(frontmostPID: front, windows: [fullOnSecond], screenFrames: screens))
+        t.isTrue(Prompt.fullScreenInFront(frontmostPID: front, windows: [fullOnSecond], screens: screens))
         // A presentation or game above the normal layer counts too.
         t.isTrue(Prompt.fullScreenInFront(frontmostPID: front, windows: [W(ownerPID: front, layer: 25, bounds: full.bounds)],
-                                          screenFrames: screens))
+                                          screens: screens))
         // A zoomed window stops at the menu bar.
         let zoomed = W(ownerPID: front, layer: 0, bounds: CGRect(x: 0, y: 33, width: 1512, height: 949))
-        t.isFalse(Prompt.fullScreenInFront(frontmostPID: front, windows: [zoomed], screenFrames: screens))
+        t.isFalse(Prompt.fullScreenInFront(frontmostPID: front, windows: [zoomed], screens: screens))
         // The desktop (negative layer) and another app's full-screen window don't count.
         t.isFalse(Prompt.fullScreenInFront(frontmostPID: front, windows: [W(ownerPID: front, layer: -2147483603, bounds: full.bounds)],
-                                           screenFrames: screens))
-        t.isFalse(Prompt.fullScreenInFront(frontmostPID: 7, windows: [full], screenFrames: screens))
-        t.isFalse(Prompt.fullScreenInFront(frontmostPID: nil, windows: [full], screenFrames: screens))
-        t.isFalse(Prompt.fullScreenInFront(frontmostPID: front, windows: [full], screenFrames: []))
+                                           screens: screens))
+        t.isFalse(Prompt.fullScreenInFront(frontmostPID: 7, windows: [full], screens: screens))
+        t.isFalse(Prompt.fullScreenInFront(frontmostPID: nil, windows: [full], screens: screens))
+        t.isFalse(Prompt.fullScreenInFront(frontmostPID: front, windows: [full], screens: []))
+    },
+    TestCase("fullScreenOnANotchedDisplayStartsBelowTheNotch") { t in
+        typealias W = Prompt.WindowInfo
+        // The owner's MacBook Air (Mac15,12), measured 2026-10-18 on macOS 26.7.1: screen 1470×956,
+        // safe-area top 32; a real full-screen window is (0, 33, 1470, 923), and the app also owns
+        // a layer-26 strip (0, 0, 1470, 33) and a layer-0 one (0, 33, 1470, 32) for the title bar.
+        let air = [Prompt.Screen(frame: CGRect(x: 0, y: 0, width: 1470, height: 956), topInset: 32)]
+        let front: Int32 = 42
+        let measured = [W(ownerPID: front, layer: 26, bounds: CGRect(x: 0, y: 0, width: 1470, height: 33)),
+                        W(ownerPID: front, layer: 0, bounds: CGRect(x: 0, y: 33, width: 1470, height: 32)),
+                        W(ownerPID: front, layer: 0, bounds: CGRect(x: 0, y: 33, width: 1470, height: 923))]
+        t.isTrue(Prompt.fullScreenInFront(frontmostPID: front, windows: measured, screens: air))
+        t.isTrue(Prompt.fullScreenInFront(frontmostPID: front, windows: [measured[2]], screens: air), "the window alone")
+        t.isFalse(Prompt.fullScreenInFront(frontmostPID: front, windows: Array(measured[0...1]), screens: air),
+                  "the strips alone aren't a full-screen window")
+        // Covering the notch row too (a game or presentation) still counts.
+        t.isTrue(Prompt.fullScreenInFront(frontmostPID: front, windows: [W(ownerPID: front, layer: 0,
+                                          bounds: CGRect(x: 0, y: 0, width: 1470, height: 956))], screens: air))
+        // A zoomed window with the Dock shown stops above the Dock.
+        t.isFalse(Prompt.fullScreenInFront(frontmostPID: front, windows: [W(ownerPID: front, layer: 0,
+                                           bounds: CGRect(x: 0, y: 33, width: 1470, height: 860))], screens: air))
+        // Dock on the left or right: not the full width.
+        t.isFalse(Prompt.fullScreenInFront(frontmostPID: front, windows: [W(ownerPID: front, layer: 0,
+                                           bounds: CGRect(x: 60, y: 33, width: 1410, height: 923))], screens: air))
+        // Starts lower than just under the notch row.
+        t.isFalse(Prompt.fullScreenInFront(frontmostPID: front, windows: [W(ownerPID: front, layer: 0,
+                                           bounds: CGRect(x: 0, y: 40, width: 1470, height: 916))], screens: air))
+        // The same rectangle on a screen without a notch is a zoomed window with the Dock hidden.
+        let flat = [Prompt.Screen(frame: air[0].frame)]
+        t.isFalse(Prompt.fullScreenInFront(frontmostPID: front, windows: [measured[2]], screens: flat))
+        // Another app's full-screen window doesn't count.
+        t.isFalse(Prompt.fullScreenInFront(frontmostPID: 7, windows: measured, screens: air))
+        // The notched built-in display as the second screen, beside an external primary 1920×1080.
+        let two = [Prompt.Screen(frame: CGRect(x: 0, y: 0, width: 1920, height: 1080)),
+                   Prompt.Screen(frame: CGRect(x: 1920, y: 0, width: 1470, height: 956), topInset: 32)]
+        t.isTrue(Prompt.fullScreenInFront(frontmostPID: front, windows: [W(ownerPID: front, layer: 0,
+                                          bounds: CGRect(x: 1920, y: 157, width: 1470, height: 923))], screens: two))
     },
     TestCase("calmMomentThresholdsAreInclusive") { t in
         var m = calm
@@ -184,22 +222,21 @@ let launchAtLoginPromptTests: [TestCase] = [
         var statusReads = 0
         let off = { () -> Bool in statusReads += 1; return false }
         for i in 1...4 {
-            t.equal(prompt.afterCapture(cardVisible: false, shownThisLaunch: false, isEnabled: off), .nothing, "capture \(i)")
+            t.equal(prompt.afterCapture(cardVisible: false, isEnabled: off), .nothing, "capture \(i)")
         }
-        t.equal(prompt.afterCapture(cardVisible: true, shownThisLaunch: false, isEnabled: off), .nothing, "card already up")
+        t.equal(prompt.afterCapture(cardVisible: true, isEnabled: off), .nothing, "card already up")
         t.equal(prompt.uses, 5, "every capture was recorded by the step itself")
         t.equal(statusReads, 0, "no XPC status call unless it could be due and the card is hidden")
-        t.equal(prompt.afterCapture(cardVisible: false, shownThisLaunch: false, isEnabled: off), .startWaiting)
+        t.equal(prompt.afterCapture(cardVisible: false, isEnabled: off), .startWaiting)
         t.equal(statusReads, 1)
         t.isFalse(prompt.asked)
     },
     TestCase("alreadyEnabledMarksItAskedSoLaterCapturesSkipTheStatusCall") { t in
         let prompt = duePrompt()
-        t.equal(prompt.afterCapture(cardVisible: false, shownThisLaunch: false, isEnabled: { true }), .alreadyEnabled)
+        t.equal(prompt.afterCapture(cardVisible: false, isEnabled: { true }), .alreadyEnabled)
         t.isTrue(prompt.asked, "afterCapture itself marked it asked")
         var statusReads = 0
-        t.equal(prompt.afterCapture(cardVisible: false, shownThisLaunch: false,
-                                    isEnabled: { statusReads += 1; return true }), .nothing)
+        t.equal(prompt.afterCapture(cardVisible: false, isEnabled: { statusReads += 1; return true }), .nothing)
         t.equal(statusReads, 0)
     },
     TestCase("waitStepWaitsForCalmThenShows") { t in
@@ -228,6 +265,27 @@ let launchAtLoginPromptTests: [TestCase] = [
         let turnedOn = duePrompt()
         t.equal(turnedOn.waitStep(calm, isEnabled: { true }), .alreadyEnabled, "turned on in System Settings meanwhile")
         t.isTrue(turnedOn.asked, "waitStep itself marked it asked")
+    },
+    TestCase("theMenuOffersTheQuestionOnlyWhileItIsDue") { t in
+        let prompt = Prompt(storage: MemoryStore())
+        var statusReads = 0
+        let off = { () -> Bool in statusReads += 1; return false }
+        for _ in 1...4 { prompt.recordUse() }
+        t.isFalse(prompt.offersMenuItem(isEnabled: off), "4 uses")
+        t.equal(statusReads, 0, "no XPC status call before it is due")
+        prompt.recordUse()
+        t.isTrue(prompt.offersMenuItem(isEnabled: off))
+        t.isFalse(prompt.asked, "offering isn't answering")
+        let turnedOn = duePrompt()
+        t.isFalse(turnedOn.offersMenuItem(isEnabled: { true }), "turned on in System Settings meanwhile")
+        t.isTrue(turnedOn.asked, "found on: marked asked")
+        let answered = duePrompt()
+        answered.markAsked()
+        t.isFalse(answered.offersMenuItem(isEnabled: off))
+        let legacy = MemoryStore()
+        legacy.values[Prompt.Key.legacyAutoEnabled] = true
+        legacy.values[Prompt.Key.uses] = 5
+        t.isFalse(Prompt(storage: legacy).offersMenuItem(isEnabled: off), "a ≤ 3.1.0 user")
     },
 
     // MARK: An unanswered card
@@ -269,36 +327,40 @@ let launchAtLoginPromptTests: [TestCase] = [
         t.equal(prompt.unansweredShowings, 0)
         t.equal(prompt.secondsSinceLastShowing(now: t0), nil)
         t.isTrue(prompt.couldAsk)
-        t.equal(prompt.afterCapture(cardVisible: false, shownThisLaunch: false, unseenShowingEndedAt: t0,
+        t.equal(prompt.afterCapture(cardVisible: false, unseenShowingEndedAt: t0,
                                     now: t0.addingTimeInterval(60), isEnabled: { false }),
                 .tooSoon, "not on the very next screenshot")
-        t.equal(prompt.afterCapture(cardVisible: false, shownThisLaunch: false, unseenShowingEndedAt: t0,
+        t.equal(prompt.afterCapture(cardVisible: false, unseenShowingEndedAt: t0,
                                     now: t0.addingTimeInterval(Prompt.reshowAfterUnseenSeconds), isEnabled: { false }),
                 .startWaiting, "ten minutes later")
-        t.equal(prompt.afterCapture(cardVisible: false, shownThisLaunch: false, now: t0.addingTimeInterval(60),
+        t.equal(prompt.afterCapture(cardVisible: false, now: t0.addingTimeInterval(60),
                                     isEnabled: { false }),
                 .startWaiting, "after a relaunch (the app only keeps the unseen time in memory)")
     },
-    TestCase("aSeenShowingComesBackADayLaterOrAfterARelaunch") { t in
+    TestCase("aSeenShowingComesBackOnlyADayLaterEvenAfterARelaunch") { t in
         let store = MemoryStore()
         let prompt = duePrompt(store)
         t.isTrue(prompt.cardHidUnanswered(seenShowing, now: t0))
         t.equal(prompt.unansweredShowings, 1)
         var statusReads = 0
         let off = { () -> Bool in statusReads += 1; return false }
-        // A burst of screenshots in the same launch: not again within the day.
+        // A burst of screenshots: not again within the day.
         let burst: [TimeInterval] = [1, 3, 60, 23 * 60]
         for minutes in burst {
-            t.equal(prompt.afterCapture(cardVisible: false, shownThisLaunch: true,
-                                        now: t0.addingTimeInterval(minutes * 60), isEnabled: off),
+            t.equal(prompt.afterCapture(cardVisible: false, now: t0.addingTimeInterval(minutes * 60), isEnabled: off),
                     .tooSoon, "\(minutes) min later")
         }
+        // Relaunched (an automatic update, or the user reopened it): the stored time still holds.
+        let relaunched = Prompt(storage: store)
+        t.equal(relaunched.afterCapture(cardVisible: false, now: t0.addingTimeInterval(60), isEnabled: off),
+                .tooSoon, "a relaunch a minute later")
+        t.equal(relaunched.afterCapture(cardVisible: false, now: t0.addingTimeInterval(Prompt.reshowAfterSeconds - 60),
+                                        isEnabled: off), .tooSoon, "a relaunch the next morning, under 24 h")
         t.equal(statusReads, 0, "no status call while spaced out")
-        t.equal(prompt.afterCapture(cardVisible: false, shownThisLaunch: true, now: t0.addingTimeInterval(Prompt.reshowAfterSeconds),
-                                    isEnabled: off), .startWaiting, "a day later")
-        t.equal(Prompt(storage: store).afterCapture(cardVisible: false, shownThisLaunch: false, now: t0.addingTimeInterval(60), isEnabled: off),
-                .startWaiting, "after a relaunch")
-        t.isTrue(Prompt.mayShowAgain(secondsSinceLastShowing: nil, shownThisLaunch: true), "never shown yet")
+        t.equal(relaunched.afterCapture(cardVisible: false, now: t0.addingTimeInterval(Prompt.reshowAfterSeconds),
+                                        isEnabled: off), .startWaiting, "a day later")
+        t.isTrue(Prompt.mayShowAgain(secondsSinceLastShowing: nil), "never shown yet")
+        t.isTrue(Prompt.mayShowAgain(secondsSinceLastShowing: -3600), "the clock was set back")
     },
     TestCase("anIgnoredCardStaysDueUntilItsThirdSeenShowing") { t in
         let store = MemoryStore()

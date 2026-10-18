@@ -23,6 +23,9 @@
 # release changed certificate (README "Where the keys live", option b): GOOD must still install
 # (Sparkle accepts it on the EdDSA signature alone) and BAD must still be refused.
 #
+# (CROSS_CERT=1 and E2E_UI=1 together are refused: the UI scenario doesn't check certificates.
+# E2E_UI=1 is refused while the screen is locked: Sparkle's window can't get the user's attention.)
+#
 # E2E_UI=1 replaces 3-4 with the path real users take (OLD without SUAutomaticallyUpdate, run with
 # SPARKLE_E2E_UI=1, App/Lifecycle/SparkleE2EUI.swift): the scheduled check's window must open —
 # in front if Sparkle chose "immediate focus" (app launched just now, or the Mac idle; then its
@@ -41,6 +44,15 @@ TEST_ID="com.betterscreenshot.mac.sparkletest"
 PORT="${PORT:-8766}"
 OTHER_IDENTITY="${OTHER_IDENTITY:-JVoice Self-Signed}"
 [ "${CROSS_CERT:-0}" = 1 ] || OTHER_IDENTITY=""
+if [ "${CROSS_CERT:-0}" = 1 ] && [ "${E2E_UI:-0}" = 1 ]; then
+    # The UI scenario has no certificate checks; run the two modes one after the other.
+    echo "error: CROSS_CERT=1 and E2E_UI=1 can't be combined; run them separately" >&2; exit 2
+fi
+if [ "${E2E_UI:-0}" = 1 ] && lsappinfo info -only bundleid "$(lsappinfo front)" 2>/dev/null | grep -q '"com.apple.loginwindow"'; then
+    # Locked screen: Sparkle's window can't come to the front or get the user's attention, so the
+    # in-focus checks would fail for a reason that has nothing to do with the app (seen 2026-10-18).
+    echo "error: the screen is locked (loginwindow is in front); E2E_UI=1 needs an unlocked screen" >&2; exit 2
+fi
 WORK="${1:-$(mktemp -d)}"
 mkdir -p "$WORK"
 WORK="$(cd "$WORK" && pwd -P)"

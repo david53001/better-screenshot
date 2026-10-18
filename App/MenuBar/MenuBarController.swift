@@ -25,6 +25,7 @@ final class MenuBarController: NSObject {
     private var actionItems: [HotkeyAction: NSMenuItem] = [:]
     private var recordItem: NSMenuItem?
     private var pauseItem: NSMenuItem?
+    private var loginQuestionItem: NSMenuItem?
 
     /// Every item carries an SF Symbol. macOS 26 adds a gear to "Settings…" on its
     /// own, which pushed Settings and Quit out of line with the rest; with an icon on
@@ -60,6 +61,10 @@ final class MenuBarController: NSObject {
         menu.addItem(.separator())
         menu.addItem(Self.helpToursItem(target: self, replay: #selector(replayTour(_:)),
                                         reset: #selector(resetTours)))
+        // Only while the one-time "Open at login?" question is due (`menuNeedsUpdate`).
+        let login = add("Open at Login…", "power.circle", #selector(askLoginQuestion), nil)
+        login.isHidden = true
+        loginQuestionItem = login
         add("Check for Updates…", "arrow.triangle.2.circlepath", #selector(checkForUpdates), nil)
         add("Settings…", "gearshape", #selector(openSettings), nil, key: ",")
         add("Quit", "power", #selector(quit), nil, key: "q")
@@ -120,6 +125,12 @@ final class MenuBarController: NSObject {
     /// Menu validation: false disables "Restore Recently Closed".
     var canRestore: (() -> Bool)?
 
+    /// "Open at Login…": shown while the one-time launch-at-login question is due, and what it does
+    /// (`LaunchAtLoginPromptController.offersMenuItem` / `askFromMenu`, set by the app delegate).
+    var offersLoginQuestion: (() -> Bool)?
+    var onAskLoginQuestion: (() -> Void)?
+    @objc private func askLoginQuestion() { onAskLoginQuestion?() }
+
     /// Help & Tours: run a tour (from its first step) / clear which tours were seen.
     var onReplayTour: ((TourID) -> Void)?
     var onResetTours: (() -> Void)?
@@ -172,6 +183,9 @@ final class MenuBarController: NSObject {
 }
 
 extension MenuBarController: NSMenuDelegate {
+    nonisolated func menuNeedsUpdate(_ menu: NSMenu) {
+        MainActor.assumeIsolated { loginQuestionItem?.isHidden = !(offersLoginQuestion?() ?? false) }
+    }
     nonisolated func menuWillOpen(_ menu: NSMenu) {
         MainActor.assumeIsolated { isMenuOpen = true }
     }

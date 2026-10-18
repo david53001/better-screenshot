@@ -25,8 +25,10 @@ extension UserDefaults: LaunchAtLoginPromptStorage {}
 /// they either still have it, or turned it off on purpose. A choice made with the Settings switch
 /// also counts as answered. A card left unanswered goes away by itself after
 /// `unansweredHideSeconds`. It only counts as a showing if the user could have seen it (`Showing`):
-/// then it comes back after a later capture at least `reshowAfterSeconds` later (or after a
-/// relaunch), at most `maxShowings` times in all; after the last one it counts as answered "no".
+/// then it comes back after a later capture at least `reshowAfterSeconds` later (a relaunch, e.g.
+/// after an automatic update, doesn't shorten that), at most `maxShowings` times in all; after the
+/// last one it counts as answered "no". While it is due, the menu-bar menu also offers it
+/// (`offersMenuItem`): the card never takes focus, so that is its keyboard path.
 ///
 /// All state is in the standard defaults under the `Key` names (docs/sparkle-updates/README.md).
 public struct LaunchAtLoginPrompt {
@@ -73,8 +75,9 @@ public struct LaunchAtLoginPrompt {
         public var appIsActive: Bool
         /// The menu-bar menu is open (menu tracking; `appIsActive` and the mouse buttons don't show it).
         public var menuIsOpen: Bool
-        /// The frontmost app has a window covering a whole screen, menu bar included: a full-screen
-        /// app (the card would be on another Space, unseen), a presentation or a game.
+        /// The frontmost app is full screen, presenting or running a full-screen game
+        /// (`fullScreenInFront`). AppKit does put the card on another app's full-screen Space
+        /// (checked 2026-10-18, macOS 26.7.1), so this wait is what keeps it off.
         public var fullScreenInFront: Bool
 
         public init(secondsSinceCapture: TimeInterval, secondsSinceKeyPress: TimeInterval,
@@ -114,16 +117,46 @@ public struct LaunchAtLoginPrompt {
         }
     }
 
-    /// `Moment.fullScreenInFront`: the frontmost app has a window exactly the size of a screen,
-    /// menu bar included (a full-screen app, a presentation, a full-screen game). A zoomed window
-    /// stops at the menu bar, and the desktop (negative layer) or another app's window don't count.
-    /// `screenFrames` are `NSScreen.frame`s (bottom-left origin, the primary screen first).
-    public static func fullScreenInFront(frontmostPID: Int32?, windows: [WindowInfo], screenFrames: [CGRect]) -> Bool {
-        guard let frontmostPID, let primary = screenFrames.first else { return false }
-        let screens = screenFrames.map {
-            CGRect(x: $0.minX, y: primary.maxY - $0.maxY, width: $0.width, height: $0.height)
+    /// A display, as `NSScreen` reports it.
+    public struct Screen: Equatable {
+        /// `NSScreen.frame`: bottom-left origin, menu bar included.
+        public var frame: CGRect
+        /// `NSScreen.safeAreaInsets.top`: the notch row of a MacBook's built-in display, else 0.
+        public var topInset: CGFloat
+
+        public init(frame: CGRect, topInset: CGFloat = 0) {
+            self.frame = frame
+            self.topInset = topInset
         }
-        return windows.contains { $0.ownerPID == frontmostPID && $0.layer >= 0 && screens.contains($0.bounds) }
+    }
+
+    /// `Moment.fullScreenInFront`: the frontmost app has a window (layer ≥ 0: not the desktop) that
+    /// fills a screen —
+    /// - exactly the screen's frame, menu bar included (a full-screen app on a display without a
+    ///   notch, a presentation, a full-screen game), or
+    /// - on a display with a notch (`topInset` > 0), the whole width down to the bottom edge,
+    ///   starting just below the notch row: macOS keeps full-screen windows out of that row
+    ///   (measured 2026-10-18 on a 1470×956 MacBook Air, inset 32: the window is (0, 33, 1470, 923)).
+    /// A zoomed window stops at the menu bar *and* the Dock; the one look-alike is a zoomed window on
+    /// a notched display with the Dock hidden, which only makes the card wait (accepted).
+    /// `screens`: the primary screen first.
+    public static func fullScreenInFront(frontmostPID: Int32?, windows: [WindowInfo], screens: [Screen]) -> Bool {
+        guard let frontmostPID, let primary = screens.first?.frame else { return false }
+        // Quartz window coordinates: top-left origin on the primary screen, y grows downwards.
+        let areas = screens.map { screen -> (frame: CGRect, topInset: CGFloat) in
+            let f = screen.frame
+            return (CGRect(x: f.minX, y: primary.maxY - f.maxY, width: f.width, height: f.height), screen.topInset)
+        }
+        func fills(_ b: CGRect, _ area: (frame: CGRect, topInset: CGFloat)) -> Bool {
+            let s = area.frame
+            if b == s { return true }
+            guard area.topInset > 0 else { return false }
+            return b.minX == s.minX && b.width == s.width && b.maxY == s.maxY
+                && b.minY > s.minY && b.minY <= s.minY + area.topInset + 2
+        }
+        return windows.contains { w in
+            w.ownerPID == frontmostPID && w.layer >= 0 && areas.contains { fills(w.bounds, $0) }
+        }
     }
 
     // MARK: The flow, one step at a time (the app's controller only carries these out)
@@ -132,8 +165,8 @@ public struct LaunchAtLoginPrompt {
     public enum AfterCapture: Equatable {
         /// Not due, or the card is already up.
         case nothing
-        /// Due, but the card was seen less than `reshowAfterSeconds` ago in this launch, or shown
-        /// unseen less than `reshowAfterUnseenSeconds` ago.
+        /// Due, but the card was seen less than `reshowAfterSeconds` ago, or shown unseen less than
+        /// `reshowAfterUnseenSeconds` ago.
         case tooSoon
         /// Due: look for a calm moment (`waitStep`, once a second).
         case startWaiting
@@ -143,15 +176,13 @@ public struct LaunchAtLoginPrompt {
 
     /// A completed capture: records it (`recordUse`), then decides. `isEnabled` reads the system's
     /// status (an XPC call), so it is only called when the question could be due and isn't spaced
-    /// out; found on, the question is marked asked. `shownThisLaunch`: a counted showing ended
-    /// since the app started; `unseenShowingEndedAt`: when the last showing that didn't count
-    /// ended, in this launch.
-    public func afterCapture(cardVisible: Bool, shownThisLaunch: Bool, unseenShowingEndedAt: Date? = nil,
+    /// out; found on, the question is marked asked. `unseenShowingEndedAt`: when the last showing
+    /// that didn't count ended, in this launch.
+    public func afterCapture(cardVisible: Bool, unseenShowingEndedAt: Date? = nil,
                              now: Date = Date(), isEnabled: () -> Bool) -> AfterCapture {
         recordUse()
         guard couldAsk, !cardVisible else { return .nothing }
         guard Self.mayShowAgain(secondsSinceLastShowing: secondsSinceLastShowing(now: now),
-                                shownThisLaunch: shownThisLaunch,
                                 secondsSinceUnseenShowing: unseenShowingEndedAt.map { now.timeIntervalSince($0) })
         else { return .tooSoon }
         guard !isEnabled() else {
@@ -188,6 +219,18 @@ public struct LaunchAtLoginPrompt {
         return .show
     }
 
+    /// Whether the menu-bar menu shows **Open at Login…** (asks the same question in a standard,
+    /// keyboard-reachable alert): while the question is due. `isEnabled` (an XPC call) is only read
+    /// then; found on, the question is marked asked and the item goes.
+    public func offersMenuItem(isEnabled: () -> Bool) -> Bool {
+        guard couldAsk else { return false }
+        guard !isEnabled() else {
+            markAsked()
+            return false
+        }
+        return true
+    }
+
     // MARK: An unanswered card
 
     /// An unanswered card goes away by itself after this long on screen, like a macOS banner, so it
@@ -198,7 +241,8 @@ public struct LaunchAtLoginPrompt {
     public static let maxShowings = 3
     /// A showing only counts once the card was seen this long (`Showing.secondsSeen`).
     public static let minimumSecondsSeen: TimeInterval = 5
-    /// After a counted showing, the card only comes back this much later, or after a relaunch.
+    /// After a counted showing, the card only comes back this much later, across relaunches too (an
+    /// automatic update relaunches the app; that mustn't bring it back the same day).
     public static let reshowAfterSeconds: TimeInterval = 24 * 60 * 60
     /// After a showing that didn't count, it comes back on a capture this much later (not on the
     /// very next one: someone who never touches the mouse while it's up isn't shown it after every
@@ -212,13 +256,14 @@ public struct LaunchAtLoginPrompt {
     }
 
     /// Whether another showing may start now. `secondsSinceLastShowing`: since the last counted
-    /// one ended (nil: none yet, ever); `secondsSinceUnseenShowing`: since the last uncounted one
-    /// ended in this launch (nil: none).
-    public static func mayShowAgain(secondsSinceLastShowing: TimeInterval?, shownThisLaunch: Bool,
+    /// one ended, from the stored time (nil: none yet, ever); `secondsSinceUnseenShowing`: since the
+    /// last uncounted one ended in this launch (nil: none). A negative time (the clock was set back)
+    /// doesn't hold the card back.
+    public static func mayShowAgain(secondsSinceLastShowing: TimeInterval?,
                                     secondsSinceUnseenShowing: TimeInterval? = nil) -> Bool {
-        if let unseen = secondsSinceUnseenShowing, unseen < reshowAfterUnseenSeconds { return false }
+        if let unseen = secondsSinceUnseenShowing, unseen >= 0, unseen < reshowAfterUnseenSeconds { return false }
         guard let seconds = secondsSinceLastShowing else { return true }
-        return !shownThisLaunch || seconds >= reshowAfterSeconds
+        return seconds < 0 || seconds >= reshowAfterSeconds
     }
 
     /// One showing of the question, followed by the app once a second while it is up, so that only

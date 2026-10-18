@@ -31,8 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // temp-file sweeps or onboarding window, which would touch the real app's shared state.
         NSApp.setActivationPolicy(.accessory)
         Updates.shared.start()
-        return
-        #endif
+        #else
         // Settings → Appearance → Opacity drives every DesignKit surface, live.
         // The Settings tour's demo previews values without saving them (`SettingsStore.opacityPreview`).
         opacityWatch = settings.$settings.map(\.uiOpacity).combineLatest(settings.$opacityPreview)
@@ -122,6 +121,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return self.coordinator.isSelecting || self.recordingCoordinator.isBusy
         }
         loginPrompt.isMenuOpen = { [weak self] in self?.menuBar.isMenuOpen ?? false }
+        menuBar.offersLoginQuestion = { [weak self] in self?.loginPrompt.offersMenuItem ?? false }
+        menuBar.onAskLoginQuestion = { [weak self] in self?.loginPrompt.askFromMenu() }
         loginPrompt.quickAccessCorner = { [weak self] in self?.settings.settings.overlayCorner ?? .bottomRight }
         coordinator.onCaptureCompleted = { [weak self] in self?.loginPrompt.captureCompleted() }
 
@@ -163,6 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         applyBindings()
         // Stop macOS's native ⌘⇧3/⌘⇧4/⌘⇧5 from also firing (double screenshot/recording). Restored on quit.
         SystemScreenshotShortcuts.disableNativeShortcuts()
+        #endif
     }
 
     /// Register every bound hotkey; record failures and refresh menu shortcuts.
@@ -234,10 +236,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        #if SPARKLE_E2E_TEST
-        return   // never restore the native shortcuts the user's real copy turned off
-        #endif
+        #if !SPARKLE_E2E_TEST   // the e2e build never restores the native shortcuts the real copy turned off
         recordingCoordinator?.stopForTermination()
         SystemScreenshotShortcuts.restoreNativeShortcuts()
+        #endif
     }
 }

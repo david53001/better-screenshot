@@ -10,11 +10,14 @@ All notable changes to BetterScreenshot. Versions are git tags; releases are pub
   bar (it reads "Update Available (X)…" while one waits) and Settings → Updates (switch + button). Updates
   are verified with an EdDSA signature; your settings stay. Your Screen Recording permission stays too, as long
   as the release is signed with the same certificate as 3.1.0 (owner decision pending; if not, these release
-  notes must say that 3.2.0 asks for Screen Recording once more — docs/sparkle-updates/README.md).
+  notes must say that 3.2.0 needs Screen Recording allowed once more, with the steps in the README's
+  "Screen Recording after an update" — docs/sparkle-updates/README.md, option b).
 - **Launch at login is your choice.** It's no longer switched on silently at first launch. After your 5th
   screenshot a small card in the corner asks: **No Thanks** / **Open at Login** (never while something
-  full-screen is in front). Ignored, it goes away after 25 seconds and asks again after a screenshot a day
-  later (or after you reopen the app), three times at most — and only times you could actually see it count.
+  full-screen is in front, including on MacBooks with a notch). Ignored, it goes away after 25 seconds and asks
+  again after a screenshot at least a day later (reopening or updating the app doesn't bring it back sooner),
+  three times at most — and only times you could actually see it count. Until you answer, the menu-bar menu
+  also has **Open at Login…**, which asks the same in a standard dialog you can answer with the keyboard.
   People who had it turned on by an earlier version are never asked.
 - Internals: `scripts/package-release.sh` does a whole release (build, sign, zip, EdDSA, appcast, prints
   the `gh` command); universal builds fixed for Swift 6.4's build system; builds pin the 26.5 SDK.

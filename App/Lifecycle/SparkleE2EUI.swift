@@ -20,7 +20,8 @@ import AppKit
 ///
 /// Every window of the test app is made fully transparent as soon as it appears, so nothing shows
 /// on the screen of the person running the test; snapshots are drawn from the views
-/// (`cacheDisplay`), so they need no Screen Recording permission. Log lines start "SPARKLE-E2E UI".
+/// (`cacheDisplay`, on the window's background colour), so they need no Screen Recording
+/// permission. Log lines start "SPARKLE-E2E UI".
 @MainActor
 enum SparkleE2EUI {
     nonisolated static let isOn = ProcessInfo.processInfo.environment["SPARKLE_E2E_UI"] == "1"
@@ -117,10 +118,29 @@ enum SparkleE2EUI {
         return nil
     }
 
+    /// The window's content drawn on its own window background, in the window's appearance: the
+    /// view alone has a transparent background, so in dark mode its white labels came out invisible
+    /// in an image viewer (round 3, N2).
     private static func snapshot(_ window: NSWindow, _ name: String) {
         guard let snapshotDir, let view = window.contentView,
-              let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
-        view.cacheDisplay(in: view.bounds, to: rep)
+              let content = view.bitmapImageRepForCachingDisplay(in: view.bounds),
+              let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: content.pixelsWide,
+                                         pixelsHigh: content.pixelsHigh, bitsPerSample: 8, samplesPerPixel: 4,
+                                         hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+                                         bytesPerRow: 0, bitsPerPixel: 0) else { return }
+        view.cacheDisplay(in: view.bounds, to: content)
+        rep.size = content.size   // points, before the context is made: draw at the same 2× scale
+        guard let context = NSGraphicsContext(bitmapImageRep: rep) else { return }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        let bounds = NSRect(origin: .zero, size: content.size)
+        window.effectiveAppearance.performAsCurrentDrawingAppearance {
+            NSColor.windowBackgroundColor.setFill()
+            bounds.fill()
+        }
+        content.draw(in: bounds, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+        NSGraphicsContext.restoreGraphicsState()
+        log("snapshot appearance: \(window.effectiveAppearance.name.rawValue)")
         let url = URL(fileURLWithPath: snapshotDir).appendingPathComponent("\(name).png")
         do {
             try FileManager.default.createDirectory(atPath: snapshotDir, withIntermediateDirectories: true)
