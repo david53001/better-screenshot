@@ -199,10 +199,12 @@ rule, the prompt's rules and UserDefaults keys, the end-to-end test — is in `d
 In short: Sparkle 2.10.0 (SwiftPM, exact) is embedded by `scripts/build-app.sh` and signed inside-out by
 `scripts/sign-app.sh`; feed `releases/latest/download/appcast.xml`; **`CFBundleVersion` is an integer that
 goes up by one every release**; one command, `scripts/package-release.sh [notes.md]`, builds, signs, zips,
-EdDSA-signs, writes `appcast.xml` and prints the `gh release create … --latest` command. The silent
-first-launch launch-at-login enable is gone: after the 5th completed screenshot a non-activating card asks
-once (CaptureKit `LaunchAtLoginPrompt`, `App/MenuBar/LaunchAtLoginPromptController.swift`); users of the old
-auto-enable (`didRegisterLaunchAtLogin`) are never asked. Builds pin the 26.5 SDK via `scripts/sdk-env.sh`.
+EdDSA-signs, writes `appcast.xml` and prints the `gh release create … --latest` command (any `ALLOW_*`
+override = a dry run into `dist/dry-run/*-DRYRUN.*` with no command). The silent first-launch launch-at-login
+enable is gone: after the 5th completed screenshot a non-activating card asks (CaptureKit
+`LaunchAtLoginPrompt`, `App/MenuBar/LaunchAtLoginPromptController.swift`); answered once ever, an ignored card
+hides after 25 s and returns after a later capture, ≤ 3 showings; users of the old auto-enable
+(`didRegisterLaunchAtLogin`) are never asked. Builds pin the 26.5 SDK via `scripts/sdk-env.sh`.
 
 **Performance pass (planned 2026-10-01, not started):** `docs/PERF-PLAN-2026-10-01.md`. Lower RAM/CPU
 without losing snappiness: baseline, ranked fixes with file:line, measurement commands, and two items

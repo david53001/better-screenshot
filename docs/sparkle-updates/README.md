@@ -40,14 +40,14 @@ MacStats' `feat/sparkle-updates` branch); JVoice gets the same.
 |---|---|
 | `.package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0")`, linked into the app target with rpath `@executable_path/../Frameworks` | `Package.swift`, `Package.resolved` |
 | `SUFeedURL` = `https://github.com/david53001/better-screenshot/releases/latest/download/appcast.xml`, `SUPublicEDKey` = `JrE6EncJErY++AZZXYrrwcNmcVzY/M2wgDWcCkaBf6U=`, `SUEnableAutomaticChecks` = YES (daily check, no "may we check?" dialog). Version **3.2.0**, build **12** (3.1.0 was 11; no branch has a higher one) | `App/Info.plist` |
-| Updater: `SPUStandardUpdaterController`, started at launch, "gentle reminders" (a background find opens Sparkle's window *behind* other apps, never stealing focus). So it isn't missed, the menu item reads **"Update Available (X)…"** and Settings says "Version X is available." with **Show Update…** until the user looks at Sparkle's window. No notification (BetterScreenshot never asks for that permission). | `App/Lifecycle/Updates.swift` (started in `AppDelegate`) |
+| Updater: `SPUStandardUpdaterController`, started at launch, "gentle reminders": a background find opens Sparkle's window *behind* other apps, without taking focus — **except** when Sparkle chooses "immediate focus", its documented default when the app was launched recently (e.g. at login) or the Mac had been idle: then the window opens in front, as in most Mac apps (verified 2026-10-18 by `E2E_UI=1 scripts/sparkle-e2e-test.sh`; round 1 of this doc wrongly said "never stealing focus"). So a window behind others isn't missed, the menu item and the Settings button both read **"Update Available (X)…"** (`Updates.actionTitle`) until the user looks at Sparkle's window. No notification (BetterScreenshot never asks for that permission). | `App/Lifecycle/Updates.swift` (started in `AppDelegate`) |
 | Menu bar: **Check for Updates…** above Settings… | `App/MenuBar/MenuBarController.swift` |
-| Settings → **UPDATES** card (column B, under Pin to Screen): "Check automatically" switch (sub "Look for a new version once a day", ⓘ text in `SettingsHelp.checkForUpdates`), **Check for Updates…** / **Show Update…** button, "You have BetterScreenshot X." | `App/Settings/SettingsView.swift` (`updatesCard`) |
+| Settings → **UPDATES** card (column B, under Pin to Screen): "Check automatically" switch (sub "Look for a new version once a day", ⓘ text in `SettingsHelp.checkForUpdates`), **Check for Updates…** / **Update Available (X)…** button (same label as the menu), "You have BetterScreenshot X." | `App/Settings/SettingsView.swift` (`updatesCard`) |
 | Bundle: copies `Sparkle.framework` into `Contents/Frameworks` (ditto, keeps symlinks), removes its `XPCServices`, `Headers`, `PrivateHeaders`, `Modules`; deletes every absolute rpath except `/usr/lib/swift` (in every slice) and fails if an `@rpath` library other than Sparkle appears. Universal builds now copy each slice out right after building it (Swift 6.4's default `swiftbuild` system puts both triples in `.build/out/Products/<Config>`, so the old script lipo'd x86_64 twice and failed). `BETTERSCREENSHOT_APP` / `BETTERSCREENSHOT_SWIFT_FLAGS` / `BETTERSCREENSHOT_REQUIRE_IDENTITY` env vars | `scripts/build-app.sh` |
 | Signing, inside-out, no `--deep`: `Autoupdate`, `Updater.app`, the framework (all `-o runtime`, as Sparkle ships them), then the app with `App/BetterScreenshot.entitlements` (no hardened runtime, as before) | `scripts/sign-app.sh` (new; `build-app.sh` calls it) |
 | SDK pin: the CLT's default MacOSX27.0 SDK can't build SwiftUI macros, so builds use `/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk` when present (an `SDKROOT` you set wins) | `scripts/sdk-env.sh`, sourced by `build-app.sh` and `test.sh` |
 | One-command release | `scripts/package-release.sh` |
-| Real end-to-end update test | `scripts/sparkle-e2e-test.sh` |
+| Real end-to-end update test (automatic install + `E2E_UI=1`: Sparkle's real windows) | `scripts/sparkle-e2e-test.sh`, `App/Lifecycle/SparkleE2EUI.swift` (only in its `-DSPARKLE_E2E_TEST` build) |
 
 **Not sandboxed** (checked: `App/BetterScreenshot.entitlements` has no `com.apple.security.app-sandbox`).
 So Sparkle installs through its bundled `Autoupdate` / `Updater.app`; the framework's XPC services are
@@ -73,16 +73,28 @@ Before: up to 3.1.0, the first launch turned launch at login on silently (`AppDe
   called at the end of `handle(_:)` and after Capture Text's HUD).
 - After the **5th** use, the app checks once a second (for up to 120 s; the next capture tries again) for a
   **calm moment**: ≥ 3 s since that capture, no key pressed for ≥ 2 s (`CGEventSource.secondsSinceLastEventType`,
-  needs no permission — checked), no mouse button down (no drag of the thumbnail in progress), no
-  selection overlay / countdown / record strip / recording, and none of BetterScreenshot's windows in
-  front (`NSApp.isActive` false — not while annotating or in Settings). Then it shows the card.
+  needs no permission — checked), no mouse button down (no drag of the thumbnail in progress), the menu-bar
+  menu closed (`MenuBarController.isMenuOpen`, from its `NSMenuDelegate`: during menu tracking neither
+  `NSApp.isActive` nor the mouse buttons show it), no selection overlay / countdown / record strip /
+  recording, and none of BetterScreenshot's windows in front (`NSApp.isActive` false — not while annotating
+  or in Settings). Then it shows the card.
 - **The card** (`Packages/OverlayKit/Sources/OverlayKit/PromptCardController.swift`): a notification-style
   card in the **top-right** corner of the screen under the pointer, 12 pt below the menu bar (bottom-right
   when Settings → Quick Access → Screen corner is top-right, so it never sits on the thumbnails). The app
   icon, **"Open BetterScreenshot at login?"**, "Your capture shortcuts keep working after a restart. You can
   change this any time in Settings.", **No Thanks** (outline) and **Open at Login** (white, primary).
   - Never takes focus: a borderless `.nonactivatingPanel` that can't become key; its buttons take the first
-    click. So no keyboard shortcuts on it (there's no focus to receive them) — by design.
+    click. So no keyboard shortcuts on it (there's no focus to receive them) — by design. **Accessibility:**
+    VoiceOver announces the title and line when it appears and can reach its two buttons (ordinary
+    `NSButton`s, labelled; the window carries the title as its accessibility label), but Return/Escape and
+    Full Keyboard Access can't reach a window that is never key. The full alternative for keyboard and
+    VoiceOver users is the **Settings → Startup → Launch at login** switch, which answers the question too.
+  - **Unanswered, it goes away by itself** after **25 s** (`LaunchAtLoginPrompt.unansweredHideSeconds`; not
+    while the pointer is on it), like a macOS banner, so it never sits over a presentation or a shared screen.
+    It stays due and comes back after a later capture (at a calm moment again), **at most 3 showings**
+    (`maxShowings`); after the 3rd unanswered one it counts as answered "no" (`launchAtLoginPromptAsked`).
+  - It joins every Space but **not full-screen ones** (no `.fullScreenAuxiliary`), so it never appears over a
+    full-screen app such as a Keynote presentation.
   - Never in a capture: its window IDs are in `CaptureCoordinator.tourTagWindowIDs` (excluded from area,
     window, full screen, Capture Text and the frozen still), and its window is registered with
     `TourTagRecordingGate`, which keeps it out of display recordings from its first frame (it's invisible
@@ -94,39 +106,54 @@ Before: up to 3.1.0, the first launch turned launch at login on silently (`AppDe
     Opacity slider can't make it lighter. All text is pure white (not the 80 % secondary, which measures 3.8:1):
     **≥ 4.86:1 over an opaque white page**, the measured value for the default tint
     (`docs/PROGRESS-2026-09-30-opacity.md`). Buttons: primary white fill + near-black text (≈ 18:1), secondary
-    white outline + white text (same ≥ 4.86:1) — the tour tag's button pair; hover and press feedback.
+    white outline + white text (same ≥ 4.86:1) — the tour tag's button pair; hover and press feedback. The
+    outline is a stroked continuous path (a layer border looked slightly rough at 2×). Fonts are text styles:
+    title `.body` semibold (13 pt), line `.callout` (12 pt), buttons `.callout` semibold. **Deliberate
+    deviation from the design language** (MacStats `docs/design-language/README.md`: small buttons are a
+    0.08 / 0.12 / 0.16 fill with no border): that fill is meant for label-coloured text on panels; under white
+    text on this surface it lightens what the text sits on, from the measured 4.86:1 to about 4.1:1 (0.08)
+    or 3.8:1 (0.12) over a white page — computed from the measured value, below the 4.5:1 floor. The
+    outline keeps 4.86:1.
   - VoiceOver announces the title and line when it appears.
 - **No Thanks** → card goes, never asked again. **Open at Login** → `SMAppService.mainApp.register()`, then:
   enabled → "BetterScreenshot will open at login." for 1.6 s, then the card goes; `.requiresApproval` →
   "One more step / Allow BetterScreenshot in Login Items to finish." + **Done** / **Open Login Items**
   (`SMAppService.openSystemSettingsLoginItems()`); error → "Couldn't turn it on. / You can try again in
   Settings → Launch at login." + **Done**.
-- The card stays until answered (one time ever). If the app quits while it's up unanswered, it is still due
-  and comes back after a later capture.
+- If the app quits while the card is up unanswered, that showing isn't counted; it is still due and comes back
+  after a later capture. The card's window is only created the first time it is shown (users who are never
+  asked never get it).
 - **Settings switch in sync:** `LaunchAtLogin.setEnabled` posts `LaunchAtLogin.didChangeNotification`; the
   Settings → Startup → Launch at login switch re-reads `SMAppService` on it (and on appear). Any choice made
   with the switch counts as answered (`setEnabled` marks it asked), and closes the card if it's up.
-- **Asked at most once ever. Never asked if launch at login is already on** (checked when it becomes due and
-  again right before showing).
+- **Answered at most once ever (shown at most 3 times). Never asked if launch at login is already on**
+  (checked when it becomes due and again right before showing; when found on, it is marked asked, so later
+  captures don't call `SMAppService.mainApp.status` — an XPC call to the system — again).
 - **Existing users**: if `didRegisterLaunchAtLogin` is set, ≤ 3.1.0 already turned it on for them; they either
   still have it (nothing to do) or turned it off on purpose (respected): never asked, and their uses aren't
   counted.
 - Same rules as MacStats (5 uses, once, legacy flag, Settings counts as an answer). Differences, because this
   app has no panel to put a card in: a use is a capture, not a panel open; the card is a corner card shown at
-  a calm moment instead of inside MacStats' panel; there are no "quick dismissals" (the card can't be glanced
-  away — only answered).
+  a calm moment instead of inside MacStats' panel; instead of MacStats' "quick dismissals", an unanswered card
+  hides itself after 25 s and counts as one of its 3 showings.
 
 **UserDefaults keys** (domain `com.betterscreenshot.mac`):
 
 | Key | Type | Meaning |
 |---|---|---|
 | `launchAtLoginPromptUses` | Int | Completed captures counted so far (stops at 5) |
-| `launchAtLoginPromptAsked` | Bool | Answered on the card, or chosen in Settings: never ask again |
+| `launchAtLoginPromptAsked` | Bool | Answered on the card, chosen in Settings, ignored 3 times, or launch at login found on: never ask again |
+| `launchAtLoginPromptUnansweredShowings` | Int | Times the card hid itself unanswered (3 → asked) |
 | `didRegisterLaunchAtLogin` | Bool | Legacy, **read only**: ≤ 3.1.0 auto-enabled launch at login |
 
-Code: rules + calm-moment test (pure, tested) `Packages/CaptureKit/Sources/CaptureKit/LaunchAtLoginPrompt.swift`;
-tests `Packages/CaptureKit/Tests/CaptureKitTests/LaunchAtLoginPromptTests.swift` (12: threshold, already
-enabled, already asked, legacy flag, counter cap, persistence, Settings choice, every calm-moment condition);
+Code: rules, calm-moment test and the whole flow as pure steps (`afterCapture` → `.nothing` / `.startWaiting` /
+`.alreadyEnabled`; `waitStep` → `.keepWaiting` / `.giveUp` / `.show` / `.noLongerDue` / `.alreadyEnabled`;
+`shouldHideUnanswered`; `recordUnansweredShowing`) in `Packages/CaptureKit/Sources/CaptureKit/LaunchAtLoginPrompt.swift`,
+behind a small storage protocol (`LaunchAtLoginPromptStorage`: `UserDefaults.standard` in the app, an in-memory
+store in tests, so a test run writes no plist into `~/Library/Preferences`);
+tests `Packages/CaptureKit/Tests/CaptureKitTests/LaunchAtLoginPromptTests.swift` (20: threshold, already
+enabled, already asked, legacy flag, counter cap, persistence, Settings choice, every calm-moment condition incl.
+the open menu, the after-capture / wait steps with when the status is read, the 25 s hide, the 3-showing cap);
 card `Packages/OverlayKit/Sources/OverlayKit/PromptCardController.swift`; flow
 `App/MenuBar/LaunchAtLoginPromptController.swift`; wiring `App/Lifecycle/AppDelegate.swift`;
 `App/SystemIntegration/LaunchAtLogin.swift`.
@@ -161,9 +188,18 @@ conflict trivially).
   was made. A release signed with the new certificate makes **every user allow Screen Recording again**
   (CLAUDE.md: "Updates must never cost users their permission"). So `package-release.sh` refuses any
   certificate except `RELEASE_CERT` (= `71ec62cd…`). Options (owner decides): (a) recover the old keychain's
-  password, put it back in `~/Library/Keychains/` and on the search list, and back it up; or (b) accept a
-  one-time re-grant for 3.2.0: set `RELEASE_CERT` in `scripts/package-release.sh` to the new hash, say so in
-  the release notes, and back up the new keychain.
+  password yourself (try `security unlock-keychain ~/Backups/2026-10-18-pre-sparkle/old-betterscreenshot-signing.keychain-db`
+  and type `betterscreenshot-local`, then your login password); if it opens, copy it to
+  `~/Library/Keychains/betterscreenshot-signing.keychain-db` (after moving the new one aside), put it on the
+  search list (`security list-keychains -d user -s …`, see `scripts/setup-signing.sh`) and back it up; an agent
+  must not try passwords on it (the auto-mode safety check refuses that as credential exploration); or
+  (b) accept a one-time re-grant for 3.2.0: set `RELEASE_CERT` in `scripts/package-release.sh` to
+  `08faa1f906d59fae5a9ccb84d00979030fb26b2b`, say in the release notes that 3.2.0 asks for Screen Recording
+  once more, and fix the CHANGELOG 3.2.0 line accordingly. Sparkle itself accepts a code-signing change when the
+  EdDSA signature is valid, but no test here covers a cross-certificate update.
+  **The new keychain is backed up** (2026-10-18, round 1):
+  `~/Backups/betterscreenshot-code-signing/new-08faa1f9-betterscreenshot-signing.keychain-db` (+ `README.md`
+  with restore steps), so option (b) stays possible even if this Mac's copy is lost.
 - Sparkle CLI tools: `/Users/davidghermansteinberg/Developer/Sparkle/2.10.0/bin` (`sign_update`,
   `generate_appcast`, `generate_keys`). The same tools come with the SwiftPM artifact in
   `.build/artifacts/sparkle/Sparkle/bin`.
@@ -178,6 +214,7 @@ git switch main
 # 0. (first time only) merge: git merge --no-ff feat/sparkle-updates
 # 1. Bump the version in App/Info.plist:
 #    CFBundleShortVersionString (e.g. 3.2.0 -> 3.3.0) AND CFBundleVersion (+1, e.g. 12 -> 13).
+#    For 3.2.0 itself, SKIP this step: this branch already set 3.2.0 / build 12.
 # 2. Tests:
 scripts/test.sh
 # 3. Commit the bump and push it (package-release.sh refuses a dirty tree or HEAD != origin/main):
@@ -192,19 +229,22 @@ gh release create v3.3.0 "<repo>/dist/BetterScreenshot.app.zip" "<repo>/dist/app
     --notes-file "<repo>/dist/release-notes.md"
 ```
 
-`package-release.sh` outputs `dist/BetterScreenshot.app.zip` (the asset both `scripts/install.sh` and Sparkle
+On a real run (no `ALLOW_*` variable), `package-release.sh` outputs `dist/BetterScreenshot.app.zip` (the asset both `scripts/install.sh` and Sparkle
 download), `dist/appcast.xml` (one item: this version, `sparkle:version` = build number, minimum macOS,
 Markdown notes, enclosure `https://github.com/david53001/better-screenshot/releases/download/vX.Y.Z/BetterScreenshot.app.zip`
 with its EdDSA signature and length) and `dist/release-notes.md`. It publishes nothing itself.
 (`dist/` is in `.gitignore`.)
 
-Guards (it refuses; the overrides are for dry runs only, never for a real release):
+Guards (it refuses; the overrides are for dry runs only, never for a real release). **Any override makes it a
+dry run:** the outputs go to `dist/dry-run/` as `BetterScreenshot-DRYRUN.app.zip`, `appcast-DRYRUN.xml` and
+`release-notes-DRYRUN.md` (plus the app), it ends with `DRY RUN - not publishable` and prints **no** `gh`
+command. Never upload those files (even uploaded, their names aren't what the feed and `install.sh` download).
 
 | Refuses when | Override |
 |---|---|
 | `git status --porcelain` is not empty | `ALLOW_DIRTY=1` |
 | `HEAD` isn't `origin/main` (after `git fetch origin main`) | `ALLOW_NOT_MAIN=1` |
-| the built app's certificate isn't `RELEASE_CERT` (checked after the build) | `ALLOW_NEW_CERT=1` |
+| the certificate isn't `RELEASE_CERT`: checked on the keychain's identity **before building** (`security find-certificate -c "BetterScreenshot Code Signing" -Z ~/Library/Keychains/betterscreenshot-signing.keychain-db`, seconds) and again on the built app (its designated requirement) | `ALLOW_NEW_CERT=1` |
 | a GitHub release with tag `vX.Y.Z` already exists, or `gh` can't tell | none: bump the version |
 | `CFBundleVersion` isn't a whole number, or isn't above the published appcast's | none |
 | "BetterScreenshot Code Signing" missing (no ad-hoc fallback for releases) | none |
@@ -233,6 +273,7 @@ Every installed copy reads `releases/latest/download/appcast.xml`, and `scripts/
 cd /Users/davidghermansteinberg/Desktop/Home/Projects/Code/BetterScreenshot/.claude/worktrees/sparkle-updates   # or the repo root after merging
 scripts/sparkle-e2e-test.sh                    # temp dir, deleted afterwards
 KEEP=1 scripts/sparkle-e2e-test.sh /some/dir   # keep logs/builds for inspection
+E2E_UI=1 KEEP=1 scripts/sparkle-e2e-test.sh /some/dir   # Sparkle's real windows (see "UI mode" below)
 ```
 
 Needs the "BetterScreenshot Code Signing" identity and the Sparkle key in the Keychain; about a minute
@@ -270,15 +311,63 @@ GOOD update installed (build 101): PASS
 BAD signature refused (still build 100): PASS
 ```
 
+### UI mode (`E2E_UI=1`): the path real users take
+
+The default run installs at once (`SUAutomaticallyUpdate` + `immediateInstallationBlock`), so it never shows
+Sparkle's windows. `E2E_UI=1` runs one more scenario instead of GOOD/BAD: OLD has no `SUAutomaticallyUpdate`
+and runs with `SPARKLE_E2E_UI=1`, which turns on `App/Lifecycle/SparkleE2EUI.swift` (compiled only into the
+`-DSPARKLE_E2E_TEST` build: `nm` on the normal build finds no `SparkleE2EUI` symbol) and makes the delegate leave
+installation to Sparkle's own window. It waits for the scheduled check's update window, logs Sparkle's
+`immediateFocus` choice, whether the window is key / the app active, and the menu title
+(`Updates.actionTitle`); does what the menu item does (`Updates.showSparkleWindow`, minus activating the app) and
+logs what is pending; then clicks **Install Update** and **Install and Relaunch** in Sparkle's windows and checks
+the installed copy is build 101. Every window of the test app is made transparent the moment it appears
+(nothing visible on screen, at most a ~50 ms flash), but the app can still become active for a few seconds.
+Snapshots (`cacheDisplay`, no Screen Recording permission needed) go to `<work-dir>/ui/`; on macOS 26 they
+show layout and buttons but drop most label text.
+
+Result 2026-10-18 (round 1; the Mac had been idle for 79 min):
+
+```
+SPARKLE-E2E UI scheduled update 90.1, immediate focus 1
+SPARKLE-E2E UI will show 90.1: handled by Sparkle 1, user-initiated 0
+SPARKLE-E2E UI user attention for 90.1
+SPARKLE-E2E UI update window shown: key 1, app active 1, frontmost app com.betterscreenshot.mac.sparkletest
+SPARKLE-E2E UI menu title: Check for Updates…
+SPARKLE-E2E UI after the menu action: pending none, menu title: Check for Updates…
+SPARKLE-E2E UI clicking Install Update
+SPARKLE-E2E downloaded 101
+SPARKLE-E2E UI clicking Install and Relaunch
+SPARKLE-E2E installing 101
+update window shown by the scheduled check: PASS
+(Sparkle chose immediate focus: launched just now / Mac idle 4791 s)
+in focus: Sparkle reports the user's attention: PASS
+in focus: the menu doesn't nag (Check for Updates…): PASS
+the menu action leaves nothing pending: PASS
+Install and Relaunch was offered and clicked: PASS
+installed and relaunched as build 101: PASS
+```
+
+What this showed: right after launch (and when the Mac is idle) Sparkle opens a scheduled update **in front,
+with focus**, and reports the user's attention at once, so the "Update Available (X)…" label never appears in
+that case. That is Sparkle's documented default (`SPUStandardUserDriverDelegate.h`: "may choose to show the
+update in immediate and utmost focus when the app was launched recently or the system has been idle"). The
+behind-other-windows branch (`key 0, app active 0`, label "Update Available (90.1)…") is checked by the script
+when Sparkle takes it, but it can't be forced from a freshly launched test copy, so **it is still unverified**.
+
 ### Manual checklist for the first real update (3.2.0 → 3.2.1)
 
-The e2e test installs at once; real users get Sparkle's window instead. The first time a later release
+The default e2e run installs at once and the UI mode runs right after launch; real users usually get the
+window later, behind their other windows. The first time a later release
 exists, on a Mac running the previous release (owner):
 
 1. Wait for (or force: quit the app, `defaults write com.betterscreenshot.mac SULastCheckTime -date "2000-01-01 00:00:00 +0000"`,
-   relaunch) the scheduled check. Expect Sparkle's update window to open **without taking focus**.
-2. Menu bar: the item reads "Update Available (3.2.1)…". Settings → Updates: "Version 3.2.1 is available." +
-   **Show Update…**.
+   relaunch) the scheduled check. Right after a launch Sparkle opens it in front (see UI mode above); for the
+   case that matters here, leave the app running past the next daily check while you use the Mac: the window
+   should open **behind** your windows, without taking focus.
+2. If the window opened behind other windows: the menu bar item and the Settings → Updates button both read
+   "Update Available (3.2.1)…". (If Sparkle opened it in front — app just launched, or the Mac was idle — the
+   label stays "Check for Updates…": the user has seen it.)
 3. Click either: Sparkle's window comes to the front. **Install Update** → **Install and Relaunch**.
 4. The app relaunches as 3.2.1; captures work **without a new Screen Recording prompt** (only true if both
    releases are signed with the same certificate — see the ⚠ above).
@@ -287,33 +376,88 @@ exists, on a Mac running the previous release (owner):
 
 - 2026-10-18: both features built and committed on `feat/sparkle-updates` (not merged, pushed, installed or
   released). Commits: `2d4c8ee` (features), `1366d80` (Settings layout + card centring after render),
-  the universal-build fix, and docs.
-- Verified 2026-10-18:
-  - `scripts/test.sh`: all 7 suites pass (DesignKit 9, CaptureKit 135 incl. 12 new, OverlayKit 50,
-    EditorKit 155, RecordingKit 92, HistoryKit 41, TourKit 119).
-  - `scripts/build-app.sh` (debug): builds, `codesign --verify --deep --strict` OK; rpaths only
-    `/usr/lib/swift`, `@loader_path`, `@executable_path/../Frameworks`; framework holds only `Autoupdate`,
-    `Resources`, `Sparkle`, `Updater.app`; designated requirement unchanged in form (identifier + cert leaf).
-  - `scripts/sparkle-e2e-test.sh`: GOOD PASS + BAD PASS (output above); afterwards no test process, server,
-    defaults domain or work dir left; the real `/Applications` copy kept running.
-  - `scripts/package-release.sh` guards: untracked file → refused; HEAD ≠ origin/main → refused; full universal
-    build with the current keychain → **refused: certificate 08faa1f9… ≠ 71ec62cd…** (works as intended); with
-    `ALLOW_NOT_MAIN=1 ALLOW_DIRTY=1 ALLOW_NEW_CERT=1` (dry run): `x86_64 arm64`, signature OK, `appcast.xml`
-    passes `xmllint`, the printed command has `--latest` and both assets. Nothing was published.
-  - Off-screen renders (scratch probes, deleted): all four card states (layout, wrapping, buttons) and the
-    real `SettingsView`, light + dark (Updates card in column B, button not truncated).
-- **Not tested** (needs the owner or a real release): the card live in the running app (5 real captures — a
-  second app instance would fight the real one for hotkeys and the native-shortcut settings, so it wasn't
-  run); the blur/tint on screen (off-screen renders don't draw the blur, so contrast relies on the earlier
-  4.86:1 measurement); a real Login Items `.requiresApproval` path; Sparkle's own window and "Install and
-  Relaunch" (checklist above); the x86_64 slice running on an Intel Mac.
+  the universal-build fix, docs, then **review round 1 fixes** (one commit, below).
+- **Review round 1** (independent reviewer, 7.5/10; report `docs/sparkle-updates/REVIEW-round1.md`, untracked,
+  with its renders in `docs/sparkle-updates/review-round1/`). What changed:
+  - **B1 certificate** (owner decision, not code): still open; the release script still refuses
+    `08faa1f9…`. New: the current keychain is backed up to `~/Backups/betterscreenshot-code-signing/`, and the
+    ⚠ section above has the exact steps for (a) and (b). No agent tried the old keychain's password.
+  - **M1 card never leaves** → fixed: an unanswered card hides after 25 s (not under the pointer), stays due,
+    comes back after a later capture, ≤ 3 showings, then counts as "no" (new key
+    `launchAtLoginPromptUnansweredShowings`). `.fullScreenAuxiliary` dropped: never over a full-screen app.
+    Timeout, cap and hover rule are pure and tested in `LaunchAtLoginPrompt`.
+  - **M2 dry run printed a live publish command** → fixed: any `ALLOW_*` = dry run → `dist/dry-run/*-DRYRUN.*`,
+    "DRY RUN - not publishable", no `gh` command. The 14:41 dry-run files (`dist/BetterScreenshot.app.zip`,
+    `dist/appcast.xml`, `dist/release-notes.md`) were deleted, and so were this round's own dry-run outputs.
+  - **M3 tests leaked plists** → fixed: `LaunchAtLoginPrompt` takes a `LaunchAtLoginPromptStorage`
+    (`UserDefaults` conforms); tests use an in-memory store. Measured: 110 leaked files before `scripts/test.sh`,
+    110 after. The **old leaked files are not deleted** (needs the owner's OK, see NEXT STEPS).
+  - **L1** certificate checked on the keychain before building (refused in 1.2 s, "Nothing was built"); the
+    post-build check stays.
+  - **L2** Sparkle's real UI path: new `E2E_UI=1` mode (section "UI mode"), run and passing. It found that the
+    old "never steals focus" claim was wrong right after launch / when the Mac is idle (Sparkle's documented
+    default); this README, `Updates.swift` and the manual checklist now say so. Behaviour unchanged: that is
+    standard Sparkle UX, and suppressing it would mean the window only ever opens from our menu. **Owner can
+    decide otherwise** (implement `standardUserDriverShouldHandleShowingScheduledUpdate` returning `false` when
+    `immediateFocus`, and rely on the menu label).
+  - **L3** launch at login found already on → marked asked (no more XPC status call per capture).
+  - **L4** `menuIsOpen` added to `Moment` / `isCalmMoment` (from `MenuBarController`'s `NSMenuDelegate`).
+  - **L5 keyboard / VoiceOver**: partly. The window now carries the title as its accessibility label; the
+    buttons were already labelled `NSButton`s. A keyboard path would need the window to become key, i.e. take
+    focus, which is the one thing the card must not do, so instead the README's accessibility line names the
+    Settings switch as the full alternative.
+  - **L6 design language**: fonts are now text styles (`.body` / `.callout`, same sizes), and the outline is a
+    stroked continuous path (smooth at 2× in an off-screen render). **Disagreed, kept the outline** instead of
+    the 0.08/0.12 filled secondary: under white text that fill drops contrast over a white page from 4.86:1 to
+    about 4.1:1 / 3.8:1 (computed from the measured value), below 4.5:1. Reason recorded in
+    `PromptCardButton`, `Packages/OverlayKit/CLAUDE.md` and section 2 above; the MacStats design-language doc
+    was not edited (another repo).
+  - **L7** flow logic moved into pure steps (`afterCapture`, `waitStep`, `shouldHideUnanswered`,
+    `recordUnansweredShowing`), tested; the controller only carries them out.
+  - **L8** DesignKit test `minimumOpacityKeepsASurfaceAtLeastAtTheDefault`.
+  - **L9** the card's window is created on first show and registered with `TourTagRecordingGate` then.
+  - **N1** CHANGELOG 3.2.0 permission line is conditional on the certificate; release step 1 says to skip the
+    bump for 3.2.0. **N2** one label: the menu item and the Settings button both use `Updates.actionTitle`
+    ("Update Available (X)…" / "Check for Updates…"); the Settings line always says "You have BetterScreenshot X.".
+- Verified 2026-10-18 (after round 1):
+  - `scripts/test.sh`: all 7 suites pass (DesignKit 10, CaptureKit 143 incl. 20 prompt tests, OverlayKit 50,
+    EditorKit 155, RecordingKit 92, HistoryKit 41, TourKit 119); `~/Library/Preferences` has the same 110
+    `LaunchAtLoginPromptTests.*.plist` before and after.
+  - `scripts/build-app.sh` (debug): exit 0, no warnings in the touched files; `codesign --verify --deep
+    --strict` OK; rpaths `/usr/lib/swift`, `@loader_path`, `@executable_path/../Frameworks`; designated
+    requirement `identifier "com.betterscreenshot.mac" and certificate leaf = H"08faa1f9…"` (the new cert, see
+    B1); `nm` finds no `SparkleE2EUI` symbol in the normal build.
+  - `scripts/sparkle-e2e-test.sh`: GOOD PASS + BAD PASS. `E2E_UI=1`: all 6 checks PASS (output in "UI mode").
+    Afterwards no test process, server, port 8766 listener, `sparkletest` defaults or caches; the real
+    `/Applications/BetterScreenshot.app` (pid 4076) kept running.
+  - `scripts/package-release.sh`: with `ALLOW_DIRTY=1 ALLOW_NOT_MAIN=1` → refused before building (certificate
+    `08faa1f9…`); with all three overrides → universal (`x86_64 arm64`), signature OK, outputs only in
+    `dist/dry-run/` under DRYRUN names, "DRY RUN - not publishable", 0 `gh release create` lines. Nothing was
+    published; those outputs were deleted afterwards.
+  - Off-screen renders of the card (scratch probe, not committed; window at alpha 0): ask / approval / done
+    states over white and black at 2×: same layout as before, outline smooth, collection behaviour
+    `canJoinAllSpaces` only.
+- **Not tested** (needs the owner or a real release): the card live in the running app (5 real captures, the
+  25 s hide, the 3-showing cap and the menu-open wait on screen — a second app instance would fight the real one
+  for hotkeys and the native-shortcut settings); the blur/tint on screen (off-screen renders don't draw the
+  blur, so contrast relies on the earlier 4.86:1 measurement); a real Login Items `.requiresApproval` path;
+  Sparkle's behind-other-windows branch (it can't be forced from a freshly launched copy) and the real
+  3.2.0 → 3.2.1 update (checklist above); a cross-certificate update (option b); the x86_64 slice on an Intel Mac.
 
 **NEXT STEPS (in this order):**
 
 1. **Owner: decide the signing certificate** (⚠ section above). Until then no release can be cut without
-   costing every user their Screen Recording permission.
-2. Owner: review and merge `feat/sparkle-updates` into `main` (`git switch main && git merge --no-ff
+   costing every user their Screen Recording permission. If you choose (b), also rewrite the CHANGELOG 3.2.0
+   permission line to say 3.2.0 asks for Screen Recording once more.
+2. Owner: OK deleting the plist files earlier test runs leaked into `~/Library/Preferences` (110 from this
+   repo's tests, 119 from MacStats' `LaunchAtLoginPromptSessionTests`). They are throwaway test domains, but
+   they are files this session didn't create, so they're left for you. Count them with
+   `ls ~/Library/Preferences | grep -cE '^LaunchAtLoginPrompt(Session)?Tests\.'`; once you OK it, delete with
+   `rm ~/Library/Preferences/LaunchAtLoginPromptTests.*.plist ~/Library/Preferences/LaunchAtLoginPromptSessionTests.*.plist`
+   (cfprefsd, the macOS preferences daemon, may keep cached copies until the next login; that is harmless).
+3. Owner: review and merge `feat/sparkle-updates` into `main` (`git switch main && git merge --no-ff
    feat/sparkle-updates`), push `main` (it also carries the unpushed ⌘⇧3 commit `c29f6c3`).
-3. Cut 3.2.0 with the steps above; install it on this Mac with the one-liner; then run the manual checklist
-   with 3.2.1.
-4. Optional: `feat/launch-at-login` (see the note in section 2) — merge it with the tour-step text fixed, or drop it.
+4. Cut 3.2.0 with the steps above (skip the bump); install it on this Mac with the one-liner; then run the
+   manual checklist with 3.2.1.
+5. Optional: `feat/launch-at-login` (see the note in section 2) — merge it with the tour-step text fixed, or drop it.
+6. Optional (owner): keep or change Sparkle's focus-at-launch behaviour (L2 bullet above).

@@ -7,10 +7,14 @@ import DesignKit
 /// LaunchAtLoginPromptController.swift`).
 ///
 /// It never takes focus: a borderless `.nonactivatingPanel` that can't become key, whose buttons
-/// take the first click — so typing in the frontmost app is never interrupted. All text is white
-/// on a surface held at least at the default opacity (`minimumOpacity`), ≥ 4.86:1 over a white
-/// page; the primary button is white with near-black text, the secondary one an outline (the tour
-/// tag's button pair). Calling `show` again while it's up replaces the content in place.
+/// take the first click — so typing in the frontmost app is never interrupted. That also means no
+/// keyboard path (Return/Escape have no focus to reach); VoiceOver announces it and can reach the
+/// buttons, and the Settings switch is the full keyboard alternative. It joins every Space but not
+/// full-screen ones (no `.fullScreenAuxiliary`): it never sits over a full-screen presentation.
+/// All text is white on a surface held at least at the default opacity (`minimumOpacity`),
+/// ≥ 4.86:1 over a white page; the primary button is white with near-black text, the secondary one
+/// an outline (the tour tag's button pair — a filled secondary would lower its white text's
+/// contrast, see `PromptCardButton`). Calling `show` again while it's up replaces the content.
 @MainActor
 public final class PromptCardController {
     public struct Action {
@@ -55,7 +59,8 @@ public final class PromptCardController {
         panel.hasShadow = true   // the one soft system shadow of a floating element
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        // Not `.fullScreenAuxiliary`: never over a full-screen app (a presentation, a shared screen).
+        panel.collectionBehavior = [.canJoinAllSpaces]
         panel.becomesKeyOnlyIfNeeded = true
         surface.minimumOpacity = UIOpacity.defaultValue
         panel.contentView = surface
@@ -85,6 +90,7 @@ public final class PromptCardController {
         let y = corner == .topRight ? vf.maxY - size.height - Self.screenMargin : vf.minY + Self.screenMargin
         window.setFrame(NSRect(x: x, y: y, width: size.width, height: size.height), display: true)
         surface.frame = NSRect(origin: .zero, size: size)
+        window.setAccessibilityLabel(title)
         window.orderFrontRegardless()
         window.invalidateShadow()
         NSAccessibility.post(element: window, notification: .announcementRequested, userInfo: [
@@ -100,13 +106,13 @@ public final class PromptCardController {
         let textWidth = Self.width - 2 * Self.padding - Self.iconSize - 12
 
         let titleLabel = NSTextField(wrappingLabelWithString: title)
-        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        titleLabel.font = Self.font(.body, weight: .semibold)   // 13 pt
         titleLabel.textColor = HUDSurfaceView.primaryText
         titleLabel.preferredMaxLayoutWidth = textWidth
         var texts: [NSView] = [titleLabel]
         if let message {
             let body = NSTextField(wrappingLabelWithString: message)
-            body.font = .systemFont(ofSize: 12)
+            body.font = .preferredFont(forTextStyle: .callout)   // 12 pt
             // Full white, not the 80 % secondary: that measures 3.8:1 over a white page.
             body.textColor = HUDSurfaceView.primaryText
             body.preferredMaxLayoutWidth = textWidth
@@ -151,6 +157,11 @@ public final class PromptCardController {
         stack.widthAnchor.constraint(equalToConstant: Self.width - 2 * Self.padding).isActive = true
         return stack
     }
+
+    /// A text style's font at a weight (AppKit's text styles come in the regular weight only).
+    static func font(_ style: NSFont.TextStyle, weight: NSFont.Weight) -> NSFont {
+        .systemFont(ofSize: NSFont.preferredFont(forTextStyle: style).pointSize, weight: weight)
+    }
 }
 
 /// Its own class so `allWindowNumbers` can find it. Never key: the card must not take focus.
@@ -162,10 +173,19 @@ final class PromptCardPanel: NSPanel {
 /// A 24 pt button: white fill + near-black title (primary) or a white outline + white title
 /// (secondary), continuous 6 pt corners, hover and press feedback, and it takes the first click
 /// (the card's window is never key).
+///
+/// The secondary is an outline, not the design language's 0.08 / 0.12 / 0.16 small-button fill:
+/// that fill is for panel buttons with label-colour text, and under white text on this surface it
+/// lightens the background white text sits on — from the measured 4.86:1 over a white page to
+/// about 4.1:1 at 0.08 and 3.8:1 at 0.12 (computed from the measured value), below 4.5:1. Same pair
+/// as the tour tag. The outline is a stroked continuous path (a layer border on continuous corners
+/// rendered slightly rough at 2×).
 final class PromptCardButton: NSButton {
     private let isPrimary: Bool
     private let handler: () -> Void
     private var hovering = false { didSet { needsDisplay = true } }
+    private let outline = CAShapeLayer()
+    static let outlineWidth: CGFloat = 1
 
     init(action: PromptCardController.Action) {
         isPrimary = action.isPrimary
@@ -175,11 +195,16 @@ final class PromptCardButton: NSButton {
         isBordered = false
         wantsLayer = true
         layer?.setContinuousCorners(6)
-        layer?.borderWidth = isPrimary ? 0 : 1
+        if !isPrimary {
+            outline.fillColor = nil
+            outline.lineWidth = Self.outlineWidth
+            outline.strokeColor = NSColor.white.withAlphaComponent(0.55).cgColor
+            layer?.addSublayer(outline)
+        }
         // Near-black on white: ≈ 18:1. White on the card's surface: ≥ 4.86:1 (see the controller).
         let colour = isPrimary ? NSColor(white: 0.1, alpha: 1) : HUDSurfaceView.primaryText
         attributedTitle = NSAttributedString(string: action.title, attributes: [
-            .font: NSFont.systemFont(ofSize: 12, weight: .semibold), .foregroundColor: colour])
+            .font: PromptCardController.font(.callout, weight: .semibold), .foregroundColor: colour])
         target = self
         self.action = #selector(clicked)
         translatesAutoresizingMaskIntoConstraints = false
@@ -201,8 +226,20 @@ final class PromptCardButton: NSButton {
             layer?.backgroundColor = NSColor.white.withAlphaComponent(pressed ? 0.75 : hovering ? 0.88 : 1).cgColor
         } else {
             layer?.backgroundColor = NSColor.white.withAlphaComponent(pressed ? 0.16 : hovering ? 0.08 : 0).cgColor
-            layer?.borderColor = NSColor.white.withAlphaComponent(0.55).cgColor
         }
+    }
+
+    override func layout() {
+        super.layout()
+        guard !isPrimary else { return }
+        // Inset by half the line so the whole stroke is inside the button, on the same curve.
+        let inset = Self.outlineWidth / 2
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        outline.frame = bounds
+        outline.contentsScale = window?.backingScaleFactor ?? 2
+        outline.path = continuousRoundedRect(bounds.insetBy(dx: inset, dy: inset), radius: 6 - inset)
+        CATransaction.commit()
     }
 
     override func mouseEntered(with event: NSEvent) { hovering = true }

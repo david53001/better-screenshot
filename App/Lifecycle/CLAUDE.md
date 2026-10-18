@@ -18,8 +18,11 @@ Bootstrap and lifecycle for the menu-bar agent.
   point at the icon.
 - `Updates.swift` — Sparkle 2 (`SPUStandardUpdaterController`, started in `applicationDidFinishLaunching`):
   gentle reminders (a background find opens Sparkle's window behind other apps), `pendingVersion` drives the
-  menu's "Update Available (X)…" and Settings → Updates. Feed/key in `App/Info.plist`;
-  `docs/sparkle-updates/README.md`.
+  menu's and Settings' one label `actionTitle` ("Update Available (X)…" / "Check for Updates…"). Feed/key
+  in `App/Info.plist`; `docs/sparkle-updates/README.md`.
+- `SparkleE2EUI.swift` — compiled only with `-DSPARKLE_E2E_TEST`, active only with `SPARKLE_E2E_UI=1`
+  (`E2E_UI=1 scripts/sparkle-e2e-test.sh`): clicks through Sparkle's real update windows (transparent, so
+  nothing shows on screen) and logs focus / menu title / user-attention, to test the production UI path.
 - `WindowPlacer.swift` — every app window goes through `WindowPlacer.place(window, rememberAs:)` right
   before it's shown: exactly centred on the screen under the pointer; resizable windows (keys
   `annotate`, `editVideo`, `history` → UserDefaults `windowPlacement.<key>`) reopen at the last closed

@@ -11,10 +11,12 @@ import Sparkle
 /// traffic is the appcast + update download from GitHub (no system profile is sent).
 ///
 /// BetterScreenshot is a menu-bar app, so scheduled checks use Sparkle's "gentle reminders": a
-/// found update's window opens *behind* the user's windows instead of taking focus. So that it
-/// isn't missed, the menu's "Check for Updates…" item reads "Update Available (X)…" and
-/// Settings → Updates says "Version X is available." until the user looks at it; either one
-/// brings Sparkle's window forward. (No notification: the app never asks for that permission.)
+/// found update's window opens *behind* the user's windows instead of taking focus — except when
+/// Sparkle decides on "immediate focus" (its documented default: the app was launched recently,
+/// e.g. at login, or the Mac had been idle), when it opens in front, as in most Mac apps (verified
+/// by `E2E_UI=1 scripts/sparkle-e2e-test.sh`). So that a window behind others isn't missed, the menu's "Check for Updates…" item and the Settings → Updates button both read
+/// "Update Available (X)…" (`actionTitle`) until the user looks at it; either one brings Sparkle's
+/// window forward. (No notification: the app never asks for that permission.)
 @MainActor
 final class Updates: NSObject, ObservableObject {
     static let shared = Updates()
@@ -47,15 +49,29 @@ final class Updates: NSObject, ObservableObject {
         }
     }
 
-    /// "Check for Updates…" / "Show Update…": shows Sparkle's window with the result, or brings
+    /// "Check for Updates…" / "Update Available (X)…": shows Sparkle's window with the result, or brings
     /// the waiting update's window forward.
     func checkForUpdates() {
         NSApp.activate(ignoringOtherApps: true)   // a menu-bar app: otherwise the window can open behind others
+        showSparkleWindow()
+    }
+
+    /// The Sparkle half of `checkForUpdates` (the e2e UI mode calls it without activating the app,
+    /// which would take focus from whoever runs the test).
+    func showSparkleWindow() {
         controller.checkForUpdates(nil)
     }
 
     /// The menu item and the Settings button are usable: no check running, or one waits to be seen.
     var canCheckOrShow: Bool { canCheck || pendingVersion != nil }
+
+    /// The one label of the menu item and the Settings button: "Update Available (X)…" while a
+    /// background find waits to be seen, otherwise "Check for Updates…".
+    var actionTitle: String { Self.actionTitle(pendingVersion: pendingVersion) }
+
+    nonisolated static func actionTitle(pendingVersion: String?) -> String {
+        pendingVersion.map { "Update Available (\($0))…" } ?? "Check for Updates…"
+    }
 
     /// Settings → Updates → "Check automatically" (Sparkle stores it in our defaults as
     /// `SUEnableAutomaticChecks`; the Info.plist value is only the default).
@@ -75,15 +91,36 @@ final class Updates: NSObject, ObservableObject {
 extension Updates: SPUStandardUserDriverDelegate {
     nonisolated var supportsGentleScheduledUpdateReminders: Bool { true }
 
+    #if SPARKLE_E2E_TEST
+    /// Only to log Sparkle's choice for the e2e UI mode; returns the default (Sparkle shows it).
+    nonisolated func standardUserDriverShouldHandleShowingScheduledUpdate(_ update: SUAppcastItem,
+                                                                         andInImmediateFocus immediateFocus: Bool) -> Bool {
+        NSLog("SPARKLE-E2E UI scheduled update %@, immediate focus %d", update.displayVersionString, immediateFocus ? 1 : 0)
+        return true
+    }
+    #endif
+
     nonisolated func standardUserDriverWillHandleShowingUpdate(_ handleShowingUpdate: Bool,
                                                                forUpdate update: SUAppcastItem,
                                                                state: SPUUserUpdateState) {
+        #if SPARKLE_E2E_TEST
+        NSLog("SPARKLE-E2E UI will show %@: handled by Sparkle %d, user-initiated %d",
+              update.displayVersionString, handleShowingUpdate ? 1 : 0, state.userInitiated ? 1 : 0)
+        #endif
         guard !state.userInitiated else { return }
         let version = update.displayVersionString
-        Task { @MainActor in self.pendingVersion = version }
+        Task { @MainActor in
+            self.pendingVersion = version
+            #if SPARKLE_E2E_TEST
+            SparkleE2EUI.start()
+            #endif
+        }
     }
 
     nonisolated func standardUserDriverDidReceiveUserAttention(forUpdate update: SUAppcastItem) {
+        #if SPARKLE_E2E_TEST
+        NSLog("SPARKLE-E2E UI user attention for %@", update.displayVersionString)
+        #endif
         Task { @MainActor in self.pendingVersion = nil }
     }
 
@@ -111,6 +148,11 @@ extension Updates: SPUUpdaterDelegate {
 
     nonisolated func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem,
                              immediateInstallationBlock immediateInstallHandler: @escaping () -> Void) -> Bool {
+        // E2E_UI: leave it to Sparkle's own "Install and Relaunch" window, as for real users.
+        guard !SparkleE2EUI.isOn else {
+            NSLog("SPARKLE-E2E ready to install %@; leaving it to Sparkle's window (UI mode)", item.versionString)
+            return false
+        }
         NSLog("SPARKLE-E2E ready to install %@; installing now", item.versionString)
         immediateInstallHandler()
         return true

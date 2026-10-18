@@ -27,7 +27,9 @@ text recognition. Imported by the `App/` target (mainly `App/Capture`).
 - `HotkeyAction.swift`, `HotkeyBindings.swift`, `HotkeyCombo.swift` — the hotkey **model** (binding
   data; registration itself lives in `App/SystemIntegration/HotKeyManager`).
 - `LaunchAtLoginPrompt.swift` — the one-time "open at login?" rules: 5 completed captures, never if already
-  enabled / already asked / a ≤ 3.1.0 user (`didRegisterLaunchAtLogin`), and `isCalmMoment` (pure, tested).
+  enabled / already asked / a ≤ 3.1.0 user (`didRegisterLaunchAtLogin`), `isCalmMoment`, the flow as pure
+  steps (`afterCapture`, `waitStep`, `shouldHideUnanswered`: an ignored card hides after 25 s, ≤ 3 showings)
+  and a storage protocol (`UserDefaults` in the app, an in-memory store in tests, so tests write no plist).
 
 ## Conventions / invariants
 - Coordinate convention (project-wide): annotations/regions are in base-image pixel space, **top-left

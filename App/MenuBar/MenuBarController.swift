@@ -63,8 +63,13 @@ final class MenuBarController: NSObject {
         add("Check for Updates…", "arrow.triangle.2.circlepath", #selector(checkForUpdates), nil)
         add("Settings…", "gearshape", #selector(openSettings), nil, key: ",")
         add("Quit", "power", #selector(quit), nil, key: "q")
+        menu.delegate = self   // isMenuOpen
         statusItem.menu = menu
     }
+
+    /// The status-item menu is open (menu tracking). The one-time launch-at-login card waits for
+    /// it to close (`LaunchAtLoginPromptController.isMenuOpen`).
+    private(set) var isMenuOpen = false
 
     /// "Help & Tours ▸": Take the Welcome Tour · one "<Name> Tour" per other tour · Reset All Tours
     /// (v3 spec §14.3). Each tour item carries its `TourID` raw value as `representedObject`. Static so
@@ -166,6 +171,15 @@ final class MenuBarController: NSObject {
     @objc private func checkForUpdates() { Updates.shared.checkForUpdates() }
 }
 
+extension MenuBarController: NSMenuDelegate {
+    nonisolated func menuWillOpen(_ menu: NSMenu) {
+        MainActor.assumeIsolated { isMenuOpen = true }
+    }
+    nonisolated func menuDidClose(_ menu: NSMenu) {
+        MainActor.assumeIsolated { isMenuOpen = false }
+    }
+}
+
 extension MenuBarController: NSMenuItemValidation {
     nonisolated func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         MainActor.assumeIsolated {
@@ -173,7 +187,7 @@ extension MenuBarController: NSMenuItemValidation {
             if menuItem.action == #selector(restoreClosed) { return canRestore?() ?? false }
             if menuItem.action == #selector(checkForUpdates) {
                 // Until the user has looked at it, a found update is named right in the menu.
-                menuItem.title = Updates.shared.pendingVersion.map { "Update Available (\($0))…" } ?? "Check for Updates…"
+                menuItem.title = Updates.shared.actionTitle
                 return Updates.shared.canCheckOrShow
             }
             return true

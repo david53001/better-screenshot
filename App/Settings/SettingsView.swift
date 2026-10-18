@@ -280,7 +280,7 @@ struct SettingsView: View {
     }
 
     /// Sparkle (`App/Lifecycle/Updates.swift`): the daily check's switch, and the same
-    /// "Check for Updates…" as the menu — "Show Update…" while a found update waits to be seen.
+    /// "Check for Updates…" as the menu — "Update Available (X)…" while a found update waits to be seen.
     private var updatesCard: some View {
         SettingsCard("UPDATES") {
             VStack(alignment: .leading, spacing: 14) {
@@ -291,22 +291,17 @@ struct SettingsView: View {
                 // Button under the line, like "Reset All Tours": side by side, a 300 pt column
                 // truncated "Check for Updates…".
                 VStack(alignment: .leading, spacing: 6) {
-                    Button(updates.pendingVersion == nil ? "Check for Updates…" : "Show Update…") {
+                    Button(updates.actionTitle) {   // same label as the menu item
                         updates.checkForUpdates()
                     }
                     .buttonStyle(.bordered)
                     .disabled(!updates.canCheckOrShow)
-                    // Found, not downloaded yet (Sparkle downloads once the user says Install).
-                    Group {
-                        if let version = updates.pendingVersion {
-                            Text("Version \(version) is available.").foregroundStyle(.primary)
-                        } else {
-                            Text("You have BetterScreenshot \(updates.currentVersion).").foregroundStyle(.secondary)
-                        }
-                    }
-                    .font(.caption)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    // The button names a found update; this line says what's installed.
+                    Text("You have BetterScreenshot \(updates.currentVersion).")
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
             }
         }

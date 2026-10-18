@@ -25,9 +25,12 @@ Quick Access thumbnail (and its stack), and pin-to-screen panels. Imported by th
   drag preview.
 - `HUDController.swift` — transient on-screen toast (optional SF Symbol).
 - `PromptCardController.swift` — a notification-style question card in a screen corner (app icon, title,
-  line, ≤ 2 buttons; white-filled primary + outlined secondary, first-click, never key). `HUDSurfaceView` held
-  at least at the default opacity so its all-white text stays ≥ 4.86:1. `allWindowNumbers` for capture filters.
-  Used by the one-time launch-at-login question.
+  line, ≤ 2 buttons; white-filled primary + outlined secondary, first-click, never key, so no keyboard path).
+  `HUDSurfaceView` held at least at the default opacity so its all-white text stays ≥ 4.86:1. Joins every Space
+  but **not** full-screen ones (no `.fullScreenAuxiliary`: never over a presentation). The secondary stays an
+  outline, not the design language's filled small button: a 0.08–0.12 white fill would drop its white text to
+  ≈ 4.1–3.8:1 (see `PromptCardButton`). Fonts are text styles (`.body` 13 pt semibold, `.callout` 12 pt).
+  `allWindowNumbers` for capture filters. Used by the one-time launch-at-login question.
 - `HUDStyle.swift` — the one shared dark HUD look (`.hudWindow` blur, `.vibrantDark`, `.active`, 40% black
   tint, 1px 10% white border). Toasts, the selection size chip, the pin close button and the Quick
   Access badge use it; new small floating surfaces should too.

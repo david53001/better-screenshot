@@ -121,6 +121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return false }
             return self.coordinator.isSelecting || self.recordingCoordinator.isBusy
         }
+        loginPrompt.isMenuOpen = { [weak self] in self?.menuBar.isMenuOpen ?? false }
         loginPrompt.quickAccessCorner = { [weak self] in self?.settings.settings.overlayCorner ?? .bottomRight }
         coordinator.onCaptureCompleted = { [weak self] in self?.loginPrompt.captureCompleted() }
 

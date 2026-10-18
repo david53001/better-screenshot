@@ -22,11 +22,15 @@
   (`welcome.captureArea`); steps in `docs/MAC-TO-WINDOWS-PARITY-v3.md` §7.4.
   `render(_:askTourQuestion:)` is internal so probes can draw a page without showing the window.
 - **Check for Updates…** (above Settings…) → `Updates.shared.checkForUpdates()`; menu validation renames it
-  "Update Available (X)…" while a background find waits to be seen.
-- `LaunchAtLoginPromptController.swift` — "Open BetterScreenshot at login?", once, after the 5th completed
-  screenshot (`CaptureCoordinator.onCaptureCompleted`), at a calm moment (CaptureKit
-  `LaunchAtLoginPrompt.isCalmMoment`), on OverlayKit's `PromptCardController` card (top-right; bottom-right
-  when Quick Access uses top-right). Left out of screenshots (`windowIDs` in `CaptureCoordinator.tourTagWindowIDs`)
+  `Updates.actionTitle` ("Update Available (X)…" while a background find waits to be seen — the same label as
+  the Settings button). The menu's delegate tracks `isMenuOpen` (the launch-at-login card waits while it's open).
+- `LaunchAtLoginPromptController.swift` — "Open BetterScreenshot at login?", answered once, after the 5th
+  completed screenshot (`CaptureCoordinator.onCaptureCompleted`), at a calm moment, on OverlayKit's
+  `PromptCardController` card (top-right; bottom-right when Quick Access uses top-right; the window is made on
+  the first showing). Every decision is a pure, tested step in CaptureKit `LaunchAtLoginPrompt`
+  (`afterCapture`, `waitStep`, `shouldHideUnanswered`); this class only carries them out. Unanswered, the card
+  hides after 25 s (not under the pointer) and returns after a later capture, ≤ 3 showings, then counts as "no".
+  Launch at login found already on → marked asked (no status call on later captures). Left out of screenshots (`windowIDs` in `CaptureCoordinator.tourTagWindowIDs`)
   and recordings (registered with `TourTagRecordingGate`). Rules and keys: `docs/sparkle-updates/README.md`.
 
 This is the app's primary always-on UI entry point. Verify by launching the built app and exercising

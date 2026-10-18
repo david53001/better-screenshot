@@ -1,8 +1,9 @@
 #!/bin/bash
 # End-to-end test of Sparkle auto-updates, on a throwaway copy of BetterScreenshot (docs/sparkle-updates/README.md):
 #
-#   Scripts/sparkle-e2e-test.sh [work-dir]      (default: a new temp dir; deleted at the end
-#                                                unless KEEP=1)
+#   scripts/sparkle-e2e-test.sh [work-dir]          (default: a new temp dir; deleted at the end
+#                                                    unless KEEP=1)
+#   E2E_UI=1 scripts/sparkle-e2e-test.sh [work-dir] (Sparkle's real windows instead; see below)
 #
 # 1. builds BetterScreenshot once (debug, this Mac's architecture) with -DSPARKLE_E2E_TEST: logs
 #    Sparkle's steps, installs right away instead of on quit, and starts nothing but the updater
@@ -15,6 +16,14 @@
 #    checks the installed bundle is build 101 and passes codesign --verify --deep --strict
 # 4. BAD: same with an appcast whose signature doesn't match the zip; checks it is refused and
 #    the installed copy stays build 100
+#
+# E2E_UI=1 replaces 3-4 with the path real users take (OLD without SUAutomaticallyUpdate, run with
+# SPARKLE_E2E_UI=1, App/Lifecycle/SparkleE2EUI.swift): the scheduled check's window must open —
+# in front if Sparkle chose "immediate focus" (app launched just now, or the Mac idle; then its
+# user-attention callback must clear our menu label), otherwise behind other windows without
+# focus and with the menu reading "Update Available (90.1)…" — then it clicks Install Update and
+# Install and Relaunch in Sparkle's own windows and checks the installed copy is build 101. The test app's windows are transparent (nothing shows on screen);
+# snapshots of them land in <work-dir>/ui/ (KEEP=1 to keep them).
 #
 # Never touches the real BetterScreenshot (/Applications or dist/), its bundle id's defaults or
 # a running copy: everything is keyed by the test bundle id and the work dir's path. Quits what
@@ -71,7 +80,7 @@ BETTERSCREENSHOT_APP="$WORK/stage/BetterScreenshot.app" BETTERSCREENSHOT_REQUIRE
     BETTERSCREENSHOT_SWIFT_FLAGS="--scratch-path $WORK/build -Xswiftc -DSPARKLE_E2E_TEST" \
     "$ROOT/scripts/build-app.sh" debug >"$WORK/build.log" 2>&1 || { tail -30 "$WORK/build.log"; exit 1; }
 
-# make_variant <build> <version> <dest>
+# make_variant <build> <version> <dest> [automatic-update: 1 (default) or 0]
 make_variant() {
     local dest="$3/BetterScreenshot.app" plist="$3/BetterScreenshot.app/Contents/Info.plist"
     mkdir -p "$3"
@@ -81,10 +90,10 @@ make_variant() {
         -c "Set :CFBundleVersion $1" \
         -c "Set :CFBundleShortVersionString $2" \
         -c "Set :SUFeedURL http://127.0.0.1:$PORT/appcast.xml" \
-        -c "Add :SUAutomaticallyUpdate bool true" \
         -c "Add :NSAppTransportSecurity dict" \
         -c "Add :NSAppTransportSecurity:NSAllowsLocalNetworking bool true" \
         "$plist"
+    if [ "${4:-1}" = 1 ]; then /usr/libexec/PlistBuddy -c "Add :SUAutomaticallyUpdate bool true" "$plist"; fi
     BETTERSCREENSHOT_REQUIRE_IDENTITY=1 "$ROOT/scripts/sign-app.sh" "$dest" >/dev/null 2>&1
 }
 
@@ -110,14 +119,17 @@ XML
 
 installed_build() { /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$INSTALL/Contents/Info.plist"; }
 
-# run_old <log> <seconds>: launch OLD, wait until the installed copy is NEW or time runs out.
+# run_old <log> <seconds> [ui: 0 (default) or 1]: launch OLD, wait until the installed copy is NEW
+# or time runs out.
 run_old() {
-    rm -rf "$WORK/install" && make_variant 100 90.0 "$WORK/install"
+    local ui="${3:-0}" auto=1
+    [ "$ui" = 1 ] && auto=0
+    rm -rf "$WORK/install" && make_variant 100 90.0 "$WORK/install" "$auto"
     reset_test_state
     # Make the daily check due right away (no "may we check?" dialog: SUEnableAutomaticChecks).
     defaults write "$TEST_ID" SULastCheckTime -date "2000-01-01 00:00:00 +0000"
-    echo "launching OLD: build $(installed_build), $(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INSTALL/Contents/Info.plist")"
-    "$INSTALL/Contents/MacOS/BetterScreenshot" >"$1" 2>&1 &
+    echo "launching OLD: build $(installed_build), $(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INSTALL/Contents/Info.plist"), UI mode $ui"
+    SPARKLE_E2E_UI="$ui" SPARKLE_E2E_SNAP_DIR="$WORK/ui" "$INSTALL/Contents/MacOS/BetterScreenshot" >"$1" 2>&1 &
     local pid=$! waited=0
     sleep 0.7
     echo "OLD pid $pid loads Sparkle from: $(vmmap "$pid" 2>/dev/null | grep -o '/[^ ]*Sparkle.framework/Versions/B/Sparkle' | sort -u || true)"
@@ -137,6 +149,38 @@ GOOD_ATTRS="$("$SPARKLE_BIN/sign_update" "$FEED/BetterScreenshot-good.zip")"
 python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$FEED" >"$WORK/server.log" 2>&1 &
 SERVER_PID=$!
 sleep 1
+
+if [ "${E2E_UI:-0}" = 1 ]; then
+    say "UI: signed update 100 -> 101 through Sparkle's own windows"
+    write_appcast "$FEED/BetterScreenshot-good.zip" "$GOOD_ATTRS"
+    run_old "$WORK/ui.log" 120 1
+    UI_RESULT="$(installed_build)"
+    stop_test_apps
+    say "RESULT (UI mode)"
+    PASS=1
+    check() {   # check <description> <grep pattern in the log>
+        if grep -q -- "$2" "$WORK/ui.log"; then echo "$1: PASS"; else echo "$1: FAIL"; PASS=0; fi
+    }
+    check "update window shown by the scheduled check" "SPARKLE-E2E UI update window shown"
+    # Sparkle shows a scheduled update in "immediate focus" when the app was launched recently or
+    # the Mac had been idle (both true here unless someone is using the Mac); otherwise behind
+    # other windows, with our menu naming it. Each path has its own expectations.
+    if grep -q "SPARKLE-E2E UI scheduled update 90.1, immediate focus 1" "$WORK/ui.log"; then
+        echo "(Sparkle chose immediate focus: launched just now / Mac idle $(ioreg -c IOHIDSystem | awk '/HIDIdleTime/ {printf "%d", $NF/1000000000; exit}') s)"
+        check "in focus: Sparkle reports the user's attention" "SPARKLE-E2E UI user attention for 90.1"
+        check "in focus: the menu doesn't nag (Check for Updates…)" "SPARKLE-E2E UI menu title: Check for Updates…"
+    else
+        echo "(Sparkle chose the background: behind other windows)"
+        check "behind: it took no focus (not key, app not active)" "SPARKLE-E2E UI update window shown: key 0, app active 0"
+        check "behind: the menu reads Update Available (90.1)…" "SPARKLE-E2E UI menu title: Update Available (90.1)…"
+    fi
+    check "the menu action leaves nothing pending" "SPARKLE-E2E UI after the menu action: pending none"
+    check "Install and Relaunch was offered and clicked" "SPARKLE-E2E UI clicking Install and Relaunch"
+    if [ "$UI_RESULT" = 101 ]; then echo "installed and relaunched as build 101: PASS"; else echo "installed copy is build $UI_RESULT: FAIL"; PASS=0; fi
+    ls "$WORK/ui"/*.png 2>/dev/null || echo "(no snapshots)"
+    [ "$PASS" = 1 ]
+    exit
+fi
 
 say "GOOD: signed update 100 -> 101"
 write_appcast "$FEED/BetterScreenshot-good.zip" "$GOOD_ATTRS"
