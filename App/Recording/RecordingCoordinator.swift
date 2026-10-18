@@ -77,6 +77,8 @@ final class RecordingCoordinator {
     var isRecording: Bool {
         switch state { case .recording, .paused: return true; default: return false }
     }
+    /// Anything of a recording is up: the record strip, the countdown, the recording, or its finish.
+    var isBusy: Bool { if case .idle = state { return false }; return true }
     var isPaused: Bool { if case .paused = state { return true }; return false }
 
     /// The smart ⌘⇧5 entry point: idle → strip · armed → cancel · recording/paused → stop.

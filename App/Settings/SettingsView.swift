@@ -36,6 +36,7 @@ struct SettingsView: View {
     // Launch-at-login has no store keypath — SMAppService is its source of truth,
     // mirrored into a guarded @State (writes back only on an actual user flip).
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
+    @ObservedObject private var updates = Updates.shared
     // Tours: same idea — TourCoordinator's UserDefaults key is the source of truth.
     @State private var toursEnabled = false
     @State private var toursWereReset = false
@@ -99,11 +100,12 @@ struct SettingsView: View {
     // Recording is split into two cards (what to record | what shows in the video) and
     // the short cards fill in under them, so the three columns end at about the same
     // height instead of leaving a tall black gap beside one long Recording card.
-    // (Startup and Pin to Screen swapped columns when Startup gained "Tours & tips".)
+    // (Startup and Pin to Screen swapped columns when Startup gained "Tours & tips"; Updates joined B.)
     private var columnB: some View {
         VStack(spacing: Design.cardSpacing) {
             recordingCard
             pinCard
+            updatesCard   // column B had the room; it keeps the three columns about level
         }
         .frame(width: Layout.columnWidth)
     }
@@ -263,12 +265,44 @@ struct SettingsView: View {
                           isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, newValue in
                         guard newValue != LaunchAtLogin.isEnabled else { return }
-                        LaunchAtLogin.setEnabled(newValue)
+                        LaunchAtLogin.setEnabled(newValue)   // also answers the one-time question
                         launchAtLogin = LaunchAtLogin.isEnabled   // revert if it failed
                     }
                     .onAppear { launchAtLogin = LaunchAtLogin.isEnabled }
+                    // "Open at Login" on the one-time card, while this window is open.
+                    .onReceive(NotificationCenter.default.publisher(for: LaunchAtLogin.didChangeNotification)) { _ in
+                        launchAtLogin = LaunchAtLogin.isEnabled
+                    }
                 Divider()
                 toursRow
+            }
+        }
+    }
+
+    /// Sparkle (`App/Lifecycle/Updates.swift`): the daily check's switch, and the same
+    /// "Check for Updates…" as the menu — "Update Available (X)…" while a found update waits to be seen.
+    private var updatesCard: some View {
+        SettingsCard("UPDATES") {
+            VStack(alignment: .leading, spacing: 14) {
+                switchRow("Check automatically", SettingsHelp.checkForUpdates,
+                          sub: "Look for a new version once a day",
+                          isOn: Binding(get: { updates.automaticallyChecks },
+                                        set: { updates.automaticallyChecks = $0 }))
+                // Button under the line, like "Reset All Tours": side by side, a 300 pt column
+                // truncated "Check for Updates…".
+                VStack(alignment: .leading, spacing: 6) {
+                    Button(updates.actionTitle) {   // same label as the menu item
+                        updates.checkForUpdates()
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!updates.canCheckOrShow)
+                    // The button names a found update; this line says what's installed.
+                    Text("You have BetterScreenshot \(updates.currentVersion).")
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
             }
         }
     }

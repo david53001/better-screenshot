@@ -97,6 +97,23 @@ runTests("DesignKitTests", [
             UIOpacity.shared.value = UIOpacity.defaultValue
         }
     },
+    TestCase("minimumOpacityKeepsASurfaceAtLeastAtTheDefault") { t in
+        MainActor.assumeIsolated {
+            func tintAlpha(_ hud: HUDSurfaceView) -> CGFloat? {
+                hud.tint.layer?.backgroundColor.flatMap { NSColor(cgColor: $0)?.alphaComponent }
+            }
+            let held = HUDSurfaceView(cornerRadius: 16)
+            held.minimumOpacity = UIOpacity.defaultValue   // the launch-at-login card
+            let follows = HUDSurfaceView(cornerRadius: 16)
+            let standard = CGFloat(OpacityCurve.hudFill(UIOpacity.defaultValue, .floating).tintAlpha)
+            UIOpacity.shared.value = 0
+            t.approxEqual(Double(tintAlpha(held) ?? -1), Double(standard), tol: 1e-6)   // opacity 0 is held at the default's tint
+            t.approxEqual(Double(tintAlpha(follows) ?? -1), 0.22, tol: 1e-6)   // without a minimum it follows the setting
+            UIOpacity.shared.value = 1
+            t.approxEqual(Double(tintAlpha(held) ?? -1), 1, tol: 1e-6)   // more opacity still applies
+            UIOpacity.shared.value = UIOpacity.defaultValue
+        }
+    },
     TestCase("continuousCornersAreNotCircular") { t in
         let rect = CGRect(x: 0, y: 0, width: 100, height: 60)
         let squircle = continuousRoundedRect(rect, radius: 12)

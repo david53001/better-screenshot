@@ -2,6 +2,27 @@
 
 All notable changes to BetterScreenshot. Versions are git tags; releases are published on [GitHub](../../releases).
 
+## v3.2.0 — 2026-10-18 · Automatic updates
+
+- **Updates install themselves.** BetterScreenshot checks GitHub once a day (Sparkle 2.10.0); a new version
+  opens a window you can install from or put off (usually behind your windows; in front right after launch or
+  when the Mac has been idle). **Check for Updates…** in the menu
+  bar (it reads "Update Available (X)…" while one waits) and Settings → Updates (switch + button). Updates
+  are verified with an EdDSA signature; your settings stay. **3.2.0 needs Screen Recording allowed once
+  more**, because its signing certificate changed (later updates keep it): System Settings > Privacy & Security >
+  Screen & System Audio Recording, remove the old BetterScreenshot entry with **−**, then take a screenshot and
+  allow it.
+- **Launch at login is your choice.** It's no longer switched on silently at first launch. After your 5th
+  screenshot a small card in the corner asks: **No Thanks** / **Open at Login** (never while something
+  full-screen is in front, including on MacBooks with a notch). Ignored, it goes away after 25 seconds and asks
+  again after a screenshot at least a day later (reopening or updating the app doesn't bring it back sooner),
+  three times at most — and only times you could actually see it count. Until you answer, the menu-bar menu
+  also has **Open at Login…**, which asks the same in a standard dialog you can answer with the keyboard.
+  People who had it turned on by an earlier version are never asked.
+- Internals: `scripts/package-release.sh` does a whole release (build, sign, zip, EdDSA, appcast, prints
+  the `gh` command); universal builds fixed for Swift 6.4's build system; builds pin the 26.5 SDK.
+  Details: `docs/sparkle-updates/README.md`.
+
 ## v3.1.0 — 2026-09-29 · Native look
 
 Every window and floating control now looks like a native macOS app (the "MacStats" design language —

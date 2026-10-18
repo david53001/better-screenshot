@@ -11,14 +11,20 @@ A **free, local macOS clone of CleanShot X** (screenshot + screen-recording tool
 
 ## Hard constraints
 - **No cloud.** No uploads, share links, accounts, or cloud sync — ever. Local features only.
-- **macOS-native, non-sandboxed, menu-bar agent** (`LSUIElement`). Personal/local use; ad-hoc signed (no Apple Developer account required).
+- **macOS-native, non-sandboxed, menu-bar agent** (`LSUIElement`). Personal/local use; signed with a local self-signed identity (no Apple Developer account required, not notarized).
 - **Min target: macOS 14 (Sonoma).**
 - **Updates must never cost users their permission, settings, or data** (owner requirement, 2026-09-10).
   Screen Recording is keyed on the designated requirement `identifier "com.betterscreenshot.mac" and
   certificate leaf = H"71ec62cd…"` — every release since v2.10.0 is signed with the local identity
   "BetterScreenshot Code Signing" in `~/Library/Keychains/betterscreenshot-signing.keychain-db`
   (created by `scripts/setup-signing.sh`). Losing or regenerating that keychain changes the hash and
-  forces every user to re-grant. Back it up; never release from a machine without it. `scripts/install.sh`
+  forces every user to re-grant. Back it up; never release from a machine without it.
+  **2026-10-18: the keychain on this Mac was regenerated** (new cert `08faa1f9…`; the old one is in
+  `~/Backups/2026-10-18-pre-sparkle/old-betterscreenshot-signing.keychain-db`, password unknown) —
+  The owner chose (2026-10-18) to release v3.2.0 with the new certificate: v3.2.0 users re-allow Screen
+  Recording once (steps in its release notes). `scripts/package-release.sh` now refuses any certificate but
+  `08faa1f9…` (`RELEASE_CERT`); keep this keychain backed up so it never happens again; see
+  `docs/sparkle-updates/README.md`. `scripts/install.sh`
   may only ever replace `/Applications/BetterScreenshot.app` — settings live in
   `~/Library/Preferences/com.betterscreenshot.mac.plist`, history in
   `~/Library/Application Support/BetterScreenshot/History/`.
@@ -188,6 +194,22 @@ Windows release: **`windows-v1.0.0`** (version in `windows/Directory.Build.props
 published with `--latest=false`:** `scripts/install.sh` downloads `releases/latest/download/BetterScreenshot.app.zip`,
 so a Windows release marked Latest would break every Mac install. For the same reason the README's Windows manual
 link is versioned (`releases/download/windows-vX.Y.Z/...`), not `latest`; bump it with each Windows release.
+
+**Sparkle auto-updates + one-time "open at login?" prompt** (built 2026-10-18 on `feat/sparkle-updates`, not
+merged or released; same approach as MacStats and JVoice). Everything — release steps, keys, the `--latest`
+rule, the prompt's rules and UserDefaults keys, the end-to-end test — is in `docs/sparkle-updates/README.md`.
+In short: Sparkle 2.10.0 (SwiftPM, exact) is embedded by `scripts/build-app.sh` and signed inside-out by
+`scripts/sign-app.sh`; feed `releases/latest/download/appcast.xml`; **`CFBundleVersion` is an integer that
+goes up by one every release**; one command, `scripts/package-release.sh [notes.md]`, builds, signs, zips,
+EdDSA-signs, writes `appcast.xml` and prints the `gh release create … --latest` command (any `ALLOW_*`
+override = a dry run into `dist/dry-run/*-DRYRUN.*` with no command). The silent first-launch launch-at-login
+enable is gone: after the 5th completed screenshot a non-activating card asks (CaptureKit
+`LaunchAtLoginPrompt`, `App/MenuBar/LaunchAtLoginPromptController.swift`); answered once ever, an ignored card
+hides after 25 s; only a showing the user could see counts (visible + user active), it returns after a capture
+≥ 24 h later (relaunches don't shorten that), ≤ 3 counted showings; never while something is full screen (AppKit
+*does* put the card on full-screen Spaces; on a notched MacBook a full-screen window starts below the notch);
+while due, the menu-bar menu has **Open at Login…** (an alert: the keyboard path); users of the old auto-enable
+(`didRegisterLaunchAtLogin`) are never asked. Builds pin the 26.5 SDK via `scripts/sdk-env.sh`.
 
 **Performance pass (planned 2026-10-01, not started):** `docs/PERF-PLAN-2026-10-01.md`. Lower RAM/CPU
 without losing snappiness: baseline, ranked fixes with file:line, measurement commands, and two items

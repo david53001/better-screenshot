@@ -95,6 +95,14 @@ enum SettingsHelp {
         example: "Turn on so your shortcuts already work right after a restart."
     )
 
+    static let checkForUpdates = HelpText(
+        "Check automatically",
+        "Once a day, BetterScreenshot asks GitHub whether a newer version exists and, if so, offers it "
+            + "in a window you can install from or put off. Your captures and settings never leave your Mac. "
+            + "Check for Updates… looks right now.",
+        example: "Leave on to get fixes without re-running the installer."
+    )
+
     static let toursAndTips = HelpText(
         "Tours & tips",
         "Short guided tours point out each part of the app — the editor, recording, History — the "

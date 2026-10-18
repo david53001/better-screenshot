@@ -23,5 +23,6 @@ runTests("CaptureKitTests",
     tempFileRetentionScaleTests +
     selectionClampTests +
     focusRestoreTests +
-    windowPlacementTests
+    windowPlacementTests +
+    launchAtLoginPromptTests
 )

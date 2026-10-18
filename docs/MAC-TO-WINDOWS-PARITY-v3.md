@@ -3447,3 +3447,43 @@ Settings: window 960 wide, three columns `(960 − 2·20 − 2·12) / 3 = 298` w
 macOS: `swift build`, `scripts/test.sh` (DesignKitTests: HUD tint/hairline/continuous corners, continuous
 paths). By eye: Settings in light and dark, HUDs over a bright and a dark wallpaper. Windows: the same by eye,
 plus re-measure white text on each HUD over a white page (≥ 4.5:1).
+
+## Part 10 — Auto-updates + one-time "open at login?" card (macOS, 2026-10-18, branch `feat/sparkle-updates`)
+
+Full macOS write-up: `docs/sparkle-updates/README.md`. What a Windows port would mirror:
+
+- **Launch at login** is never turned on silently any more. Count completed screenshots (area, window, full
+  screen, Capture Text that produced an image; not cancelled or failed ones). After the 5th, wait for a calm
+  moment — ≥ 3 s since the capture, ≥ 2 s since a key press, no mouse button down, the tray menu closed, no
+  selection / countdown / record strip / recording, none of the app's windows in front, and the frontmost app
+  has no window covering a whole screen (full-screen app, presentation, game; on a MacBook with a notch a
+  full-screen window starts just below the notch row: full width, down to the bottom edge, top within the
+  safe-area inset + 2; the card must not rely on the OS keeping it off full-screen desktops — macOS doesn't);
+  give up after 120 s and retry
+  after the next capture — then show the card. Never if already enabled (found enabled → mark asked), already
+  asked, or the old one-time auto-enable flag (`didRegisterLaunchAtLogin`) is set. A choice in Settings counts as
+  answered. **Unanswered**, the card hides itself after 25 s (not while the pointer is on it). That showing
+  **counts** only if the user could have seen it: ≥ 5 s during which the card was visible on the current
+  desktop and the user had used the mouse or keyboard since it appeared (not a locked screen or an empty desk;
+  one tick adds at most 2 s, so a sleep doesn't count). A counted showing comes back after a capture ≥ 24 h
+  later, relaunches included (an update relaunch must not bring it back the same day); after the 3rd counted
+  showing it counts as "no". While it is due, the tray menu has **Open at Login…**: the same question in a
+  standard focus-taking dialog (Enter = Open at Login, Esc = No Thanks; then "One more step" with **Open Login
+  Items** / **Done**, or "Couldn't turn it on." with **Done**), the card's keyboard path. An uncounted showing comes back after
+  a capture ≥ 10 min later (kept in memory only). The "One more step" and "Couldn't turn it on" cards also hide
+  after 25 s (not counted). Keys: `launchAtLoginPromptUses` (int, stops at 5), `launchAtLoginPromptAsked` (bool),
+  `launchAtLoginPromptUnansweredShowings` (int), `launchAtLoginPromptLastShownAt` (double, seconds since 1970).
+  Rules + steps: CaptureKit `LaunchAtLoginPrompt` (tested).
+- **Card**: top-right of the screen under the pointer, 12 px from the work area (bottom-right when Quick Access
+  uses the top-right corner); 360 px wide, radius 16, padding 14; the app icon 36 px, then title (13 semibold)
+  and line (12 regular; macOS text styles body / callout), all white, on the dark HUD surface held at least at the default opacity; buttons 24 px
+  tall, radius 6, 12 px semibold: secondary = white outline (55 %) + white text, primary = white fill + near-black
+  text. Never takes focus; left out of screenshots and recordings. Strings: "Open BetterScreenshot at login?" /
+  "Your capture shortcuts keep working after a restart. You can change this any time in Settings." /
+  **No Thanks** · **Open at Login** → "BetterScreenshot will open at login." (1.6 s) · approval needed: "One more
+  step" / "Allow BetterScreenshot in Login Items to finish." · **Done** · **Open Login Items** · error:
+  "Couldn't turn it on." / "You can try again in Settings → Launch at login." · **Done**.
+- **Updates**: Settings card "UPDATES" (Check automatically switch, sub "Look for a new version once a day";
+  **Check for Updates…** button, which reads **Update Available (X)…** — the same label as the tray item — while
+  a found update waits to be seen; "You have BetterScreenshot X.")
+  and a tray-menu item. Windows releases stay `--latest=false` (the Mac feed reads the Latest release).

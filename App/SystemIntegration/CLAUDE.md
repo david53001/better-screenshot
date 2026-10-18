@@ -17,10 +17,14 @@ against the diff-level security checklist, and never weaken or bypass a permissi
   shortcuts (⌘⇧3 / ⌘⇧4 / ⌘⇧5) by editing the `com.apple.symbolichotkeys` preferences domain and reloading
   via a private `activateSettings` helper. Restore is crash-safe (removes our entries to revert to
   defaults).
-- `LaunchAtLogin.swift` — login-item (launch-at-login) registration.
+- `LaunchAtLogin.swift` — login-item (launch-at-login) registration via `SMAppService.mainApp` (`isEnabled`,
+  `needsApproval` = `.requiresApproval`, `setEnabled` → returns the resulting status, marks the one-time
+  question answered and posts `didChangeNotification`; `openSystemSettings()` → Login Items). Never enabled
+  without the user: the Settings switch or the one-time card (`App/MenuBar/LaunchAtLoginPromptController.swift`).
 
 ## Invariants / guardrails
-- **No cloud, non-sandboxed, local-only.** Nothing here uploads or phones home.
+- **No cloud, non-sandboxed, local-only.** Nothing here uploads or phones home. (The one network call in the
+  app is Sparkle's update check + download from GitHub, `App/Lifecycle/Updates.swift`; nothing is sent.)
 - The paired declarations live at `App/` root and must stay there: `App/Info.plist` (TCC usage
   strings) and `App/BetterScreenshot.entitlements` (signed in by `scripts/build-app.sh`). They are
   part of this surface even though they sit one level up.

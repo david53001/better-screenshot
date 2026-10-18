@@ -1,6 +1,6 @@
 # BetterScreenshot
 
-A free screenshot, recording and annotation tool for macOS and Windows. Everything stays on your computer: no cloud, no accounts, no network access.
+A free screenshot, recording and annotation tool for macOS and Windows. Everything stays on your computer: no cloud, no accounts. The only network access is the macOS app's daily check for a new version on GitHub (Settings > Updates turns it off).
 
 ## Install and update
 
@@ -12,7 +12,7 @@ Paste this into Terminal:
 curl -fsSL https://raw.githubusercontent.com/david53001/better-screenshot/main/scripts/install.sh | bash
 ```
 
-The same command installs and updates. It puts the latest release in `/Applications` and keeps your settings, history and Screen Recording permission.
+The same command installs and updates. It puts the latest release in `/Applications` and keeps your settings, history and Screen Recording permission (with one exception, see below). From version 3.2.0 on, the app also updates itself: it checks once a day and offers each new version in a window.
 
 Or download `BetterScreenshot.app.zip` from the [latest release](https://github.com/david53001/better-screenshot/releases/latest), unzip it and drag the app into `/Applications`.
 
@@ -27,6 +27,16 @@ irm https://raw.githubusercontent.com/david53001/better-screenshot/main/scripts/
 The same command installs and updates. It puts the latest release in your user folder (no admin needed), sets up ffmpeg for screen recording if your PC doesn't have it, and keeps your settings and history. You can read the script first: [`scripts/install.ps1`](scripts/install.ps1).
 
 Or download [`BetterScreenshot-win-x64.zip`](https://github.com/david53001/better-screenshot/releases/download/windows-v1.0.0/BetterScreenshot-win-x64.zip), unzip it and run `BetterScreenshot.App.exe`. Screen recording then also needs [ffmpeg](https://ffmpeg.org/download.html) on your PATH.
+
+### Screen Recording after an update (macOS)
+
+Updates keep the Screen Recording permission, except once: BetterScreenshot's signing certificate was replaced on 2026-10-18, and macOS treats the first version signed with the new one as a new app. That release's notes say so. If its notes say so, or captures stop working after an update and BetterScreenshot opens its "allow Screen Recording" window again, allow it once more:
+
+1. Open **System Settings > Privacy & Security > Screen & System Audio Recording**.
+2. BetterScreenshot is probably still in the list and switched on, but that entry belongs to the old version and no longer works. Select it and click the **−** (minus) button below the list to remove it. Switching it off and on again isn't enough.
+3. Take a screenshot (or click the button in BetterScreenshot's window) and allow Screen Recording when macOS asks. BetterScreenshot restarts itself once and works again.
+
+Or, in Terminal: `tccutil reset ScreenCapture com.betterscreenshot.mac`, then do step 3.
 
 ## Uninstall
 

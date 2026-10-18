@@ -25,6 +25,7 @@ final class MenuBarController: NSObject {
     private var actionItems: [HotkeyAction: NSMenuItem] = [:]
     private var recordItem: NSMenuItem?
     private var pauseItem: NSMenuItem?
+    private var loginQuestionItem: NSMenuItem?
 
     /// Every item carries an SF Symbol. macOS 26 adds a gear to "Settings…" on its
     /// own, which pushed Settings and Quit out of line with the rest; with an icon on
@@ -60,10 +61,20 @@ final class MenuBarController: NSObject {
         menu.addItem(.separator())
         menu.addItem(Self.helpToursItem(target: self, replay: #selector(replayTour(_:)),
                                         reset: #selector(resetTours)))
+        // Only while the one-time "Open at login?" question is due (`menuNeedsUpdate`).
+        let login = add("Open at Login…", "power.circle", #selector(askLoginQuestion), nil)
+        login.isHidden = true
+        loginQuestionItem = login
+        add("Check for Updates…", "arrow.triangle.2.circlepath", #selector(checkForUpdates), nil)
         add("Settings…", "gearshape", #selector(openSettings), nil, key: ",")
         add("Quit", "power", #selector(quit), nil, key: "q")
+        menu.delegate = self   // isMenuOpen
         statusItem.menu = menu
     }
+
+    /// The status-item menu is open (menu tracking). The one-time launch-at-login card waits for
+    /// it to close (`LaunchAtLoginPromptController.isMenuOpen`).
+    private(set) var isMenuOpen = false
 
     /// "Help & Tours ▸": Take the Welcome Tour · one "<Name> Tour" per other tour · Reset All Tours
     /// (v3 spec §14.3). Each tour item carries its `TourID` raw value as `representedObject`. Static so
@@ -114,6 +125,12 @@ final class MenuBarController: NSObject {
     /// Menu validation: false disables "Restore Recently Closed".
     var canRestore: (() -> Bool)?
 
+    /// "Open at Login…": shown while the one-time launch-at-login question is due, and what it does
+    /// (`LaunchAtLoginPromptController.offersMenuItem` / `askFromMenu`, set by the app delegate).
+    var offersLoginQuestion: (() -> Bool)?
+    var onAskLoginQuestion: (() -> Void)?
+    @objc private func askLoginQuestion() { onAskLoginQuestion?() }
+
     /// Help & Tours: run a tour (from its first step) / clear which tours were seen.
     var onReplayTour: ((TourID) -> Void)?
     var onResetTours: (() -> Void)?
@@ -161,6 +178,20 @@ final class MenuBarController: NSObject {
         settingsWindow.show()
     }
     @objc private func quit() { NSApp.terminate(nil) }
+    /// Sparkle's window: the result of a check, or the update a background check found.
+    @objc private func checkForUpdates() { Updates.shared.checkForUpdates() }
+}
+
+extension MenuBarController: NSMenuDelegate {
+    nonisolated func menuNeedsUpdate(_ menu: NSMenu) {
+        MainActor.assumeIsolated { loginQuestionItem?.isHidden = !(offersLoginQuestion?() ?? false) }
+    }
+    nonisolated func menuWillOpen(_ menu: NSMenu) {
+        MainActor.assumeIsolated { isMenuOpen = true }
+    }
+    nonisolated func menuDidClose(_ menu: NSMenu) {
+        MainActor.assumeIsolated { isMenuOpen = false }
+    }
 }
 
 extension MenuBarController: NSMenuItemValidation {
@@ -168,6 +199,11 @@ extension MenuBarController: NSMenuItemValidation {
         MainActor.assumeIsolated {
             if menuItem.action == #selector(pinClipboard) { return coordinator.clipboardHasImage }
             if menuItem.action == #selector(restoreClosed) { return canRestore?() ?? false }
+            if menuItem.action == #selector(checkForUpdates) {
+                // Until the user has looked at it, a found update is named right in the menu.
+                menuItem.title = Updates.shared.actionTitle
+                return Updates.shared.canCheckOrShow
+            }
             return true
         }
     }

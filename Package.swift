@@ -19,6 +19,9 @@ let package = Package(
         .package(path: "Packages/HistoryKit"),
         .package(path: "Packages/TourKit"),
         .package(path: "Packages/DesignKit"),
+        // Auto-updates (docs/sparkle-updates/README.md). Exact pin: the bundled framework,
+        // the release tools in ~/Developer/Sparkle/2.10.0 and the appcast format must agree.
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0"),
     ],
     targets: [
         .executableTarget(
@@ -31,9 +34,12 @@ let package = Package(
                 .product(name: "HistoryKit", package: "HistoryKit"),
                 .product(name: "TourKit", package: "TourKit"),
                 .product(name: "DesignKit", package: "DesignKit"),
+                .product(name: "Sparkle", package: "Sparkle"),
             ],
             path: "App",
-            exclude: ["Info.plist", "BetterScreenshot.entitlements"]
+            exclude: ["Info.plist", "BetterScreenshot.entitlements"],
+            // Sparkle.framework is embedded in BetterScreenshot.app/Contents/Frameworks by build-app.sh.
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
         )
     ]
 )
