@@ -32,6 +32,13 @@ open class HUDSurfaceView: NSView {
         didSet { applyCorners() }
     }
 
+    /// Never drawn lighter than this Settings → Opacity value. 0 (the default) follows the setting all
+    /// the way; a surface whose white body text must stay ≥ 4.5:1 at every setting (the one-time
+    /// launch-at-login card) uses `UIOpacity.defaultValue`, where white text measures 4.86:1 over white.
+    public var minimumOpacity: Double = 0 {
+        didSet { applyOpacity(UIOpacity.shared.value) }
+    }
+
     /// `.withinWindow` when the HUD floats over content drawn in its own window (a
     /// pinned image, the editor's canvas); `.behindWindow` otherwise. `placement`: `.docked`
     /// for panels that only ever sit on the editor's dark window (no tint at the default —
@@ -64,7 +71,7 @@ open class HUDSurfaceView: NSView {
     }
 
     private func applyOpacity(_ opacity: Double) {
-        let fill = OpacityCurve.hudFill(opacity, placement)
+        let fill = OpacityCurve.hudFill(max(opacity, minimumOpacity), placement)
         backdrop.alphaValue = fill.backdropAlpha
         tint.layer?.backgroundColor = NSColor(white: fill.tintWhite, alpha: fill.tintAlpha).cgColor
     }

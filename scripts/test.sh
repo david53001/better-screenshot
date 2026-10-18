@@ -3,6 +3,7 @@
 # and set -e makes the first failure fail the whole script.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+source scripts/sdk-env.sh
 for pkg in DesignKit CaptureKit OverlayKit EditorKit RecordingKit HistoryKit TourKit; do
     echo "== ${pkg}Tests"
     swift run --package-path "Packages/$pkg" "${pkg}Tests"

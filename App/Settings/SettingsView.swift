@@ -36,6 +36,7 @@ struct SettingsView: View {
     // Launch-at-login has no store keypath — SMAppService is its source of truth,
     // mirrored into a guarded @State (writes back only on an actual user flip).
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
+    @ObservedObject private var updates = Updates.shared
     // Tours: same idea — TourCoordinator's UserDefaults key is the source of truth.
     @State private var toursEnabled = false
     @State private var toursWereReset = false
@@ -92,6 +93,7 @@ struct SettingsView: View {
             captureCard
             overlayCard
             startupCard
+            updatesCard
         }
         .frame(width: Layout.columnWidth)
     }
@@ -263,12 +265,48 @@ struct SettingsView: View {
                           isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, newValue in
                         guard newValue != LaunchAtLogin.isEnabled else { return }
-                        LaunchAtLogin.setEnabled(newValue)
+                        LaunchAtLogin.setEnabled(newValue)   // also answers the one-time question
                         launchAtLogin = LaunchAtLogin.isEnabled   // revert if it failed
                     }
                     .onAppear { launchAtLogin = LaunchAtLogin.isEnabled }
+                    // "Open at Login" on the one-time card, while this window is open.
+                    .onReceive(NotificationCenter.default.publisher(for: LaunchAtLogin.didChangeNotification)) { _ in
+                        launchAtLogin = LaunchAtLogin.isEnabled
+                    }
                 Divider()
                 toursRow
+            }
+        }
+    }
+
+    /// Sparkle (`App/Lifecycle/Updates.swift`): the daily check's switch, and the same
+    /// "Check for Updates…" as the menu — "Show Update…" while a found update waits to be seen.
+    private var updatesCard: some View {
+        SettingsCard("UPDATES") {
+            VStack(alignment: .leading, spacing: 14) {
+                switchRow("Check automatically", SettingsHelp.checkForUpdates,
+                          sub: "Look for a new version once a day",
+                          isOn: Binding(get: { updates.automaticallyChecks },
+                                        set: { updates.automaticallyChecks = $0 }))
+                HStack(spacing: 8) {
+                    // Found, not downloaded yet (Sparkle downloads once the user says Install).
+                    Group {
+                        if let version = updates.pendingVersion {
+                            Text("Version \(version) is available.").foregroundStyle(.primary)
+                        } else {
+                            Text("You have BetterScreenshot \(updates.currentVersion).").foregroundStyle(.secondary)
+                        }
+                    }
+                    .font(.caption)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    Spacer(minLength: 8)
+                    Button(updates.pendingVersion == nil ? "Check for Updates…" : "Show Update…") {
+                        updates.checkForUpdates()
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!updates.canCheckOrShow)
+                }
             }
         }
     }

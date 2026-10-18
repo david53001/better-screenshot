@@ -60,6 +60,7 @@ final class MenuBarController: NSObject {
         menu.addItem(.separator())
         menu.addItem(Self.helpToursItem(target: self, replay: #selector(replayTour(_:)),
                                         reset: #selector(resetTours)))
+        add("Check for Updates…", "arrow.triangle.2.circlepath", #selector(checkForUpdates), nil)
         add("Settings…", "gearshape", #selector(openSettings), nil, key: ",")
         add("Quit", "power", #selector(quit), nil, key: "q")
         statusItem.menu = menu
@@ -161,6 +162,8 @@ final class MenuBarController: NSObject {
         settingsWindow.show()
     }
     @objc private func quit() { NSApp.terminate(nil) }
+    /// Sparkle's window: the result of a check, or the update a background check found.
+    @objc private func checkForUpdates() { Updates.shared.checkForUpdates() }
 }
 
 extension MenuBarController: NSMenuItemValidation {
@@ -168,6 +171,11 @@ extension MenuBarController: NSMenuItemValidation {
         MainActor.assumeIsolated {
             if menuItem.action == #selector(pinClipboard) { return coordinator.clipboardHasImage }
             if menuItem.action == #selector(restoreClosed) { return canRestore?() ?? false }
+            if menuItem.action == #selector(checkForUpdates) {
+                // Until the user has looked at it, a found update is named right in the menu.
+                menuItem.title = Updates.shared.pendingVersion.map { "Update Available (\($0))…" } ?? "Check for Updates…"
+                return Updates.shared.canCheckOrShow
+            }
             return true
         }
     }

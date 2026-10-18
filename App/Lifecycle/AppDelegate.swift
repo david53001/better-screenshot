@@ -22,8 +22,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hud = HUDController()
     private var opacityWatch: AnyCancellable?
     private var opacityDemo: OpacityDemo!
+    private var loginPrompt: LaunchAtLoginPromptController!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        #if SPARKLE_E2E_TEST
+        // The throwaway build of scripts/sparkle-e2e-test.sh runs next to the user's real copy: it
+        // only starts the updater — no status item, hotkeys, native-shortcut changes, history,
+        // temp-file sweeps or onboarding window, which would touch the real app's shared state.
+        NSApp.setActivationPolicy(.accessory)
+        Updates.shared.start()
+        return
+        #endif
         // Settings → Appearance → Opacity drives every DesignKit surface, live.
         // The Settings tour's demo previews values without saving them (`SettingsStore.opacityPreview`).
         opacityWatch = settings.$settings.map(\.uiOpacity).combineLatest(settings.$opacityPreview)
@@ -104,6 +113,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBar.onPauseResume = { [weak self] in self?.recordingCoordinator.pauseResume() }
         menuBar.canRestore = { [weak self] in self?.history.canRestore ?? false }
 
+        // "Check for Updates…" in the menu, Settings → Updates, and the daily background check.
+        Updates.shared.start()
+        // "Open BetterScreenshot at login?", once, after the 5th completed screenshot.
+        loginPrompt = LaunchAtLoginPromptController()
+        loginPrompt.isCaptureOrRecordingActive = { [weak self] in
+            guard let self else { return false }
+            return self.coordinator.isSelecting || self.recordingCoordinator.isBusy
+        }
+        loginPrompt.quickAccessCorner = { [weak self] in self?.settings.settings.overlayCorner ?? .bottomRight }
+        coordinator.onCaptureCompleted = { [weak self] in self?.loginPrompt.captureCompleted() }
+
         // One-button first-run setup (Screen Recording is the only permission).
         onboarding = OnboardingController(bindings: { [weak self] in self?.settings.bindings ?? .defaults })
         onboarding.shouldAskTourQuestion = { [weak self] in self?.tours.shouldAskQuestion ?? false }
@@ -137,12 +157,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     || tours.shouldOpenWelcomeOnLaunch(permissionGranted: true) {   // new user, unasked
             onboarding.show(.allSet)
         }
-        // Register as a login item once, by default. One-time so we never
-        // fight a user who later disables it (Settings or System Settings).
-        if !UserDefaults.standard.bool(forKey: "didRegisterLaunchAtLogin") {
-            LaunchAtLogin.setEnabled(true)
-            UserDefaults.standard.set(true, forKey: "didRegisterLaunchAtLogin")
-        }
+        // Launch at login is no longer switched on silently at first launch (≤ 3.1.0 did, flag
+        // `didRegisterLaunchAtLogin`, now only read): `loginPrompt` asks once, after 5 captures.
         applyBindings()
         // Stop macOS's native ⌘⇧3/⌘⇧4/⌘⇧5 from also firing (double screenshot/recording). Restored on quit.
         SystemScreenshotShortcuts.disableNativeShortcuts()
@@ -217,6 +233,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        #if SPARKLE_E2E_TEST
+        return   // never restore the native shortcuts the user's real copy turned off
+        #endif
         recordingCoordinator?.stopForTermination()
         SystemScreenshotShortcuts.restoreNativeShortcuts()
     }

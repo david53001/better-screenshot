@@ -25,6 +25,14 @@ final class CaptureCoordinator {
     /// Set by the app delegate; nil until then (history silently skipped).
     var history: HistoryService?
 
+    /// Called after every screenshot that produced an image (area, window, full screen, Capture
+    /// Text) — not for a cancelled selection or a failed capture. Counts uses for the one-time
+    /// launch-at-login question (`LaunchAtLoginPromptController`).
+    var onCaptureCompleted: (() -> Void)?
+
+    /// A selection overlay (area or Capture Text) is up.
+    var isSelecting: Bool { overlay.isPresenting }
+
     private var editorController: EditorWindowController?
 
     /// The last app that was frontmost before one of our overlays took focus,
@@ -159,6 +167,7 @@ final class CaptureCoordinator {
                 NSPasteboard.general.setString(payload, forType: .string)
             }
             hud.show(recognition.hudMessage, symbol: "text.viewfinder", on: screen(for: result.displayID))
+            onCaptureCompleted?()
         } catch {
             NSLog("Capture Text failed: \(error)")
             hud.show("Capture Text failed", symbol: "exclamationmark.triangle", on: screen(for: result.displayID))
@@ -175,10 +184,12 @@ final class CaptureCoordinator {
         } ?? NSScreen.main
     }
 
-    /// Guided-tour tags on screen right now. Every capture leaves them out — the Welcome tour asks
-    /// for a screenshot while its tag is showing, and a tag must never end up in the user's image.
+    /// Guided-tour tags and the launch-at-login card on screen right now. Every capture leaves them
+    /// out — the Welcome tour asks for a screenshot while its tag is showing, and neither may ever end
+    /// up in the user's image.
     static var tourTagWindowIDs: Set<CGWindowID> {
         Set(TagOverlayController.allWindowNumbers.map { CGWindowID($0) })
+            .union(LaunchAtLoginPromptController.windowIDs)
     }
 
     private func run(_ target: CaptureTarget, sourceRect: CGRect? = nil) async {
@@ -207,6 +218,7 @@ final class CaptureCoordinator {
         // The Quick Access card is a .nonactivatingPanel, so handing focus back
         // here leaves it on screen and clickable.
         restoreFrontmostApp()
+        onCaptureCompleted?()
     }
 
     private func presentOverlay(_ image: CGImage, sourceRect: CGRect?, historyID: UUID?) {
