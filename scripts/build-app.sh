@@ -27,11 +27,14 @@ if [ "${2:-}" = "universal" ]; then
         echo "==> swift build -c $CONFIG --triple $TRIPLE"
         swift build -c "$CONFIG" --triple "$TRIPLE" ${FLAGS[@]+"${FLAGS[@]}"}
         BIN_DIR="$(swift build -c "$CONFIG" --triple "$TRIPLE" ${FLAGS[@]+"${FLAGS[@]}"} --show-bin-path)"
-        SLICES+=("$BIN_DIR/$APP_NAME")
+        # Next to the build folders (honours a --scratch-path in FLAGS). Each slice is copied out
+        # at once: Swift 6.4's default build system (swiftbuild) puts every triple in the same
+        # .build/out/Products/<Config>, so the next triple's build overwrites it.
+        UNIVERSAL_DIR="$(dirname "$(dirname "$BIN_DIR")")/universal"
+        mkdir -p "$UNIVERSAL_DIR"
+        cp "$BIN_DIR/$APP_NAME" "$UNIVERSAL_DIR/$APP_NAME.$TRIPLE"
+        SLICES+=("$UNIVERSAL_DIR/$APP_NAME.$TRIPLE")
     done
-    # Next to the slices' build folders (honours a --scratch-path in FLAGS).
-    UNIVERSAL_DIR="$(dirname "$(dirname "$BIN_DIR")")/universal"
-    mkdir -p "$UNIVERSAL_DIR"
     BIN="$UNIVERSAL_DIR/$APP_NAME"
     lipo -create "${SLICES[@]}" -output "$BIN"
     echo "==> lipo: $(lipo -archs "$BIN")"
