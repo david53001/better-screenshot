@@ -2,16 +2,16 @@
 
 All notable changes to BetterScreenshot. Versions are git tags; releases are published on [GitHub](../../releases).
 
-## v3.2.0 — unreleased (branch `feat/sparkle-updates`) · Automatic updates
+## v3.2.0 — 2026-10-18 · Automatic updates
 
 - **Updates install themselves.** BetterScreenshot checks GitHub once a day (Sparkle 2.10.0); a new version
   opens a window you can install from or put off (usually behind your windows; in front right after launch or
   when the Mac has been idle). **Check for Updates…** in the menu
   bar (it reads "Update Available (X)…" while one waits) and Settings → Updates (switch + button). Updates
-  are verified with an EdDSA signature; your settings stay. Your Screen Recording permission stays too, as long
-  as the release is signed with the same certificate as 3.1.0 (owner decision pending; if not, these release
-  notes must say that 3.2.0 needs Screen Recording allowed once more, with the steps in the README's
-  "Screen Recording after an update" — docs/sparkle-updates/README.md, option b).
+  are verified with an EdDSA signature; your settings stay. **3.2.0 needs Screen Recording allowed once
+  more**, because its signing certificate changed (later updates keep it): System Settings > Privacy & Security >
+  Screen & System Audio Recording, remove the old BetterScreenshot entry with **−**, then take a screenshot and
+  allow it.
 - **Launch at login is your choice.** It's no longer switched on silently at first launch. After your 5th
   screenshot a small card in the corner asks: **No Thanks** / **Open at Login** (never while something
   full-screen is in front, including on MacBooks with a notch). Ignored, it goes away after 25 seconds and asks

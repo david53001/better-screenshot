@@ -563,8 +563,9 @@ exists, on a Mac running the previous release (owner):
     **N3** e2e `vmmap` retries; the BAD run now logs the Sparkle path.
 - **Review round 3** (another independent reviewer, 8.3/10; report `docs/sparkle-updates/REVIEW-round3.md`,
   untracked, probes and snapshots in `docs/sparkle-updates/review-round3/`). What changed:
-  - **B1 certificate** (owner decision): still open; `RELEASE_CERT` still `71ec62cd…`, the guard still refuses
-    `08faa1f9…`. For option (b) the user re-grant steps now exist (L1 below).
+  - **B1 certificate** (owner decision): **decided 2026-10-18 — option (b)**: `RELEASE_CERT` is now `08faa1f9…`
+    and the v3.2.0 release notes carry the re-grant steps below. (Before that decision the guard refused
+    `08faa1f9…`.) For option (b) the user re-grant steps now exist (L1 below).
   - **M1 the card appeared over full-screen apps on notched MacBooks** → fixed. (1) `fullScreenInFront` takes
     each screen's `safeAreaInsets.top` (`LaunchAtLoginPrompt.Screen`) and also accepts a full-width window that
     ends at the bottom edge and starts within inset + 2 pt of the top (the measured `(0, 33, 1470, 923)`).

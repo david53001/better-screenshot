@@ -46,7 +46,7 @@ REPO="david53001/better-screenshot"
 SPARKLE_BIN="${SPARKLE_BIN:-$HOME/Developer/Sparkle/2.10.0/bin}"
 # SHA-1 of the "BetterScreenshot Code Signing" certificate every release since v2.10.0 is signed
 # with; Screen Recording is keyed on it (designated requirement `certificate leaf = H"…"`).
-RELEASE_CERT="71ec62cdf447d86a147727f0184a1f83bc5135cb"
+RELEASE_CERT="08faa1f906d59fae5a9ccb84d00979030fb26b2b"
 IDENTITY="BetterScreenshot Code Signing"
 KEYCHAIN="$HOME/Library/Keychains/betterscreenshot-signing.keychain-db"   # scripts/sign-app.sh signs from it
 

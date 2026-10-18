@@ -21,7 +21,9 @@ A **free, local macOS clone of CleanShot X** (screenshot + screen-recording tool
   forces every user to re-grant. Back it up; never release from a machine without it.
   **2026-10-18: the keychain on this Mac was regenerated** (new cert `08faa1f9…`; the old one is in
   `~/Backups/2026-10-18-pre-sparkle/old-betterscreenshot-signing.keychain-db`, password unknown) —
-  `scripts/package-release.sh` refuses to package with any certificate but `71ec62cd…`; see
+  The owner chose (2026-10-18) to release v3.2.0 with the new certificate: v3.2.0 users re-allow Screen
+  Recording once (steps in its release notes). `scripts/package-release.sh` now refuses any certificate but
+  `08faa1f9…` (`RELEASE_CERT`); keep this keychain backed up so it never happens again; see
   `docs/sparkle-updates/README.md`. `scripts/install.sh`
   may only ever replace `/Applications/BetterScreenshot.app` — settings live in
   `~/Library/Preferences/com.betterscreenshot.mac.plist`, history in
