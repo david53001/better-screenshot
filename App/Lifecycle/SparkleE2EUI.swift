@@ -8,8 +8,11 @@ import AppKit
 ///
 /// After a scheduled check found an update (gentle reminders: `Updates.standardUserDriverWillHandleShowingUpdate`
 /// set `pendingVersion` and called `start`):
-/// 1. waits for Sparkle's update window, logs whether it took focus (it must not) and the menu
-///    title (`Updates.actionTitle`, "Update Available (X)…"), saves a snapshot;
+/// 1. waits for Sparkle's update window, logs whether it took focus (yes when Sparkle chose
+///    "immediate focus", e.g. right after launch; no when it opened behind other windows) and the
+///    menu title (`Updates.actionTitle`), saves a snapshot; from then on it hands focus back to
+///    the app that was in front before (`yieldActivation(to:)` + `activate()`) whenever the test
+///    app has it, so keys typed by the person running the test don't go to an invisible window;
 /// 2. does what that menu item does (`Updates.showSparkleWindow`, without activating the app) and
 ///    logs `pendingVersion` afterwards (Sparkle's "user attention" callback clears it);
 /// 3. clicks **Install Update**, waits for **Install and Relaunch**, saves a snapshot, clicks it.
@@ -28,11 +31,16 @@ enum SparkleE2EUI {
     private static var stage = 0
     private static var startedAt = Date()
     private static var stageStartedAt = Date()
+    private static var gaveFocusBack = false
+    /// The app that was in front before the test app launched (the script passes its bundle id).
+    private static var previousApp: NSRunningApplication?
 
     static func start() {
         guard isOn, timer == nil else { return }
         startedAt = Date()
         stageStartedAt = startedAt
+        previousApp = ProcessInfo.processInfo.environment["SPARKLE_E2E_RETURN_TO"]
+            .flatMap { NSRunningApplication.runningApplications(withBundleIdentifier: $0).first }
         let timer = Timer(timeInterval: 0.05, repeats: true) { _ in MainActor.assumeIsolated { step() } }
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
@@ -47,6 +55,18 @@ enum SparkleE2EUI {
 
     private static func step() {
         for window in NSApp.windows where window.isVisible && window.alphaValue > 0 { window.alphaValue = 0 }
+        // Once stage 0 has logged the focus, give it back whenever Sparkle takes it: the windows are
+        // transparent, so keys typed by the person running the test must not go to them.
+        if stage > 0, NSApp.isActive {
+            if let previousApp {   // hand activation back explicitly (macOS 14 cooperative activation)
+                NSApp.yieldActivation(to: previousApp)
+                previousApp.activate()
+            } else {
+                NSApp.deactivate()
+            }
+            if !gaveFocusBack { log("giving focus back to \(previousApp?.bundleIdentifier ?? "the next app")") }
+            gaveFocusBack = true
+        }
         guard Date().timeIntervalSince(startedAt) < timeout else {
             log("timed out at stage \(stage)")
             timer?.invalidate()
@@ -65,6 +85,7 @@ enum SparkleE2EUI {
             // Sparkle's "user attention" callback clears pendingVersion asynchronously.
             guard Date().timeIntervalSince(stageStartedAt) > 1 else { return }
             log("after the menu action: pending \(Updates.shared.pendingVersion ?? "none"), menu title: \(Updates.shared.actionTitle)")
+            log("focus now: app active \(NSApp.isActive ? 1 : 0)")
             guard let (_, button) = find("Install Update") else { return }
             log("clicking Install Update")
             button.performClick(nil)

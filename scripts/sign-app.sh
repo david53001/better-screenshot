@@ -19,7 +19,16 @@ IDENTITY="BetterScreenshot Code Signing"
 KEYCHAIN="$HOME/Library/Keychains/betterscreenshot-signing.keychain-db"
 KEYCHAIN_PW="betterscreenshot-local"
 
-if security find-identity -p codesigning "$KEYCHAIN" 2>/dev/null | grep -q "$IDENTITY"; then
+if [ -n "${BETTERSCREENSHOT_OTHER_IDENTITY:-}" ]; then
+    # Test only (sparkle-e2e-test.sh CROSS_CERT=1): sign with a different certificate from the
+    # keychain search list, to check an update across a certificate change. Never for a release.
+    if ! security find-identity -p codesigning 2>/dev/null | grep -qF "\"$BETTERSCREENSHOT_OTHER_IDENTITY\""; then
+        echo "error: signing identity '$BETTERSCREENSHOT_OTHER_IDENTITY' not found" >&2
+        exit 1
+    fi
+    SIGN=(--sign "$BETTERSCREENSHOT_OTHER_IDENTITY")
+    WHO="other identity '$BETTERSCREENSHOT_OTHER_IDENTITY' (test only)"
+elif security find-identity -p codesigning "$KEYCHAIN" 2>/dev/null | grep -q "$IDENTITY"; then
     security unlock-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN" 2>/dev/null || true
     SIGN=(--keychain "$KEYCHAIN" --sign "$IDENTITY")
     WHO="stable identity '$IDENTITY'; permissions persist"

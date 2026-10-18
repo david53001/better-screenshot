@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// Where `LaunchAtLoginPrompt` keeps its state: the app's `UserDefaults.standard`; tests use an
@@ -5,8 +6,10 @@ import Foundation
 public protocol LaunchAtLoginPromptStorage {
     func integer(forKey defaultName: String) -> Int
     func bool(forKey defaultName: String) -> Bool
+    func double(forKey defaultName: String) -> Double
     func set(_ value: Int, forKey defaultName: String)
     func set(_ value: Bool, forKey defaultName: String)
+    func set(_ value: Double, forKey defaultName: String)
 }
 
 extension UserDefaults: LaunchAtLoginPromptStorage {}
@@ -21,8 +24,9 @@ extension UserDefaults: LaunchAtLoginPromptStorage {}
 /// ≤ 3.1.0, whose first launch turned it on by itself (that build wrote `didRegisterLaunchAtLogin`):
 /// they either still have it, or turned it off on purpose. A choice made with the Settings switch
 /// also counts as answered. A card left unanswered goes away by itself after
-/// `unansweredHideSeconds` and comes back after a later capture, at most `maxShowings` times in
-/// all; after the last one it counts as answered "no".
+/// `unansweredHideSeconds`. It only counts as a showing if the user could have seen it (`Showing`):
+/// then it comes back after a later capture at least `reshowAfterSeconds` later (or after a
+/// relaunch), at most `maxShowings` times in all; after the last one it counts as answered "no".
 ///
 /// All state is in the standard defaults under the `Key` names (docs/sparkle-updates/README.md).
 public struct LaunchAtLoginPrompt {
@@ -32,8 +36,10 @@ public struct LaunchAtLoginPrompt {
         /// Bool: the question was answered (or ignored `maxShowings` times), or the user chose in
         /// Settings, or launch at login was found on. Never asked again.
         public static let asked = "launchAtLoginPromptAsked"
-        /// Int: times the card was shown and went away unanswered.
+        /// Int: times the card was seen and went away unanswered (`Showing.counts`).
         public static let unansweredShowings = "launchAtLoginPromptUnansweredShowings"
+        /// Double: when the last such showing ended, in seconds since 1970 (0 = never).
+        public static let lastShownAt = "launchAtLoginPromptLastShownAt"
         /// Bool, read only: written by ≤ 3.1.0 after its silent first-launch enable.
         public static let legacyAutoEnabled = "didRegisterLaunchAtLogin"
     }
@@ -67,46 +73,95 @@ public struct LaunchAtLoginPrompt {
         public var appIsActive: Bool
         /// The menu-bar menu is open (menu tracking; `appIsActive` and the mouse buttons don't show it).
         public var menuIsOpen: Bool
+        /// The frontmost app has a window covering a whole screen, menu bar included: a full-screen
+        /// app (the card would be on another Space, unseen), a presentation or a game.
+        public var fullScreenInFront: Bool
 
         public init(secondsSinceCapture: TimeInterval, secondsSinceKeyPress: TimeInterval,
                     mouseButtonDown: Bool, captureOrRecordingActive: Bool, appIsActive: Bool,
-                    menuIsOpen: Bool) {
+                    menuIsOpen: Bool, fullScreenInFront: Bool) {
             self.secondsSinceCapture = secondsSinceCapture
             self.secondsSinceKeyPress = secondsSinceKeyPress
             self.mouseButtonDown = mouseButtonDown
             self.captureOrRecordingActive = captureOrRecordingActive
             self.appIsActive = appIsActive
             self.menuIsOpen = menuIsOpen
+            self.fullScreenInFront = fullScreenInFront
         }
     }
 
     /// A moment when the card can't interrupt anything: the capture has settled, nothing of ours is
-    /// in use, no drag is in progress and the user isn't typing.
+    /// in use, no drag is in progress, the user isn't typing and nothing full-screen is in front.
     public static func isCalmMoment(_ m: Moment) -> Bool {
         m.secondsSinceCapture >= settleSeconds && m.secondsSinceKeyPress >= typingQuietSeconds
             && !m.mouseButtonDown && !m.captureOrRecordingActive && !m.appIsActive && !m.menuIsOpen
+            && !m.fullScreenInFront
+    }
+
+    /// An on-screen window, as `CGWindowListCopyWindowInfo` reports it (bounds and owner need no
+    /// Screen Recording permission).
+    public struct WindowInfo: Equatable {
+        public var ownerPID: Int32
+        /// `kCGWindowLayer`: 0 for normal windows, negative for the desktop, higher for panels.
+        public var layer: Int
+        /// Top-left origin on the primary screen (Quartz window coordinates).
+        public var bounds: CGRect
+
+        public init(ownerPID: Int32, layer: Int, bounds: CGRect) {
+            self.ownerPID = ownerPID
+            self.layer = layer
+            self.bounds = bounds
+        }
+    }
+
+    /// `Moment.fullScreenInFront`: the frontmost app has a window exactly the size of a screen,
+    /// menu bar included (a full-screen app, a presentation, a full-screen game). A zoomed window
+    /// stops at the menu bar, and the desktop (negative layer) or another app's window don't count.
+    /// `screenFrames` are `NSScreen.frame`s (bottom-left origin, the primary screen first).
+    public static func fullScreenInFront(frontmostPID: Int32?, windows: [WindowInfo], screenFrames: [CGRect]) -> Bool {
+        guard let frontmostPID, let primary = screenFrames.first else { return false }
+        let screens = screenFrames.map {
+            CGRect(x: $0.minX, y: primary.maxY - $0.maxY, width: $0.width, height: $0.height)
+        }
+        return windows.contains { $0.ownerPID == frontmostPID && $0.layer >= 0 && screens.contains($0.bounds) }
     }
 
     // MARK: The flow, one step at a time (the app's controller only carries these out)
 
-    /// What to do right after a counted capture.
+    /// What to do right after a capture (`afterCapture`).
     public enum AfterCapture: Equatable {
         /// Not due, or the card is already up.
         case nothing
+        /// Due, but the card was seen less than `reshowAfterSeconds` ago in this launch, or shown
+        /// unseen less than `reshowAfterUnseenSeconds` ago.
+        case tooSoon
         /// Due: look for a calm moment (`waitStep`, once a second).
         case startWaiting
-        /// Launch at login is on already: never ask (`markAsked`), so no capture checks again.
+        /// Launch at login is on already: marked asked, so no later capture checks again.
         case alreadyEnabled
     }
 
-    /// `isEnabled` reads the system's status (an XPC call), so it is only called when the question
-    /// could be due.
-    public static func afterCapture(couldAsk: Bool, cardVisible: Bool, isEnabled: () -> Bool) -> AfterCapture {
+    /// A completed capture: records it (`recordUse`), then decides. `isEnabled` reads the system's
+    /// status (an XPC call), so it is only called when the question could be due and isn't spaced
+    /// out; found on, the question is marked asked. `shownThisLaunch`: a counted showing ended
+    /// since the app started; `unseenShowingEndedAt`: when the last showing that didn't count
+    /// ended, in this launch.
+    public func afterCapture(cardVisible: Bool, shownThisLaunch: Bool, unseenShowingEndedAt: Date? = nil,
+                             now: Date = Date(), isEnabled: () -> Bool) -> AfterCapture {
+        recordUse()
         guard couldAsk, !cardVisible else { return .nothing }
-        return isEnabled() ? .alreadyEnabled : .startWaiting
+        guard Self.mayShowAgain(secondsSinceLastShowing: secondsSinceLastShowing(now: now),
+                                shownThisLaunch: shownThisLaunch,
+                                secondsSinceUnseenShowing: unseenShowingEndedAt.map { now.timeIntervalSince($0) })
+        else { return .tooSoon }
+        guard !isEnabled() else {
+            markAsked()
+            return .alreadyEnabled
+        }
+        return .startWaiting
     }
 
-    /// One tick of the wait for a calm moment.
+    /// One tick of the wait for a calm moment (`waitStep`).
     public enum WaitStep: Equatable {
         /// Not calm yet: check again in a second.
         case keepWaiting
@@ -116,31 +171,85 @@ public struct LaunchAtLoginPrompt {
         case show
         /// Answered meanwhile (the Settings switch): stop.
         case noLongerDue
-        /// Turned on meanwhile (System Settings): stop and never ask (`markAsked`).
+        /// Turned on meanwhile (System Settings): stop; marked asked, never asked.
         case alreadyEnabled
     }
 
     /// `couldAsk` and `isEnabled` are re-read right before showing, because either can change
     /// while the app waits; `isEnabled` (an XPC call) only once the moment is calm.
-    public static func waitStep(_ m: Moment, couldAsk: Bool, isEnabled: () -> Bool) -> WaitStep {
-        if m.secondsSinceCapture >= giveUpSeconds { return .giveUp }
-        guard isCalmMoment(m) else { return .keepWaiting }
+    public func waitStep(_ m: Moment, isEnabled: () -> Bool) -> WaitStep {
+        if m.secondsSinceCapture >= Self.giveUpSeconds { return .giveUp }
+        guard Self.isCalmMoment(m) else { return .keepWaiting }
         guard couldAsk else { return .noLongerDue }
-        return isEnabled() ? .alreadyEnabled : .show
+        guard !isEnabled() else {
+            markAsked()
+            return .alreadyEnabled
+        }
+        return .show
     }
 
     // MARK: An unanswered card
 
-    /// An unanswered question card goes away by itself after this long on screen, like a macOS
-    /// banner, so it never sits over a presentation or a shared screen.
+    /// An unanswered card goes away by itself after this long on screen, like a macOS banner, so it
+    /// never sits over a presentation or a shared screen. The "One more step" and "Couldn't turn it
+    /// on" cards too (they don't count as showings: the question is answered).
     public static let unansweredHideSeconds: TimeInterval = 25
-    /// Shown at most this many times without an answer; after the last it counts as "no".
+    /// Shown (and seen) at most this many times without an answer; after the last it counts as "no".
     public static let maxShowings = 3
+    /// A showing only counts once the card was seen this long (`Showing.secondsSeen`).
+    public static let minimumSecondsSeen: TimeInterval = 5
+    /// After a counted showing, the card only comes back this much later, or after a relaunch.
+    public static let reshowAfterSeconds: TimeInterval = 24 * 60 * 60
+    /// After a showing that didn't count, it comes back on a capture this much later (not on the
+    /// very next one: someone who never touches the mouse while it's up isn't shown it after every
+    /// screenshot).
+    public static let reshowAfterUnseenSeconds: TimeInterval = 10 * 60
 
-    /// Whether the unanswered card should go now: after `unansweredHideSeconds`, but not while the
-    /// pointer is on it (the user is about to click).
+    /// Whether the card should go now: after `unansweredHideSeconds`, but not while the pointer is
+    /// on it (the user is about to click).
     public static func shouldHideUnanswered(secondsShown: TimeInterval, pointerOnCard: Bool) -> Bool {
         secondsShown >= unansweredHideSeconds && !pointerOnCard
+    }
+
+    /// Whether another showing may start now. `secondsSinceLastShowing`: since the last counted
+    /// one ended (nil: none yet, ever); `secondsSinceUnseenShowing`: since the last uncounted one
+    /// ended in this launch (nil: none).
+    public static func mayShowAgain(secondsSinceLastShowing: TimeInterval?, shownThisLaunch: Bool,
+                                    secondsSinceUnseenShowing: TimeInterval? = nil) -> Bool {
+        if let unseen = secondsSinceUnseenShowing, unseen < reshowAfterUnseenSeconds { return false }
+        guard let seconds = secondsSinceLastShowing else { return true }
+        return !shownThisLaunch || seconds >= reshowAfterSeconds
+    }
+
+    /// One showing of the question, followed by the app once a second while it is up, so that only
+    /// a card the user could have seen counts: one that was on screen (on the active Space, not
+    /// covered, the screen not locked or asleep) after the user had used the mouse or keyboard since
+    /// it appeared (not a desk they walked away from).
+    public struct Showing: Equatable {
+        /// Wall-clock time on screen (for `shouldHideUnanswered`).
+        public private(set) var secondsShown: TimeInterval = 0
+        /// Time it was visible with the user there.
+        public private(set) var secondsSeen: TimeInterval = 0
+
+        /// The longest a single tick adds to `secondsSeen`: a tick that comes late (the Mac slept
+        /// with the card up) says nothing about the time in between.
+        public static let maxSecondsPerTick: TimeInterval = 2
+
+        public init() {}
+
+        /// - Parameters:
+        ///   - seconds: since the previous tick (or since the card appeared).
+        ///   - cardVisible: the card's window is on the active Space and not covered.
+        ///   - secondsSinceInput: since the last key, click, scroll or mouse move, anywhere.
+        public mutating func tick(seconds: TimeInterval, cardVisible: Bool, secondsSinceInput: TimeInterval) {
+            secondsShown += seconds
+            if cardVisible && secondsSinceInput < secondsShown {
+                secondsSeen += min(seconds, Self.maxSecondsPerTick)
+            }
+        }
+
+        /// Whether it counts towards `maxShowings`.
+        public var counts: Bool { secondsSeen >= LaunchAtLoginPrompt.minimumSecondsSeen }
     }
 
     // MARK: Storage
@@ -155,6 +264,12 @@ public struct LaunchAtLoginPrompt {
     public var asked: Bool { storage.bool(forKey: Key.asked) }
     public var unansweredShowings: Int { storage.integer(forKey: Key.unansweredShowings) }
     private var legacyAutoEnabled: Bool { storage.bool(forKey: Key.legacyAutoEnabled) }
+
+    /// Seconds since the last counted showing ended, or nil if there was none.
+    public func secondsSinceLastShowing(now: Date = Date()) -> TimeInterval? {
+        let last = storage.double(forKey: Key.lastShownAt)
+        return last > 0 ? now.timeIntervalSince1970 - last : nil
+    }
 
     /// Everything but the launch-at-login status, so callers can skip reading that (an XPC call
     /// to the system) until the question could actually be due.
@@ -179,9 +294,20 @@ public struct LaunchAtLoginPrompt {
         storage.set(true, forKey: Key.asked)
     }
 
-    /// The card went away unanswered (`shouldHideUnanswered`). It stays due, so a later capture
-    /// brings it back, until this was the `maxShowings`th time: then it counts as answered.
-    /// Returns whether that was the last showing.
+    /// The question card went away unanswered (`shouldHideUnanswered`). Only a showing the user
+    /// could have seen (`Showing.counts`) is recorded (`recordUnansweredShowing`, and its time for
+    /// `reshowAfterSeconds`); any other only delays the next one (`reshowAfterUnseenSeconds`, kept by
+    /// the app for this launch). Returns whether it counted.
+    @discardableResult
+    public func cardHidUnanswered(_ showing: Showing, now: Date = Date()) -> Bool {
+        guard showing.counts else { return false }
+        storage.set(now.timeIntervalSince1970, forKey: Key.lastShownAt)
+        recordUnansweredShowing()
+        return true
+    }
+
+    /// One more unanswered showing. It stays due, so a later capture brings it back, until this was
+    /// the `maxShowings`th time: then it counts as answered. Returns whether that was the last.
     @discardableResult
     public func recordUnansweredShowing() -> Bool {
         let showings = unansweredShowings + 1

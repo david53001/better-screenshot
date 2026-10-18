@@ -47,7 +47,7 @@ MacStats' `feat/sparkle-updates` branch); JVoice gets the same.
 | Signing, inside-out, no `--deep`: `Autoupdate`, `Updater.app`, the framework (all `-o runtime`, as Sparkle ships them), then the app with `App/BetterScreenshot.entitlements` (no hardened runtime, as before) | `scripts/sign-app.sh` (new; `build-app.sh` calls it) |
 | SDK pin: the CLT's default MacOSX27.0 SDK can't build SwiftUI macros, so builds use `/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk` when present (an `SDKROOT` you set wins) | `scripts/sdk-env.sh`, sourced by `build-app.sh` and `test.sh` |
 | One-command release | `scripts/package-release.sh` |
-| Real end-to-end update test (automatic install + `E2E_UI=1`: Sparkle's real windows) | `scripts/sparkle-e2e-test.sh`, `App/Lifecycle/SparkleE2EUI.swift` (only in its `-DSPARKLE_E2E_TEST` build) |
+| Real end-to-end update test (automatic install; `E2E_UI=1`: Sparkle's real windows; `CROSS_CERT=1`: OLD signed with another certificate) | `scripts/sparkle-e2e-test.sh`, `App/Lifecycle/SparkleE2EUI.swift` (only in its `-DSPARKLE_E2E_TEST` build) |
 
 **Not sandboxed** (checked: `App/BetterScreenshot.entitlements` has no `com.apple.security.app-sandbox`).
 So Sparkle installs through its bundled `Autoupdate` / `Updater.app`; the framework's XPC services are
@@ -76,8 +76,11 @@ Before: up to 3.1.0, the first launch turned launch at login on silently (`AppDe
   needs no permission — checked), no mouse button down (no drag of the thumbnail in progress), the menu-bar
   menu closed (`MenuBarController.isMenuOpen`, from its `NSMenuDelegate`: during menu tracking neither
   `NSApp.isActive` nor the mouse buttons show it), no selection overlay / countdown / record strip /
-  recording, and none of BetterScreenshot's windows in front (`NSApp.isActive` false — not while annotating
-  or in Settings). Then it shows the card.
+  recording, none of BetterScreenshot's windows in front (`NSApp.isActive` false — not while annotating
+  or in Settings), and **nothing full-screen in front**: the frontmost app has no on-screen window exactly the
+  size of a screen, menu bar included (a full-screen app, a Keynote presentation, a full-screen game; a zoomed
+  window stops at the menu bar). Read from `CGWindowListCopyWindowInfo` (bounds and owners need no permission);
+  the rule is `LaunchAtLoginPrompt.fullScreenInFront`, tested. Then it shows the card.
 - **The card** (`Packages/OverlayKit/Sources/OverlayKit/PromptCardController.swift`): a notification-style
   card in the **top-right** corner of the screen under the pointer, 12 pt below the menu bar (bottom-right
   when Settings → Quick Access → Screen corner is top-right, so it never sits on the thumbnails). The app
@@ -91,10 +94,22 @@ Before: up to 3.1.0, the first launch turned launch at login on silently (`AppDe
     VoiceOver users is the **Settings → Startup → Launch at login** switch, which answers the question too.
   - **Unanswered, it goes away by itself** after **25 s** (`LaunchAtLoginPrompt.unansweredHideSeconds`; not
     while the pointer is on it), like a macOS banner, so it never sits over a presentation or a shared screen.
-    It stays due and comes back after a later capture (at a calm moment again), **at most 3 showings**
-    (`maxShowings`); after the 3rd unanswered one it counts as answered "no" (`launchAtLoginPromptAsked`).
-  - It joins every Space but **not full-screen ones** (no `.fullScreenAuxiliary`), so it never appears over a
-    full-screen app such as a Keynote presentation.
+    It stays due. **Only a showing the user could have seen counts** (`LaunchAtLoginPrompt.Showing`, followed
+    once a second): at least **5 s** (`minimumSecondsSeen`) during which the card's window was visible
+    (`occlusionState.contains(.visible)` and `isOnActiveSpace`: not on another Space, not covered, the screen
+    not locked or asleep) **and** the user had used the mouse or keyboard since the card appeared
+    (`CGEventSource.secondsSinceLastEventType`, any input; no permission needed) — not a desk they walked away
+    from. One late tick (the Mac slept with the card up) adds at most 2 s. A **counted** showing
+    (`cardHidUnanswered`) is stored with its time (`launchAtLoginPromptLastShownAt`); the card comes back after
+    a capture **≥ 24 h later or after a relaunch** (`reshowAfterSeconds`, `mayShowAgain`), so a burst of
+    screenshots can't show it 3 times in a few minutes; after the **3rd** counted one it counts as answered "no"
+    (`maxShowings`, `launchAtLoginPromptAsked`). An **uncounted** showing comes back after a capture ≥ 10 min
+    later (`reshowAfterUnseenSeconds`, kept in memory for this launch), so someone who never touches the mouse
+    while it's up doesn't get it after every screenshot either.
+  - It joins every Space but, per AppKit, not full-screen ones (no `.fullScreenAuxiliary`), and the app waits
+    while anything full-screen is in front (above), so it isn't put over a full-screen app or presentation.
+    (Whether AppKit really keeps such a panel off a full-screen Space was not checked on screen; the counting
+    rule above makes it safe either way: an invisible showing never counts.)
   - Never in a capture: its window IDs are in `CaptureCoordinator.tourTagWindowIDs` (excluded from area,
     window, full screen, Capture Text and the frozen still), and its window is registered with
     `TourTagRecordingGate`, which keeps it out of display recordings from its first frame (it's invisible
@@ -119,14 +134,15 @@ Before: up to 3.1.0, the first launch turned launch at login on silently (`AppDe
   enabled → "BetterScreenshot will open at login." for 1.6 s, then the card goes; `.requiresApproval` →
   "One more step / Allow BetterScreenshot in Login Items to finish." + **Done** / **Open Login Items**
   (`SMAppService.openSystemSettingsLoginItems()`); error → "Couldn't turn it on. / You can try again in
-  Settings → Launch at login." + **Done**.
+  Settings → Launch at login." + **Done**. Those two also go away by themselves after 25 s (not under the
+  pointer; not counted as showings: the question is answered, and Settings shows the same state).
 - If the app quits while the card is up unanswered, that showing isn't counted; it is still due and comes back
   after a later capture. The card's window is only created the first time it is shown (users who are never
   asked never get it).
 - **Settings switch in sync:** `LaunchAtLogin.setEnabled` posts `LaunchAtLogin.didChangeNotification`; the
   Settings → Startup → Launch at login switch re-reads `SMAppService` on it (and on appear). Any choice made
   with the switch counts as answered (`setEnabled` marks it asked), and closes the card if it's up.
-- **Answered at most once ever (shown at most 3 times). Never asked if launch at login is already on**
+- **Answered at most once ever (at most 3 counted showings). Never asked if launch at login is already on**
   (checked when it becomes due and again right before showing; when found on, it is marked asked, so later
   captures don't call `SMAppService.mainApp.status` — an XPC call to the system — again).
 - **Existing users**: if `didRegisterLaunchAtLogin` is set, ≤ 3.1.0 already turned it on for them; they either
@@ -135,7 +151,8 @@ Before: up to 3.1.0, the first launch turned launch at login on silently (`AppDe
 - Same rules as MacStats (5 uses, once, legacy flag, Settings counts as an answer). Differences, because this
   app has no panel to put a card in: a use is a capture, not a panel open; the card is a corner card shown at
   a calm moment instead of inside MacStats' panel; instead of MacStats' "quick dismissals", an unanswered card
-  hides itself after 25 s and counts as one of its 3 showings.
+  hides itself after 25 s and, if it could be seen, counts as one of its 3 showings (spaced ≥ 24 h / a
+  relaunch apart).
 
 **UserDefaults keys** (domain `com.betterscreenshot.mac`):
 
@@ -143,17 +160,24 @@ Before: up to 3.1.0, the first launch turned launch at login on silently (`AppDe
 |---|---|---|
 | `launchAtLoginPromptUses` | Int | Completed captures counted so far (stops at 5) |
 | `launchAtLoginPromptAsked` | Bool | Answered on the card, chosen in Settings, ignored 3 times, or launch at login found on: never ask again |
-| `launchAtLoginPromptUnansweredShowings` | Int | Times the card hid itself unanswered (3 → asked) |
+| `launchAtLoginPromptUnansweredShowings` | Int | Times the card hid itself unanswered after the user could see it (3 → asked) |
+| `launchAtLoginPromptLastShownAt` | Double | When the last such showing ended, seconds since 1970 (0 = never); the next needs ≥ 24 h or a relaunch |
 | `didRegisterLaunchAtLogin` | Bool | Legacy, **read only**: ≤ 3.1.0 auto-enabled launch at login |
 
-Code: rules, calm-moment test and the whole flow as pure steps (`afterCapture` → `.nothing` / `.startWaiting` /
-`.alreadyEnabled`; `waitStep` → `.keepWaiting` / `.giveUp` / `.show` / `.noLongerDue` / `.alreadyEnabled`;
-`shouldHideUnanswered`; `recordUnansweredShowing`) in `Packages/CaptureKit/Sources/CaptureKit/LaunchAtLoginPrompt.swift`,
+Code: rules, calm-moment test and the whole flow as steps that apply their own side effects, so the
+controller only acts on the result (`afterCapture` records the capture → `.nothing` / `.tooSoon` /
+`.startWaiting` / `.alreadyEnabled` (marks asked); `waitStep` → `.keepWaiting` / `.giveUp` / `.show` /
+`.noLongerDue` / `.alreadyEnabled` (marks asked); `fullScreenInFront`; `shouldHideUnanswered`; `Showing.tick`
+/ `.counts`; `cardHidUnanswered` (records only a counted showing and its time); `mayShowAgain`) in
+`Packages/CaptureKit/Sources/CaptureKit/LaunchAtLoginPrompt.swift`,
 behind a small storage protocol (`LaunchAtLoginPromptStorage`: `UserDefaults.standard` in the app, an in-memory
 store in tests, so a test run writes no plist into `~/Library/Preferences`);
-tests `Packages/CaptureKit/Tests/CaptureKitTests/LaunchAtLoginPromptTests.swift` (20: threshold, already
+tests `Packages/CaptureKit/Tests/CaptureKitTests/LaunchAtLoginPromptTests.swift` (27: threshold, already
 enabled, already asked, legacy flag, counter cap, persistence, Settings choice, every calm-moment condition incl.
-the open menu, the after-capture / wait steps with when the status is read, the 25 s hide, the 3-showing cap);
+the open menu and full screen, the full-screen window rule (two screens, zoomed window, desktop, other app), the
+after-capture / wait steps with when the status is read and their own `markAsked`, the 25 s hide, seen vs
+unseen showings (other Space / locked, walked away, came back late, a sleep), the 24 h / relaunch and 10 min
+spacing, the 3-showing cap);
 card `Packages/OverlayKit/Sources/OverlayKit/PromptCardController.swift`; flow
 `App/MenuBar/LaunchAtLoginPromptController.swift`; wiring `App/Lifecycle/AppDelegate.swift`;
 `App/SystemIntegration/LaunchAtLogin.swift`.
@@ -161,8 +185,9 @@ card `Packages/OverlayKit/Sources/OverlayKit/PromptCardController.swift`; flow
 To see the card on a dev build without 5 captures (only where you're happy to change BetterScreenshot's own
 settings, i.e. not on the owner's running copy): quit the app, `defaults write com.betterscreenshot.mac
 launchAtLoginPromptUses -int 5; defaults delete com.betterscreenshot.mac launchAtLoginPromptAsked; defaults
-delete com.betterscreenshot.mac didRegisterLaunchAtLogin`, make sure launch at login is off, launch, take one
-screenshot, then don't type for a few seconds.
+delete com.betterscreenshot.mac didRegisterLaunchAtLogin; defaults delete com.betterscreenshot.mac
+launchAtLoginPromptLastShownAt`, make sure launch at login is off, launch, take one screenshot, then don't type
+for a few seconds (move the mouse once while the card is up if you want that showing to count).
 
 **Unmerged related branch:** `feat/launch-at-login` (61393b7, 2026-10-01) adds an "Allow it in System
 Settings" hint under the Settings switch and a Settings-tour step whose text says new users "have it on
@@ -195,8 +220,13 @@ conflict trivially).
   must not try passwords on it (the auto-mode safety check refuses that as credential exploration); or
   (b) accept a one-time re-grant for 3.2.0: set `RELEASE_CERT` in `scripts/package-release.sh` to
   `08faa1f906d59fae5a9ccb84d00979030fb26b2b`, say in the release notes that 3.2.0 asks for Screen Recording
-  once more, and fix the CHANGELOG 3.2.0 line accordingly. Sparkle itself accepts a code-signing change when the
-  EdDSA signature is valid, but no test here covers a cross-certificate update.
+  once more, and fix the CHANGELOG 3.2.0 line accordingly. **Sparkle itself accepts a code-signing change when
+  the EdDSA signature is valid — tested 2026-10-18 (round 2):** `CROSS_CERT=1 scripts/sparkle-e2e-test.sh`
+  signs OLD with a different certificate ("JVoice Self-Signed", `1164938a…`) and NEW with the current
+  "BetterScreenshot Code Signing" (`08faa1f9…`): the update installs and relaunches (installed copy carries
+  `08faa1f9…`, `codesign --verify --deep --strict` OK) and a bad EdDSA signature is still refused (output in
+  "How to re-run the end-to-end test"). What that test can't show is the Screen Recording re-prompt itself (the
+  test copy never asks for it); that part follows from TCC keying the permission on the certificate.
   **The new keychain is backed up** (2026-10-18, round 1):
   `~/Backups/betterscreenshot-code-signing/new-08faa1f9-betterscreenshot-signing.keychain-db` (+ `README.md`
   with restore steps), so option (b) stays possible even if this Mac's copy is lost.
@@ -238,7 +268,10 @@ with its EdDSA signature and length) and `dist/release-notes.md`. It publishes n
 Guards (it refuses; the overrides are for dry runs only, never for a real release). **Any override makes it a
 dry run:** the outputs go to `dist/dry-run/` as `BetterScreenshot-DRYRUN.app.zip`, `appcast-DRYRUN.xml` and
 `release-notes-DRYRUN.md` (plus the app), it ends with `DRY RUN - not publishable` and prints **no** `gh`
-command. Never upload those files (even uploaded, their names aren't what the feed and `install.sh` download).
+command. Never upload those files: their names aren't what the feed and `install.sh` download, and the dry-run
+appcast carries `sparkle:edSignature="DRYRUN-not-signed"` and the enclosure URL `…/DRYRUN-not-a-release.zip`,
+so even uploaded it can't install anything (signing itself is still exercised: `sign_update` signs and
+verifies the dry-run zip, and that signature is then discarded).
 
 | Refuses when | Override |
 |---|---|
@@ -274,6 +307,7 @@ cd /Users/davidghermansteinberg/Desktop/Home/Projects/Code/BetterScreenshot/.cla
 scripts/sparkle-e2e-test.sh                    # temp dir, deleted afterwards
 KEEP=1 scripts/sparkle-e2e-test.sh /some/dir   # keep logs/builds for inspection
 E2E_UI=1 KEEP=1 scripts/sparkle-e2e-test.sh /some/dir   # Sparkle's real windows (see "UI mode" below)
+CROSS_CERT=1 scripts/sparkle-e2e-test.sh       # OLD signed with another certificate (see "Cross-certificate")
 ```
 
 Needs the "BetterScreenshot Code Signing" identity and the Sparkle key in the Keychain; about a minute
@@ -311,6 +345,26 @@ GOOD update installed (build 101): PASS
 BAD signature refused (still build 100): PASS
 ```
 
+Since round 2 each run also prints both copies' certificates (`OLD certificate …, NEW certificate …`), and the
+"loads Sparkle from:" line retries `vmmap` (it used to race the launch and print an empty path in BAD). Re-run
+2026-10-18 after the round-2 changes: GOOD PASS, BAD PASS (same output as above), 51 s.
+
+### Cross-certificate (`CROSS_CERT=1`): an update that changes the signing certificate
+
+For option (b) of B1 (see "Where the keys live"). OLD is signed with `OTHER_IDENTITY` (default
+"JVoice Self-Signed", any code-signing identity on the keychain search list; `scripts/sign-app.sh` takes it as
+`BETTERSCREENSHOT_OTHER_IDENTITY`, test only) and NEW with the real "BetterScreenshot Code Signing"; then the
+same GOOD and BAD runs. Result 2026-10-18:
+
+```
+OLD certificate 1164938af56472957620eeaaca96e33572677860, NEW certificate 08faa1f906d59fae5a9ccb84d00979030fb26b2b
+...
+cross-certificate: OLD 1164938a… ('JVoice Self-Signed') != NEW 08faa1f9…: PASS
+installed copy now carries NEW's certificate: PASS
+GOOD update installed (build 101): PASS
+BAD signature refused (still build 100): PASS
+```
+
 ### UI mode (`E2E_UI=1`): the path real users take
 
 The default run installs at once (`SUAutomaticallyUpdate` + `immediateInstallationBlock`), so it never shows
@@ -322,7 +376,11 @@ installation to Sparkle's own window. It waits for the scheduled check's update 
 (`Updates.actionTitle`); does what the menu item does (`Updates.showSparkleWindow`, minus activating the app) and
 logs what is pending; then clicks **Install Update** and **Install and Relaunch** in Sparkle's windows and checks
 the installed copy is build 101. Every window of the test app is made transparent the moment it appears
-(nothing visible on screen, at most a ~50 ms flash), but the app can still become active for a few seconds.
+(nothing visible on screen, at most a ~50 ms flash). When Sparkle chooses immediate focus the test app becomes
+active from launch until its first snapshot (a few seconds); from then on it hands focus straight back to the
+app that was in front before (the script passes its bundle id from `lsappinfo` as `SPARKLE_E2E_RETURN_TO`;
+`NSApp.deactivate()` alone did not work: still active a second later). The script prints "Don't type for
+about 30 s" before launching.
 Snapshots (`cacheDisplay`, no Screen Recording permission needed) go to `<work-dir>/ui/`; on macOS 26 they
 show layout and buttons but drop most label text.
 
@@ -347,6 +405,10 @@ the menu action leaves nothing pending: PASS
 Install and Relaunch was offered and clicked: PASS
 installed and relaunched as build 101: PASS
 ```
+
+Re-run 2026-10-18 after round 2 (Mac idle 115 min): the same lines, plus `giving focus back to
+com.apple.Terminal` and `focus now: app active 0`, and the new check
+`the test app doesn't keep the keyboard (not active a second later): PASS` — 7/7 PASS.
 
 What this showed: right after launch (and when the Mac is idle) Sparkle opens a scheduled update **in front,
 with focus**, and reports the user's attention at once, so the "Update Available (X)…" label never appears in
@@ -376,7 +438,8 @@ exists, on a Mac running the previous release (owner):
 
 - 2026-10-18: both features built and committed on `feat/sparkle-updates` (not merged, pushed, installed or
   released). Commits: `2d4c8ee` (features), `1366d80` (Settings layout + card centring after render),
-  the universal-build fix, docs, then **review round 1 fixes** (one commit, below).
+  the universal-build fix, docs, then **review round 1 fixes** (`a149104`) and **review round 2 fixes** (the
+  commit after it), both below.
 - **Review round 1** (independent reviewer, 7.5/10; report `docs/sparkle-updates/REVIEW-round1.md`, untracked,
   with its renders in `docs/sparkle-updates/review-round1/`). What changed:
   - **B1 certificate** (owner decision, not code): still open; the release script still refuses
@@ -419,6 +482,53 @@ exists, on a Mac running the previous release (owner):
   - **N1** CHANGELOG 3.2.0 permission line is conditional on the certificate; release step 1 says to skip the
     bump for 3.2.0. **N2** one label: the menu item and the Settings button both use `Updates.actionTitle`
     ("Update Available (X)…" / "Check for Updates…"); the Settings line always says "You have BetterScreenshot X.".
+- **Review round 2** (another independent reviewer, 8.0/10; report `docs/sparkle-updates/REVIEW-round2.md`,
+  untracked, renders in `docs/sparkle-updates/review-round2/`). What changed:
+  - **B1 certificate** (owner decision): still open, the release script still refuses `08faa1f9…`. New: option
+    (b) is now tested — `CROSS_CERT=1 scripts/sparkle-e2e-test.sh` (OLD signed with another certificate, NEW
+    with `08faa1f9…`) installs, and a bad EdDSA signature is still refused. `RELEASE_CERT` was **not** changed:
+    choosing (b) costs every user a Screen Recording re-grant, which is the owner's call.
+  - **M1 unseen showings counted** → fixed: a showing counts only after ≥ 5 s visible on the active Space
+    (`occlusionState` + `isOnActiveSpace`) with mouse/keyboard input since it appeared (`Showing`,
+    `cardHidUnanswered`, tested). Also (the optional part) the app waits while anything full-screen is in front
+    (`fullScreenInFront`, tested). Checked on the window server with a scratch probe (the card at 1 % opacity,
+    click-through, ~2 s): `occlusionState` reports `.visible` within 0.5 s of `show` and not after `hide`, the
+    any-input idle time reads without permission, `fullScreenInFront` false with Terminal in front, and showing
+    the card doesn't activate the app. (In a process that doesn't run the AppKit event loop `.visible` never
+    appears; the app does run it.) Extra guard: an unseen showing delays the next one by 10 min (in memory), so
+    a user who never touches the mouse while it's up isn't shown it after every capture.
+  - **L1 no spacing** → fixed: after a counted showing the card comes back only after a capture ≥ 24 h later or
+    after a relaunch (`launchAtLoginPromptLastShownAt`, `mayShowAgain`, tested with a burst of captures).
+  - **L2 result cards never hide** → fixed: "One more step" and "Couldn't turn it on." hide after 25 s too (not
+    under the pointer, not counted).
+  - **L3 a test re-implemented the controller** → fixed: `afterCapture` and `waitStep` are instance methods that
+    record the capture / mark asked themselves; the controller only acts on `.startWaiting` / `.show`. Checked
+    by mutation: dropping `markAsked()` from `afterCapture` makes
+    `alreadyEnabledMarksItAskedSoLaterCapturesSkipTheStatusCall` fail.
+  - **L4 dry run carried a real signature** → fixed: dry-run appcast has `edSignature="DRYRUN-not-signed"` and
+    a `DRYRUN-not-a-release.zip` URL (`sign_update --verify` rejects it).
+  - **L5 `E2E_UI=1` could take the keyboard** → fixed: warning printed first; after its first snapshot the test
+    app hands focus back to the previously frontmost app (checked: `app active 0` a second later, new PASS line).
+  - **L6 no keyboard path — not done, on purpose.** An "Open at Login…" menu item while the question is due
+    would be a second UI for the same one-time question, shown to everyone between their 5th capture and their
+    answer, for a case the Settings → Startup → Launch at login switch already covers fully (reachable from
+    the menu with the keyboard, and it answers the question). The card stays mouse/VoiceOver only, as
+    documented in section 2.
+  - **N1** CHANGELOG: "without taking focus" and "slides away" reworded (and the new rules). **N2** stale
+    comments in `SparkleE2EUI.swift` and `PromptCardController.swift` reworded, `Updates.swift:17` wrapped.
+    **N3** e2e `vmmap` retries; the BAD run now logs the Sparkle path.
+- Verified 2026-10-18 (after round 2):
+  - `scripts/test.sh`: all 7 suites pass (DesignKit 10, CaptureKit 149 incl. 27 prompt tests, OverlayKit 50,
+    EditorKit 155, RecordingKit 92, HistoryKit 41, TourKit 119); `~/Library/Preferences` still has the same 110
+    `LaunchAtLoginPromptTests.*.plist` before and after.
+  - `scripts/build-app.sh debug`: exit 0, no warnings in the touched files (re-touched and rebuilt);
+    `codesign --verify --deep --strict` OK; `nm` finds no `SparkleE2EUI` symbol in the normal build.
+  - `scripts/sparkle-e2e-test.sh`: GOOD PASS + BAD PASS. `CROSS_CERT=1`: all 4 PASS. `E2E_UI=1`: 7/7 PASS.
+    Afterwards no test process, nothing on port 8766, no `sparkletest` defaults or caches; the real
+    `/Applications/BetterScreenshot.app` (pid 4076) kept running.
+  - `scripts/package-release.sh`: `ALLOW_DIRTY=1 ALLOW_NOT_MAIN=1` → refused in 1.1 s before building;
+    all three overrides → universal (`x86_64 arm64`), signature OK, DRYRUN outputs only, unusable signature
+    and URL in the appcast, no `gh` command; outputs deleted afterwards.
 - Verified 2026-10-18 (after round 1):
   - `scripts/test.sh`: all 7 suites pass (DesignKit 10, CaptureKit 143 incl. 20 prompt tests, OverlayKit 50,
     EditorKit 155, RecordingKit 92, HistoryKit 41, TourKit 119); `~/Library/Preferences` has the same 110
@@ -442,13 +552,19 @@ exists, on a Mac running the previous release (owner):
   for hotkeys and the native-shortcut settings); the blur/tint on screen (off-screen renders don't draw the
   blur, so contrast relies on the earlier 4.86:1 measurement); a real Login Items `.requiresApproval` path;
   Sparkle's behind-other-windows branch (it can't be forced from a freshly launched copy) and the real
-  3.2.0 → 3.2.1 update (checklist above); a cross-certificate update (option b); the x86_64 slice on an Intel Mac.
+  3.2.0 → 3.2.1 update (checklist above); the Screen Recording re-prompt a cross-certificate update would cause
+  (option b; the Sparkle side is tested); whether AppKit keeps the card off a full-screen Space (the app waits
+  while anything full-screen is in front, and an invisible showing never counts, so either answer is safe);
+  `fullScreenInFront` with a real full-screen app in front (the rule is unit-tested on window lists); the
+  x86_64 slice on an Intel Mac.
 
 **NEXT STEPS (in this order):**
 
 1. **Owner: decide the signing certificate** (⚠ section above). Until then no release can be cut without
-   costing every user their Screen Recording permission. If you choose (b), also rewrite the CHANGELOG 3.2.0
-   permission line to say 3.2.0 asks for Screen Recording once more.
+   costing every user their Screen Recording permission. If you choose (b): set `RELEASE_CERT` in
+   `scripts/package-release.sh` to `08faa1f906d59fae5a9ccb84d00979030fb26b2b`, rewrite the CHANGELOG 3.2.0
+   permission line and the release notes to say 3.2.0 asks for Screen Recording once more, and re-run
+   `CROSS_CERT=1 scripts/sparkle-e2e-test.sh` right before releasing (it passed 2026-10-18).
 2. Owner: OK deleting the plist files earlier test runs leaked into `~/Library/Preferences` (110 from this
    repo's tests, 119 from MacStats' `LaunchAtLoginPromptSessionTests`). They are throwaway test domains, but
    they are files this session didn't create, so they're left for you. Count them with

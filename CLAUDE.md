@@ -203,7 +203,8 @@ EdDSA-signs, writes `appcast.xml` and prints the `gh release create … --latest
 override = a dry run into `dist/dry-run/*-DRYRUN.*` with no command). The silent first-launch launch-at-login
 enable is gone: after the 5th completed screenshot a non-activating card asks (CaptureKit
 `LaunchAtLoginPrompt`, `App/MenuBar/LaunchAtLoginPromptController.swift`); answered once ever, an ignored card
-hides after 25 s and returns after a later capture, ≤ 3 showings; users of the old auto-enable
+hides after 25 s; only a showing the user could see counts (visible + user active), it returns after a capture
+≥ 24 h later or after a relaunch, ≤ 3 counted showings; users of the old auto-enable
 (`didRegisterLaunchAtLogin`) are never asked. Builds pin the 26.5 SDK via `scripts/sdk-env.sh`.
 
 **Performance pass (planned 2026-10-01, not started):** `docs/PERF-PLAN-2026-10-01.md`. Lower RAM/CPU

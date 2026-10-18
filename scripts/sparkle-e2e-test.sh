@@ -4,6 +4,7 @@
 #   scripts/sparkle-e2e-test.sh [work-dir]          (default: a new temp dir; deleted at the end
 #                                                    unless KEEP=1)
 #   E2E_UI=1 scripts/sparkle-e2e-test.sh [work-dir] (Sparkle's real windows instead; see below)
+#   CROSS_CERT=1 scripts/sparkle-e2e-test.sh [work-dir]  (OLD signed with another certificate)
 #
 # 1. builds BetterScreenshot once (debug, this Mac's architecture) with -DSPARKLE_E2E_TEST: logs
 #    Sparkle's steps, installs right away instead of on quit, and starts nothing but the updater
@@ -16,6 +17,11 @@
 #    checks the installed bundle is build 101 and passes codesign --verify --deep --strict
 # 4. BAD: same with an appcast whose signature doesn't match the zip; checks it is refused and
 #    the installed copy stays build 100
+#
+# CROSS_CERT=1 signs OLD with a different certificate, OTHER_IDENTITY (default "JVoice Self-Signed",
+# any code-signing identity on the keychain search list), and NEW with the real one, as if a
+# release changed certificate (README "Where the keys live", option b): GOOD must still install
+# (Sparkle accepts it on the EdDSA signature alone) and BAD must still be refused.
 #
 # E2E_UI=1 replaces 3-4 with the path real users take (OLD without SUAutomaticallyUpdate, run with
 # SPARKLE_E2E_UI=1, App/Lifecycle/SparkleE2EUI.swift): the scheduled check's window must open —
@@ -33,6 +39,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SPARKLE_BIN="${SPARKLE_BIN:-$HOME/Developer/Sparkle/2.10.0/bin}"
 TEST_ID="com.betterscreenshot.mac.sparkletest"
 PORT="${PORT:-8766}"
+OTHER_IDENTITY="${OTHER_IDENTITY:-JVoice Self-Signed}"
+[ "${CROSS_CERT:-0}" = 1 ] || OTHER_IDENTITY=""
 WORK="${1:-$(mktemp -d)}"
 mkdir -p "$WORK"
 WORK="$(cd "$WORK" && pwd -P)"
@@ -80,7 +88,7 @@ BETTERSCREENSHOT_APP="$WORK/stage/BetterScreenshot.app" BETTERSCREENSHOT_REQUIRE
     BETTERSCREENSHOT_SWIFT_FLAGS="--scratch-path $WORK/build -Xswiftc -DSPARKLE_E2E_TEST" \
     "$ROOT/scripts/build-app.sh" debug >"$WORK/build.log" 2>&1 || { tail -30 "$WORK/build.log"; exit 1; }
 
-# make_variant <build> <version> <dest> [automatic-update: 1 (default) or 0]
+# make_variant <build> <version> <dest> [automatic-update: 1 (default) or 0] [other identity]
 make_variant() {
     local dest="$3/BetterScreenshot.app" plist="$3/BetterScreenshot.app/Contents/Info.plist"
     mkdir -p "$3"
@@ -94,8 +102,12 @@ make_variant() {
         -c "Add :NSAppTransportSecurity:NSAllowsLocalNetworking bool true" \
         "$plist"
     if [ "${4:-1}" = 1 ]; then /usr/libexec/PlistBuddy -c "Add :SUAutomaticallyUpdate bool true" "$plist"; fi
-    BETTERSCREENSHOT_REQUIRE_IDENTITY=1 "$ROOT/scripts/sign-app.sh" "$dest" >/dev/null 2>&1
+    BETTERSCREENSHOT_REQUIRE_IDENTITY=1 BETTERSCREENSHOT_OTHER_IDENTITY="${5:-}" \
+        "$ROOT/scripts/sign-app.sh" "$dest" >"$3.sign.log" 2>&1 || { cat "$3.sign.log"; exit 1; }
 }
+
+# The certificate a bundle's designated requirement names (what Screen Recording is keyed on).
+cert_of() { codesign -d -r- "$1" 2>&1 | sed -n 's/.*certificate leaf = H"\([0-9a-f]*\)".*/\1/p'; }
 
 # write_appcast <zip> <edSignature attrs>
 write_appcast() {
@@ -124,15 +136,25 @@ installed_build() { /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$INSTAL
 run_old() {
     local ui="${3:-0}" auto=1
     [ "$ui" = 1 ] && auto=0
-    rm -rf "$WORK/install" && make_variant 100 90.0 "$WORK/install" "$auto"
+    rm -rf "$WORK/install" && make_variant 100 90.0 "$WORK/install" "$auto" "$OTHER_IDENTITY"
+    OLD_CERT="$(cert_of "$INSTALL")"
+    echo "OLD certificate $OLD_CERT, NEW certificate $NEW_CERT"
     reset_test_state
     # Make the daily check due right away (no "may we check?" dialog: SUEnableAutomaticChecks).
     defaults write "$TEST_ID" SULastCheckTime -date "2000-01-01 00:00:00 +0000"
     echo "launching OLD: build $(installed_build), $(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INSTALL/Contents/Info.plist"), UI mode $ui"
-    SPARKLE_E2E_UI="$ui" SPARKLE_E2E_SNAP_DIR="$WORK/ui" "$INSTALL/Contents/MacOS/BetterScreenshot" >"$1" 2>&1 &
-    local pid=$! waited=0
-    sleep 0.7
-    echo "OLD pid $pid loads Sparkle from: $(vmmap "$pid" 2>/dev/null | grep -o '/[^ ]*Sparkle.framework/Versions/B/Sparkle' | sort -u || true)"
+    # UI mode hands focus back to whatever is in front now (lsappinfo needs no permission).
+    local front_id
+    front_id="$(lsappinfo info -only bundleid "$(lsappinfo front)" 2>/dev/null | sed -n 's/.*="\(.*\)"/\1/p' || true)"
+    SPARKLE_E2E_UI="$ui" SPARKLE_E2E_SNAP_DIR="$WORK/ui" SPARKLE_E2E_RETURN_TO="$front_id" \
+        "$INSTALL/Contents/MacOS/BetterScreenshot" >"$1" 2>&1 &
+    local pid=$! waited=0 loads=""
+    for delay in 0.7 1 1; do   # vmmap can race the launch
+        sleep "$delay"
+        loads="$(vmmap "$pid" 2>/dev/null | grep -o '/[^ ]*Sparkle.framework/Versions/B/Sparkle' | sort -u || true)"
+        [ -n "$loads" ] && break
+    done
+    echo "OLD pid $pid loads Sparkle from: ${loads:-(not seen: the process had already exited or relaunched)}"
     while [ "$waited" -lt "$2" ] && [ "$(installed_build)" = 100 ] && ! grep -q 'SPARKLE-E2E aborted' "$1"; do
         sleep 1; waited=$((waited + 1))
     done
@@ -143,6 +165,8 @@ run_old() {
 
 mkdir -p "$FEED"
 make_variant 101 90.1 "$WORK/new"
+NEW_CERT="$(cert_of "$WORK/new/BetterScreenshot.app")"
+OLD_CERT=""
 ditto -c -k --keepParent "$WORK/new/BetterScreenshot.app" "$FEED/BetterScreenshot-good.zip"
 GOOD_ATTRS="$("$SPARKLE_BIN/sign_update" "$FEED/BetterScreenshot-good.zip")"
 
@@ -152,6 +176,9 @@ sleep 1
 
 if [ "${E2E_UI:-0}" = 1 ]; then
     say "UI: signed update 100 -> 101 through Sparkle's own windows"
+    echo "NOTE: right after launch the (transparent) test app can take keyboard focus for a moment;"
+    echo "      it gives it back after its first snapshot. Don't type for about 30 s."
+    sleep 3
     write_appcast "$FEED/BetterScreenshot-good.zip" "$GOOD_ATTRS"
     run_old "$WORK/ui.log" 120 1
     UI_RESULT="$(installed_build)"
@@ -175,6 +202,7 @@ if [ "${E2E_UI:-0}" = 1 ]; then
         check "behind: the menu reads Update Available (90.1)…" "SPARKLE-E2E UI menu title: Update Available (90.1)…"
     fi
     check "the menu action leaves nothing pending" "SPARKLE-E2E UI after the menu action: pending none"
+    check "the test app doesn't keep the keyboard (not active a second later)" "SPARKLE-E2E UI focus now: app active 0"
     check "Install and Relaunch was offered and clicked" "SPARKLE-E2E UI clicking Install and Relaunch"
     if [ "$UI_RESULT" = 101 ]; then echo "installed and relaunched as build 101: PASS"; else echo "installed copy is build $UI_RESULT: FAIL"; PASS=0; fi
     ls "$WORK/ui"/*.png 2>/dev/null || echo "(no snapshots)"
@@ -186,6 +214,7 @@ say "GOOD: signed update 100 -> 101"
 write_appcast "$FEED/BetterScreenshot-good.zip" "$GOOD_ATTRS"
 run_old "$WORK/good.log" 90
 GOOD_RESULT="$(installed_build)"
+GOOD_INSTALLED_CERT="$(cert_of "$INSTALL")"
 if [ "$GOOD_RESULT" = 101 ]; then
     codesign --verify --deep --strict "$INSTALL" && echo "installed copy: codesign --verify --deep --strict OK"
     codesign -dvv "$INSTALL" 2>&1 | grep -E '^(Identifier|Authority)='
@@ -208,6 +237,17 @@ cat "$WORK/server.log"
 
 say "RESULT"
 PASS=1
+if [ -n "$OTHER_IDENTITY" ]; then
+    if [ -n "$OLD_CERT" ] && [ "$OLD_CERT" != "$NEW_CERT" ]; then
+        echo "cross-certificate: OLD $OLD_CERT ('$OTHER_IDENTITY') != NEW $NEW_CERT: PASS"
+    else
+        echo "cross-certificate: OLD '$OLD_CERT' is not a different certificate from NEW $NEW_CERT: FAIL"; PASS=0
+    fi
+    if [ "$GOOD_RESULT" = 101 ]; then
+        if [ "$GOOD_INSTALLED_CERT" = "$NEW_CERT" ]; then echo "installed copy now carries NEW's certificate: PASS"
+        else echo "installed copy's certificate is '$GOOD_INSTALLED_CERT', not NEW's: FAIL"; PASS=0; fi
+    fi
+fi
 if [ "$GOOD_RESULT" = 101 ]; then echo "GOOD update installed (build 101): PASS"; else echo "GOOD update NOT installed (build $GOOD_RESULT): FAIL"; PASS=0; fi
 if [ "$BAD_RESULT" = 100 ]; then echo "BAD signature refused (still build 100): PASS"; else echo "BAD signature installed (build $BAD_RESULT): FAIL"; PASS=0; fi
 [ "$PASS" = 1 ]

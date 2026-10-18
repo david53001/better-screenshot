@@ -5,15 +5,17 @@ All notable changes to BetterScreenshot. Versions are git tags; releases are pub
 ## v3.2.0 — unreleased (branch `feat/sparkle-updates`) · Automatic updates
 
 - **Updates install themselves.** BetterScreenshot checks GitHub once a day (Sparkle 2.10.0); a new version
-  opens a window you can install from or put off, without taking focus. **Check for Updates…** in the menu
+  opens a window you can install from or put off (usually behind your windows; in front right after launch or
+  when the Mac has been idle). **Check for Updates…** in the menu
   bar (it reads "Update Available (X)…" while one waits) and Settings → Updates (switch + button). Updates
   are verified with an EdDSA signature; your settings stay. Your Screen Recording permission stays too, as long
   as the release is signed with the same certificate as 3.1.0 (owner decision pending; if not, these release
   notes must say that 3.2.0 asks for Screen Recording once more — docs/sparkle-updates/README.md).
 - **Launch at login is your choice.** It's no longer switched on silently at first launch. After your 5th
-  screenshot a small card in the corner asks: **No Thanks** / **Open at Login**. Ignored, it slides away after
-  25 seconds and asks again after a later screenshot, three times at most. People who had it turned on by an
-  earlier version are never asked.
+  screenshot a small card in the corner asks: **No Thanks** / **Open at Login** (never while something
+  full-screen is in front). Ignored, it goes away after 25 seconds and asks again after a screenshot a day
+  later (or after you reopen the app), three times at most — and only times you could actually see it count.
+  People who had it turned on by an earlier version are never asked.
 - Internals: `scripts/package-release.sh` does a whole release (build, sign, zip, EdDSA, appcast, prints
   the `gh` command); universal builds fixed for Swift 6.4's build system; builds pin the 26.5 SDK.
   Details: `docs/sparkle-updates/README.md`.

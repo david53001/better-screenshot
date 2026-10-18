@@ -14,9 +14,10 @@ import Sparkle
 /// found update's window opens *behind* the user's windows instead of taking focus — except when
 /// Sparkle decides on "immediate focus" (its documented default: the app was launched recently,
 /// e.g. at login, or the Mac had been idle), when it opens in front, as in most Mac apps (verified
-/// by `E2E_UI=1 scripts/sparkle-e2e-test.sh`). So that a window behind others isn't missed, the menu's "Check for Updates…" item and the Settings → Updates button both read
-/// "Update Available (X)…" (`actionTitle`) until the user looks at it; either one brings Sparkle's
-/// window forward. (No notification: the app never asks for that permission.)
+/// by `E2E_UI=1 scripts/sparkle-e2e-test.sh`). So that a window behind others isn't missed, the
+/// menu's "Check for Updates…" item and the Settings → Updates button both read "Update Available
+/// (X)…" (`actionTitle`) until the user looks at it; either one brings Sparkle's window forward.
+/// (No notification: the app never asks for that permission.)
 @MainActor
 final class Updates: NSObject, ObservableObject {
     static let shared = Updates()

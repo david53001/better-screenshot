@@ -29,7 +29,9 @@
 #
 # With any ALLOW_* override set it is a DRY RUN: everything goes to dist/dry-run/ under
 # *-DRYRUN names (BetterScreenshot-DRYRUN.app.zip, appcast-DRYRUN.xml, release-notes-DRYRUN.md),
-# it prints "DRY RUN - not publishable" and no gh command. Never upload those files.
+# it prints "DRY RUN - not publishable" and no gh command. Never upload those files (their
+# appcast carries edSignature="DRYRUN-not-signed" and a DRYRUN-not-a-release.zip URL, so Sparkle
+# would refuse it anyway).
 #
 # Windows releases (tags windows-v*) are made separately and MUST use --latest=false, or the
 # Mac feed and install.sh would point at a release without the Mac zip / appcast.
@@ -142,6 +144,13 @@ ditto -c -k --keepParent "$APP" "$ZIP"
 # EdDSA signature + length for the appcast enclosure (key read from the Keychain, never printed).
 SIGNATURE_ATTRS="$("$SPARKLE_BIN/sign_update" "$ZIP")"
 "$SPARKLE_BIN/sign_update" --verify "$ZIP" "$(sed -n 's/.*edSignature="\([^"]*\)".*/\1/p' <<<"$SIGNATURE_ATTRS")" >/dev/null
+ENCLOSURE_URL="https://github.com/$REPO/releases/download/$TAG/BetterScreenshot.app.zip"
+if [ "$DRY_RUN" = 1 ]; then
+    # Signing was checked just above; the dry-run feed gets neither that signature nor the real
+    # download URL, so even uploaded (renamed or not), it can't install anything on any Mac.
+    SIGNATURE_ATTRS="sparkle:edSignature=\"DRYRUN-not-signed\" length=\"$(stat -f %z "$ZIP")\""
+    ENCLOSURE_URL="https://github.com/$REPO/releases/download/$TAG/DRYRUN-not-a-release.zip"
+fi
 
 if [ -n "$NOTES_FILE" ]; then
     cp "$NOTES_FILE" "$NOTES_OUT"
@@ -164,7 +173,7 @@ cat > "$APPCAST" <<XML
       <description sparkle:format="markdown"><![CDATA[
 $(sed 's/]]>/]]]]><![CDATA[>/g' "$NOTES_OUT")
 ]]></description>
-      <enclosure url="https://github.com/$REPO/releases/download/$TAG/BetterScreenshot.app.zip"
+      <enclosure url="$ENCLOSURE_URL"
                  type="application/octet-stream" $SIGNATURE_ATTRS />
     </item>
   </channel>

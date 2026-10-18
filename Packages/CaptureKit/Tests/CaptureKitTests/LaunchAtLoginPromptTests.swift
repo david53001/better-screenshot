@@ -8,15 +8,18 @@ private final class MemoryStore: LaunchAtLoginPromptStorage {
     var values: [String: Any] = [:]
     func integer(forKey key: String) -> Int { values[key] as? Int ?? 0 }
     func bool(forKey key: String) -> Bool { values[key] as? Bool ?? false }
+    func double(forKey key: String) -> Double { values[key] as? Double ?? 0 }
     func set(_ value: Int, forKey key: String) { values[key] = value }
     func set(_ value: Bool, forKey key: String) { values[key] = value }
+    func set(_ value: Double, forKey key: String) { values[key] = value }
 }
 
 private typealias Prompt = LaunchAtLoginPrompt
 
 /// A moment that is calm in every respect; each test spoils one field.
 private let calm = Prompt.Moment(secondsSinceCapture: 10, secondsSinceKeyPress: 10, mouseButtonDown: false,
-                                 captureOrRecordingActive: false, appIsActive: false, menuIsOpen: false)
+                                 captureOrRecordingActive: false, appIsActive: false, menuIsOpen: false,
+                                 fullScreenInFront: false)
 
 /// A prompt that is due (5 uses recorded).
 private func duePrompt(_ store: MemoryStore = MemoryStore()) -> Prompt {
@@ -24,6 +27,21 @@ private func duePrompt(_ store: MemoryStore = MemoryStore()) -> Prompt {
     for _ in 1...5 { prompt.recordUse() }
     return prompt
 }
+
+/// A showing followed for `seconds` one-second ticks.
+private func showing(seconds: Int, visible: (Int) -> Bool = { _ in true },
+                     secondsSinceInput: (Int) -> TimeInterval) -> Prompt.Showing {
+    var s = Prompt.Showing()
+    for second in 1...seconds {
+        s.tick(seconds: 1, cardVisible: visible(second), secondsSinceInput: secondsSinceInput(second))
+    }
+    return s
+}
+
+/// A showing the user saw: the mouse moved a moment ago on every tick, card visible throughout.
+private let seenShowing = showing(seconds: 25, secondsSinceInput: { _ in 0.3 })
+
+private let t0 = Date(timeIntervalSince1970: 2_000_000_000)
 
 let launchAtLoginPromptTests: [TestCase] = [
     // MARK: The decision
@@ -71,10 +89,11 @@ let launchAtLoginPromptTests: [TestCase] = [
         let store = MemoryStore()
         let prompt = Prompt(storage: store)
         prompt.recordUse()
-        prompt.recordUnansweredShowing()
+        prompt.cardHidUnanswered(seenShowing, now: t0)
         prompt.markAsked()
         t.equal(store.values["launchAtLoginPromptUses"] as? Int, 1)
         t.equal(store.values["launchAtLoginPromptUnansweredShowings"] as? Int, 1)
+        t.equal(store.values["launchAtLoginPromptLastShownAt"] as? Double, t0.timeIntervalSince1970)
         t.equal(store.values["launchAtLoginPromptAsked"] as? Bool, true)
         t.equal(Prompt.Key.legacyAutoEnabled, "didRegisterLaunchAtLogin")
     },
@@ -125,6 +144,31 @@ let launchAtLoginPromptTests: [TestCase] = [
         t.isFalse(Prompt.isCalmMoment(m), "while working in our editor or Settings")
         m = calm; m.menuIsOpen = true
         t.isFalse(Prompt.isCalmMoment(m), "while the menu-bar menu is open")
+        m = calm; m.fullScreenInFront = true
+        t.isFalse(Prompt.isCalmMoment(m), "while a full-screen app, presentation or game is in front")
+    },
+    TestCase("fullScreenInFrontMeansTheFrontmostAppCoversAWholeScreen") { t in
+        typealias W = Prompt.WindowInfo
+        // Primary 1512×982 at the origin; a second 1920×1080 screen above it, starting at x = -200.
+        let screens = [CGRect(x: 0, y: 0, width: 1512, height: 982), CGRect(x: -200, y: 982, width: 1920, height: 1080)]
+        let front: Int32 = 42
+        let full = W(ownerPID: front, layer: 0, bounds: CGRect(x: 0, y: 0, width: 1512, height: 982))
+        t.isTrue(Prompt.fullScreenInFront(frontmostPID: front, windows: [full], screenFrames: screens))
+        // The second screen's frame in window coordinates: top-left origin, y grows downwards.
+        let fullOnSecond = W(ownerPID: front, layer: 0, bounds: CGRect(x: -200, y: -1080, width: 1920, height: 1080))
+        t.isTrue(Prompt.fullScreenInFront(frontmostPID: front, windows: [fullOnSecond], screenFrames: screens))
+        // A presentation or game above the normal layer counts too.
+        t.isTrue(Prompt.fullScreenInFront(frontmostPID: front, windows: [W(ownerPID: front, layer: 25, bounds: full.bounds)],
+                                          screenFrames: screens))
+        // A zoomed window stops at the menu bar.
+        let zoomed = W(ownerPID: front, layer: 0, bounds: CGRect(x: 0, y: 33, width: 1512, height: 949))
+        t.isFalse(Prompt.fullScreenInFront(frontmostPID: front, windows: [zoomed], screenFrames: screens))
+        // The desktop (negative layer) and another app's full-screen window don't count.
+        t.isFalse(Prompt.fullScreenInFront(frontmostPID: front, windows: [W(ownerPID: front, layer: -2147483603, bounds: full.bounds)],
+                                           screenFrames: screens))
+        t.isFalse(Prompt.fullScreenInFront(frontmostPID: 7, windows: [full], screenFrames: screens))
+        t.isFalse(Prompt.fullScreenInFront(frontmostPID: nil, windows: [full], screenFrames: screens))
+        t.isFalse(Prompt.fullScreenInFront(frontmostPID: front, windows: [full], screenFrames: []))
     },
     TestCase("calmMomentThresholdsAreInclusive") { t in
         var m = calm
@@ -133,47 +177,57 @@ let launchAtLoginPromptTests: [TestCase] = [
         t.isTrue(Prompt.isCalmMoment(m))
     },
 
-    // MARK: The flow
+    // MARK: The flow (each step applies its own side effects; the controller only acts on the result)
 
-    TestCase("afterCaptureStartsWaitingOnlyWhenDueAndHidden") { t in
+    TestCase("afterCaptureRecordsTheUseAndStartsWaitingOnlyWhenDueAndHidden") { t in
+        let prompt = Prompt(storage: MemoryStore())
         var statusReads = 0
         let off = { () -> Bool in statusReads += 1; return false }
-        t.equal(Prompt.afterCapture(couldAsk: false, cardVisible: false, isEnabled: off), .nothing)
-        t.equal(Prompt.afterCapture(couldAsk: true, cardVisible: true, isEnabled: off), .nothing)
+        for i in 1...4 {
+            t.equal(prompt.afterCapture(cardVisible: false, shownThisLaunch: false, isEnabled: off), .nothing, "capture \(i)")
+        }
+        t.equal(prompt.afterCapture(cardVisible: true, shownThisLaunch: false, isEnabled: off), .nothing, "card already up")
+        t.equal(prompt.uses, 5, "every capture was recorded by the step itself")
         t.equal(statusReads, 0, "no XPC status call unless it could be due and the card is hidden")
-        t.equal(Prompt.afterCapture(couldAsk: true, cardVisible: false, isEnabled: off), .startWaiting)
-        t.equal(Prompt.afterCapture(couldAsk: true, cardVisible: false, isEnabled: { true }), .alreadyEnabled)
+        t.equal(prompt.afterCapture(cardVisible: false, shownThisLaunch: false, isEnabled: off), .startWaiting)
+        t.equal(statusReads, 1)
+        t.isFalse(prompt.asked)
     },
     TestCase("alreadyEnabledMarksItAskedSoLaterCapturesSkipTheStatusCall") { t in
-        // What the controller does with `.alreadyEnabled` (review L3).
         let prompt = duePrompt()
-        if Prompt.afterCapture(couldAsk: prompt.couldAsk, cardVisible: false, isEnabled: { true }) == .alreadyEnabled {
-            prompt.markAsked()
-        }
+        t.equal(prompt.afterCapture(cardVisible: false, shownThisLaunch: false, isEnabled: { true }), .alreadyEnabled)
+        t.isTrue(prompt.asked, "afterCapture itself marked it asked")
         var statusReads = 0
-        t.equal(Prompt.afterCapture(couldAsk: prompt.couldAsk, cardVisible: false,
+        t.equal(prompt.afterCapture(cardVisible: false, shownThisLaunch: false,
                                     isEnabled: { statusReads += 1; return true }), .nothing)
         t.equal(statusReads, 0)
     },
     TestCase("waitStepWaitsForCalmThenShows") { t in
+        let prompt = duePrompt()
         var m = calm; m.secondsSinceKeyPress = 0
         var statusReads = 0
-        t.equal(Prompt.waitStep(m, couldAsk: true, isEnabled: { statusReads += 1; return false }), .keepWaiting)
+        t.equal(prompt.waitStep(m, isEnabled: { statusReads += 1; return false }), .keepWaiting)
         t.equal(statusReads, 0, "the status is only read once the moment is calm")
-        t.equal(Prompt.waitStep(calm, couldAsk: true, isEnabled: { false }), .show)
+        t.equal(prompt.waitStep(calm, isEnabled: { false }), .show)
+        t.isFalse(prompt.asked, "showing isn't answering")
     },
     TestCase("waitStepGivesUpAfterTwoMinutesEvenIfCalm") { t in
+        let prompt = duePrompt()
         var m = calm
         m.secondsSinceCapture = Prompt.giveUpSeconds - 1
-        t.equal(Prompt.waitStep(m, couldAsk: true, isEnabled: { false }), .show)
+        t.equal(prompt.waitStep(m, isEnabled: { false }), .show)
         m.secondsSinceCapture = Prompt.giveUpSeconds
-        t.equal(Prompt.waitStep(m, couldAsk: true, isEnabled: { false }), .giveUp)
+        t.equal(prompt.waitStep(m, isEnabled: { false }), .giveUp)
         m.secondsSinceKeyPress = 0
-        t.equal(Prompt.waitStep(m, couldAsk: true, isEnabled: { false }), .giveUp)
+        t.equal(prompt.waitStep(m, isEnabled: { false }), .giveUp)
     },
     TestCase("waitStepRechecksBeforeShowing") { t in
-        t.equal(Prompt.waitStep(calm, couldAsk: false, isEnabled: { false }), .noLongerDue, "answered in Settings meanwhile")
-        t.equal(Prompt.waitStep(calm, couldAsk: true, isEnabled: { true }), .alreadyEnabled, "turned on in System Settings meanwhile")
+        let answered = duePrompt()
+        answered.markAsked()   // the Settings switch meanwhile
+        t.equal(answered.waitStep(calm, isEnabled: { false }), .noLongerDue)
+        let turnedOn = duePrompt()
+        t.equal(turnedOn.waitStep(calm, isEnabled: { true }), .alreadyEnabled, "turned on in System Settings meanwhile")
+        t.isTrue(turnedOn.asked, "waitStep itself marked it asked")
     },
 
     // MARK: An unanswered card
@@ -184,17 +238,87 @@ let launchAtLoginPromptTests: [TestCase] = [
         t.isTrue(Prompt.shouldHideUnanswered(secondsShown: Prompt.unansweredHideSeconds, pointerOnCard: false))
         t.isFalse(Prompt.shouldHideUnanswered(secondsShown: 600, pointerOnCard: true), "the user is about to click")
     },
-    TestCase("anIgnoredCardStaysDueUntilItsThirdShowing") { t in
+    TestCase("aShowingCountsOnlyIfTheUserCouldHaveSeenIt") { t in
+        t.isTrue(seenShowing.counts)
+        t.equal(seenShowing.secondsShown, 25)
+        // On another (full-screen) Space, covered, or the screen locked / asleep: never visible.
+        t.isFalse(showing(seconds: 25, visible: { _ in false }, secondsSinceInput: { _ in 0.3 }).counts)
+        // Walked away right after the capture: no input since the card appeared.
+        t.isFalse(showing(seconds: 25, secondsSinceInput: { 60 + TimeInterval($0) }).counts)
+        // Came back at second 22: only 4 s seen.
+        t.isFalse(showing(seconds: 25, secondsSinceInput: { $0 >= 22 ? 0.5 : 60 + TimeInterval($0) }).counts)
+        // Came back at second 20: 6 s seen.
+        t.isTrue(showing(seconds: 25, secondsSinceInput: { $0 >= 20 ? 0.5 : 60 + TimeInterval($0) }).counts)
+        // Moved the mouse once at second 3, then only read it: seen from then on.
+        t.isTrue(showing(seconds: 25, secondsSinceInput: { $0 >= 3 ? TimeInterval($0) - 2.5 : 60 + TimeInterval($0) }).counts)
+        // Visible only for 3 s (switched to a full-screen Space after that).
+        t.isFalse(showing(seconds: 25, visible: { $0 <= 3 }, secondsSinceInput: { _ in 0.3 }).counts)
+    },
+    TestCase("aLateTickAfterSleepAddsAtMostTwoSeenSeconds") { t in
+        var s = Prompt.Showing()
+        s.tick(seconds: 3600, cardVisible: true, secondsSinceInput: 0.2)   // woke up with a key press
+        t.equal(s.secondsShown, 3600, "wall-clock time, so it hides now")
+        t.equal(s.secondsSeen, Prompt.Showing.maxSecondsPerTick)
+        t.isFalse(s.counts)
+    },
+    TestCase("anUnseenShowingDoesNotCountAndOnlyDelaysTheNextOne") { t in
+        let store = MemoryStore()
+        let prompt = duePrompt(store)
+        let unseen = showing(seconds: 25, visible: { _ in false }, secondsSinceInput: { _ in 0.3 })
+        for _ in 1...5 { t.isFalse(prompt.cardHidUnanswered(unseen, now: t0)) }
+        t.equal(prompt.unansweredShowings, 0)
+        t.equal(prompt.secondsSinceLastShowing(now: t0), nil)
+        t.isTrue(prompt.couldAsk)
+        t.equal(prompt.afterCapture(cardVisible: false, shownThisLaunch: false, unseenShowingEndedAt: t0,
+                                    now: t0.addingTimeInterval(60), isEnabled: { false }),
+                .tooSoon, "not on the very next screenshot")
+        t.equal(prompt.afterCapture(cardVisible: false, shownThisLaunch: false, unseenShowingEndedAt: t0,
+                                    now: t0.addingTimeInterval(Prompt.reshowAfterUnseenSeconds), isEnabled: { false }),
+                .startWaiting, "ten minutes later")
+        t.equal(prompt.afterCapture(cardVisible: false, shownThisLaunch: false, now: t0.addingTimeInterval(60),
+                                    isEnabled: { false }),
+                .startWaiting, "after a relaunch (the app only keeps the unseen time in memory)")
+    },
+    TestCase("aSeenShowingComesBackADayLaterOrAfterARelaunch") { t in
+        let store = MemoryStore()
+        let prompt = duePrompt(store)
+        t.isTrue(prompt.cardHidUnanswered(seenShowing, now: t0))
+        t.equal(prompt.unansweredShowings, 1)
+        var statusReads = 0
+        let off = { () -> Bool in statusReads += 1; return false }
+        // A burst of screenshots in the same launch: not again within the day.
+        let burst: [TimeInterval] = [1, 3, 60, 23 * 60]
+        for minutes in burst {
+            t.equal(prompt.afterCapture(cardVisible: false, shownThisLaunch: true,
+                                        now: t0.addingTimeInterval(minutes * 60), isEnabled: off),
+                    .tooSoon, "\(minutes) min later")
+        }
+        t.equal(statusReads, 0, "no status call while spaced out")
+        t.equal(prompt.afterCapture(cardVisible: false, shownThisLaunch: true, now: t0.addingTimeInterval(Prompt.reshowAfterSeconds),
+                                    isEnabled: off), .startWaiting, "a day later")
+        t.equal(Prompt(storage: store).afterCapture(cardVisible: false, shownThisLaunch: false, now: t0.addingTimeInterval(60), isEnabled: off),
+                .startWaiting, "after a relaunch")
+        t.isTrue(Prompt.mayShowAgain(secondsSinceLastShowing: nil, shownThisLaunch: true), "never shown yet")
+    },
+    TestCase("anIgnoredCardStaysDueUntilItsThirdSeenShowing") { t in
         let store = MemoryStore()
         let prompt = duePrompt(store)
         t.equal(Prompt.maxShowings, 3)
-        t.isFalse(prompt.recordUnansweredShowing())
+        t.isTrue(prompt.cardHidUnanswered(seenShowing, now: t0))
         t.isTrue(prompt.couldAsk, "comes back after a later capture")
-        t.isFalse(prompt.recordUnansweredShowing())
+        t.isTrue(prompt.cardHidUnanswered(seenShowing, now: t0.addingTimeInterval(Prompt.reshowAfterSeconds)))
         t.isTrue(prompt.couldAsk)
-        t.isTrue(prompt.recordUnansweredShowing(), "the third was the last")
+        t.isTrue(prompt.cardHidUnanswered(seenShowing, now: t0.addingTimeInterval(2 * Prompt.reshowAfterSeconds)))
+        t.equal(prompt.unansweredShowings, 3, "the third was the last")
         t.isFalse(prompt.couldAsk)
         t.isTrue(prompt.asked)
         t.isFalse(Prompt(storage: store).couldAsk, "still answered after a relaunch")
+    },
+    TestCase("recordUnansweredShowingCapsAtThree") { t in
+        let prompt = duePrompt()
+        t.isFalse(prompt.recordUnansweredShowing())
+        t.isFalse(prompt.recordUnansweredShowing())
+        t.isTrue(prompt.recordUnansweredShowing())
+        t.isTrue(prompt.asked)
     },
 ]

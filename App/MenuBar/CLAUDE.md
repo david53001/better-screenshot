@@ -28,8 +28,12 @@
   completed screenshot (`CaptureCoordinator.onCaptureCompleted`), at a calm moment, on OverlayKit's
   `PromptCardController` card (top-right; bottom-right when Quick Access uses top-right; the window is made on
   the first showing). Every decision is a pure, tested step in CaptureKit `LaunchAtLoginPrompt`
-  (`afterCapture`, `waitStep`, `shouldHideUnanswered`); this class only carries them out. Unanswered, the card
-  hides after 25 s (not under the pointer) and returns after a later capture, ≤ 3 showings, then counts as "no".
+  (`afterCapture`, `waitStep`, `Showing`, `cardHidUnanswered`, `fullScreenInFront`; each step applies its own
+  side effects); this class only reads system state (occlusion, active Space, input idle time, the window list)
+  and carries them out. Unanswered, the card hides after 25 s (not under the pointer); only a showing the user
+  could have seen counts (visible on the active Space + input since it appeared, ≥ 5 s); a counted one returns
+  after a capture ≥ 24 h later or after a relaunch, ≤ 3, then counts as "no"; an unseen one after ≥ 10 min.
+  The "One more step" / error cards hide after 25 s too. Never while something full-screen is in front.
   Launch at login found already on → marked asked (no status call on later captures). Left out of screenshots (`windowIDs` in `CaptureCoordinator.tourTagWindowIDs`)
   and recordings (registered with `TourTagRecordingGate`). Rules and keys: `docs/sparkle-updates/README.md`.
 

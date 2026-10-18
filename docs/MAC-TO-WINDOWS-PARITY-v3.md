@@ -3455,13 +3455,19 @@ Full macOS write-up: `docs/sparkle-updates/README.md`. What a Windows port would
 - **Launch at login** is never turned on silently any more. Count completed screenshots (area, window, full
   screen, Capture Text that produced an image; not cancelled or failed ones). After the 5th, wait for a calm
   moment — ≥ 3 s since the capture, ≥ 2 s since a key press, no mouse button down, the tray menu closed, no
-  selection / countdown / record strip / recording, none of the app's windows in front; give up after 120 s and
-  retry after the next capture — then show the card. Never if already enabled (found enabled → mark asked),
-  already asked, or the old one-time auto-enable flag (`didRegisterLaunchAtLogin`) is set. A choice in Settings
-  counts as answered. **Unanswered**, the card hides itself after 25 s (not while the pointer is on it) and comes
-  back after a later capture; after the 3rd unanswered showing it counts as "no". It never shows over a
-  full-screen app. Keys: `launchAtLoginPromptUses` (int, stops at 5), `launchAtLoginPromptAsked` (bool),
-  `launchAtLoginPromptUnansweredShowings` (int). Rules + steps: CaptureKit `LaunchAtLoginPrompt` (tested).
+  selection / countdown / record strip / recording, none of the app's windows in front, and the frontmost app
+  has no window covering a whole screen (full-screen app, presentation, game); give up after 120 s and retry
+  after the next capture — then show the card. Never if already enabled (found enabled → mark asked), already
+  asked, or the old one-time auto-enable flag (`didRegisterLaunchAtLogin`) is set. A choice in Settings counts as
+  answered. **Unanswered**, the card hides itself after 25 s (not while the pointer is on it). That showing
+  **counts** only if the user could have seen it: ≥ 5 s during which the card was visible on the current
+  desktop and the user had used the mouse or keyboard since it appeared (not a locked screen or an empty desk;
+  one tick adds at most 2 s, so a sleep doesn't count). A counted showing comes back after a capture ≥ 24 h
+  later or after a relaunch; after the 3rd counted showing it counts as "no". An uncounted one comes back after
+  a capture ≥ 10 min later (kept in memory only). The "One more step" and "Couldn't turn it on" cards also hide
+  after 25 s (not counted). Keys: `launchAtLoginPromptUses` (int, stops at 5), `launchAtLoginPromptAsked` (bool),
+  `launchAtLoginPromptUnansweredShowings` (int), `launchAtLoginPromptLastShownAt` (double, seconds since 1970).
+  Rules + steps: CaptureKit `LaunchAtLoginPrompt` (tested).
 - **Card**: top-right of the screen under the pointer, 12 px from the work area (bottom-right when Quick Access
   uses the top-right corner); 360 px wide, radius 16, padding 14; the app icon 36 px, then title (13 semibold)
   and line (12 regular; macOS text styles body / callout), all white, on the dark HUD surface held at least at the default opacity; buttons 24 px
