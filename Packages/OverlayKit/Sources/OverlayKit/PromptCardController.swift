@@ -126,7 +126,7 @@ public final class PromptCardController {
 
         let top = NSStackView(views: [icon, textStack])
         top.orientation = .horizontal
-        top.alignment = .top
+        top.alignment = message == nil ? .centerY : .top   // a lone line sits level with the icon
         top.spacing = 12
 
         var rows: [NSView] = [top]

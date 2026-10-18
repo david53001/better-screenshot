@@ -93,7 +93,6 @@ struct SettingsView: View {
             captureCard
             overlayCard
             startupCard
-            updatesCard
         }
         .frame(width: Layout.columnWidth)
     }
@@ -101,11 +100,12 @@ struct SettingsView: View {
     // Recording is split into two cards (what to record | what shows in the video) and
     // the short cards fill in under them, so the three columns end at about the same
     // height instead of leaving a tall black gap beside one long Recording card.
-    // (Startup and Pin to Screen swapped columns when Startup gained "Tours & tips".)
+    // (Startup and Pin to Screen swapped columns when Startup gained "Tours & tips"; Updates joined B.)
     private var columnB: some View {
         VStack(spacing: Design.cardSpacing) {
             recordingCard
             pinCard
+            updatesCard   // column B had the room; it keeps the three columns about level
         }
         .frame(width: Layout.columnWidth)
     }
@@ -288,7 +288,14 @@ struct SettingsView: View {
                           sub: "Look for a new version once a day",
                           isOn: Binding(get: { updates.automaticallyChecks },
                                         set: { updates.automaticallyChecks = $0 }))
-                HStack(spacing: 8) {
+                // Button under the line, like "Reset All Tours": side by side, a 300 pt column
+                // truncated "Check for Updates…".
+                VStack(alignment: .leading, spacing: 6) {
+                    Button(updates.pendingVersion == nil ? "Check for Updates…" : "Show Update…") {
+                        updates.checkForUpdates()
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!updates.canCheckOrShow)
                     // Found, not downloaded yet (Sparkle downloads once the user says Install).
                     Group {
                         if let version = updates.pendingVersion {
@@ -300,12 +307,6 @@ struct SettingsView: View {
                     .font(.caption)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
-                    Spacer(minLength: 8)
-                    Button(updates.pendingVersion == nil ? "Check for Updates…" : "Show Update…") {
-                        updates.checkForUpdates()
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(!updates.canCheckOrShow)
                 }
             }
         }
