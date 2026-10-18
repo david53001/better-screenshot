@@ -20,7 +20,7 @@ A **free, local macOS clone of CleanShot X** (screenshot + screen-recording tool
   (created by `scripts/setup-signing.sh`). Losing or regenerating that keychain changes the hash and
   forces every user to re-grant. Back it up; never release from a machine without it.
   **2026-10-18: the keychain on this Mac was regenerated** (new cert `08faa1f9…`; the old one is in
-  `~/Backups/2026-10-18-pre-sparkle/old-betterscreenshot-signing.keychain-db`, password unknown) —
+  `~/Backups/2026-10-18-pre-sparkle/old-betterscreenshot-signing.keychain-db`, password unknown).
   The owner chose (2026-10-18) to release v3.2.0 with the new certificate: v3.2.0 users re-allow Screen
   Recording once (steps in its release notes). `scripts/package-release.sh` now refuses any certificate but
   `08faa1f9…` (`RELEASE_CERT`); keep this keychain backed up so it never happens again; see
@@ -195,8 +195,8 @@ published with `--latest=false`:** `scripts/install.sh` downloads `releases/late
 so a Windows release marked Latest would break every Mac install. For the same reason the README's Windows manual
 link is versioned (`releases/download/windows-vX.Y.Z/...`), not `latest`; bump it with each Windows release.
 
-**Sparkle auto-updates + one-time "open at login?" prompt** (built 2026-10-18 on `feat/sparkle-updates`, not
-merged or released; same approach as MacStats and JVoice). Everything — release steps, keys, the `--latest`
+**Sparkle auto-updates + one-time "open at login?" prompt** (built 2026-10-18 on `feat/sparkle-updates`,
+merged and released as v3.2.0 the same day; same approach as MacStats and JVoice). Everything — release steps, keys, the `--latest`
 rule, the prompt's rules and UserDefaults keys, the end-to-end test — is in `docs/sparkle-updates/README.md`.
 In short: Sparkle 2.10.0 (SwiftPM, exact) is embedded by `scripts/build-app.sh` and signed inside-out by
 `scripts/sign-app.sh`; feed `releases/latest/download/appcast.xml`; **`CFBundleVersion` is an integer that
