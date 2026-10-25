@@ -180,3 +180,9 @@ present in both menus, Pause/Open at Login… hidden/shown correctly, Record ↔
   icon) and their `TagLayoutTests` — only the old `menuBar.icon` step used them; the Windows port's tray step
   mirrors them.
 - `App/Tours/NoOpTourTagPresenter.swift` was already unused.
+
+## 2026-10-26 — merged + installed
+- Local `main` fast-forwarded to `5fc4aa4` (not pushed, no tag, no release).
+- Installed to `/Applications/BetterScreenshot.app` from `BETTERSCREENSHOT_REQUIRE_IDENTITY=1 scripts/build-app.sh release` (run in worktree `.claude/worktrees/dock-app`): 3.3.0 (build 13), certificate leaf `08faa1f9…`, the same as the installed 3.2.0, so Screen Recording carries over (the app opened Settings, not the permission setup). System Events shows a single menu bar (no status item) and the main menu BetterScreenshot · Capture · Edit · Window · Help.
+- Previous install (3.2.0 build 12) backed up at `~/Backups/2026-10-25-pre-dock-app/BetterScreenshot-3.2.0-build12.app`.
+- NEXT: the owner runs the live checks above (full-screen Spaces first); to ship publicly, date the CHANGELOG, push, and run `scripts/package-release.sh` per `docs/sparkle-updates/README.md`.
