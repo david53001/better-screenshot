@@ -2,11 +2,11 @@
 // Windows-port copy: parity doc §7.4.
 extension TourCatalog {
     /// Started by "Show Me Around" on the Welcome window's last page (`TourCoordinator.answerQuestion`),
-    /// hand-over or replay; hosted by the Welcome window. Step 1's anchor is the menu-bar status item's
-    /// button, which lives in the status bar's own window (`TourCoordinator.extraAnchorWindows`).
+    /// hand-over or replay; hosted by the Welcome window. Step 1 is about the Dock icon (a Dock app since
+    /// 3.3.0; the Dock is another process's window, so it outlines the page's "lives in your Dock" line).
     static let welcome = Tour(id: .welcome, surface: .welcome, trigger: .startedByApp, steps: [
-        TourStep(anchor: "menuBar.icon", kind: .explain, title: "Your menu bar icon",
-                 body: "Everything lives here: captures, recordings, History and Settings."),
+        TourStep(anchor: "welcome.dock", kind: .explain, title: "Your Dock icon",
+                 body: "Click it for Settings. Right-click it for captures, recordings, History and more."),
         // `welcome.shortcuts` outlines only the three capture rows this body names. A non-breaking space
         // (U+00A0) glues each combo to its word, so a line never ends on a bare combo; this wording fits
         // the tag's two lines even with three ⌃⌥⇧⌘F12-long combos (TagFitTests).

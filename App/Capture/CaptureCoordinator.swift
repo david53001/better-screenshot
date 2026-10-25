@@ -126,10 +126,16 @@ final class CaptureCoordinator {
         Task { await run(.fullscreen(displayID: CGMainDisplayID())) }
     }
 
-    func captureFrontWindow() {
+    /// `skippingOwnWindows` (our Dock and main menus): the window the user means is another app's, not
+    /// our Settings / History / editor window that is in front while our main menu is in use.
+    func captureFrontWindow(skippingOwnWindows: Bool = false) {
         rememberFrontmostApp()
         guard ensurePermission() else { return }
-        Task { if let id = await frontmostWindowID() { await run(.window(windowID: id)) } }
+        Task {
+            if let id = await frontmostWindowID(skippingOwnWindows: skippingOwnWindows) {
+                await run(.window(windowID: id))
+            }
+        }
     }
 
     /// Capture Text (OCR + QR): drag a region; the recognized text — or a QR
@@ -361,9 +367,13 @@ final class CaptureCoordinator {
         app.activate()
     }
 
-    private func frontmostWindowID() async -> CGWindowID? {
+    private func frontmostWindowID(skippingOwnWindows: Bool) async -> CGWindowID? {
         let content = try? await SCShareableContent.excludingDesktopWindows(
             false, onScreenWindowsOnly: true)
-        return content?.windows.first(where: { $0.isOnScreen && $0.title?.isEmpty == false })?.windowID
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+        return content?.windows.first(where: {
+            $0.isOnScreen && $0.title?.isEmpty == false
+                && !(skippingOwnWindows && $0.owningApplication?.processID == ownPID)
+        })?.windowID
     }
 }

@@ -27,22 +27,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         #if SPARKLE_E2E_TEST
         // The throwaway build of scripts/sparkle-e2e-test.sh runs next to the user's real copy: it
-        // only starts the updater — no status item, hotkeys, native-shortcut changes, history,
+        // only starts the updater — no menus, hotkeys, native-shortcut changes, history,
         // temp-file sweeps or onboarding window, which would touch the real app's shared state.
         NSApp.setActivationPolicy(.accessory)
         Updates.shared.start()
         #else
+        // At login the app only takes its place in the Dock; any other launch shows a window (below).
+        // Read first: the launch's Apple Event is only current while this method runs.
+        let launchedAsLoginItem = LaunchAtLogin.launchedAsLoginItem
         // Settings → Appearance → Opacity drives every DesignKit surface, live.
         // The Settings tour's demo previews values without saving them (`SettingsStore.opacityPreview`).
         opacityWatch = settings.$settings.map(\.uiOpacity).combineLatest(settings.$opacityPreview)
             .map { saved, preview in preview ?? saved }.removeDuplicates()
             .sink { UIOpacity.shared.value = $0 }
         // Guided tours (v3 spec §14.9): decide once, for good, whether this is a new user — before
-        // anything below writes a preference (status item, launch-at-login flag…) that would look like
+        // anything below writes a preference (window frames, Sparkle's keys…) that would look like
         // earlier use. Existing users are never asked and never get a tour by themselves.
         TourCoordinator.classifyAudienceIfNeeded(
             screenRecordingGranted: PermissionManager.hasScreenRecordingPermission)
-        NSApp.setActivationPolicy(.accessory)
+        // A regular Dock app since 3.3.0 (no LSUIElement): Dock icon, main menu, Dock menu (MenuBarController).
         tours = TourCoordinator(
             // The tag overlay, with its windows kept out of screen recordings (TourTagRecordingGate).
             makePresenter: { RecordingSafeTagPresenter() },
@@ -96,8 +99,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.history.clearAll()
         }, tours: tourSettings)
         menuBar = MenuBarController(coordinator: coordinator, settingsWindow: settingsWindow)
-        // The Welcome tour's first step points at the menu-bar icon, which isn't in the Welcome window.
-        tours.extraAnchorWindows = { [weak self] in self?.menuBar?.iconWindow.map { [$0] } ?? [] }
         menuBar.onReplayTour = { [weak self] tour in self?.tours.replay(tour, in: nil) }
         menuBar.onResetTours = { [weak self] in
             guard let self else { return }
@@ -153,11 +154,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return true
         }
-        if !PermissionManager.hasScreenRecordingPermission {
-            onboarding.show(.needsPermission)
-        } else if OnboardingController.consumeRelaunchFlag()   // just relaunched after the grant
-                    || tours.shouldOpenWelcomeOnLaunch(permissionGranted: true) {   // new user, unasked
-            onboarding.show(.allSet)
+        switch LaunchWindowPolicy.window(
+            permissionGranted: PermissionManager.hasScreenRecordingPermission,
+            launchedAsLoginItem: launchedAsLoginItem,
+            relaunchedAfterGrant: { OnboardingController.consumeRelaunchFlag() },
+            opensWelcome: { tours.shouldOpenWelcomeOnLaunch(permissionGranted: true) }) {   // new user, unasked
+        case .setup: onboarding.show(.needsPermission)
+        case .welcome: onboarding.show(.allSet)
+        case .settings: settingsWindow.show()
+        case .none: break
         }
         // Launch at login is no longer switched on silently at first launch (≤ 3.1.0 did, flag
         // `didRegisterLaunchAtLogin`, now only read): `loginPrompt` asks once, after 5 captures.
@@ -183,7 +188,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ]
         let failed = hotKeys.apply(settings.bindings, handlers: handlers)
         settings.failedActions = failed
-        menuBar.refreshKeyEquivalents(settings.bindings)
+        menuBar.refreshKeyEquivalents(settings.bindings, unregistered: failed)
         return failed
     }
 
@@ -234,6 +239,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                         historyID: entry.id)
         }
     }
+
+    /// Clicking the Dock icon (or opening the app again from Finder) with none of our windows up opens
+    /// Settings; with one up, AppKit just brings the app forward. The floating panels (Quick Access, pins,
+    /// recording controls, HUD) don't count as windows here.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        #if !SPARKLE_E2E_TEST
+        let windowUp = NSApp.windows.contains {
+            $0.isVisible && !($0 is NSPanel) && $0.styleMask.contains(.titled)
+        }
+        if !windowUp {
+            settingsWindow.show()
+            return false
+        }
+        #endif
+        return true
+    }
+
+    /// The Dock icon's right-click menu: every capture, recording and app action (`MenuBarController`).
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        #if SPARKLE_E2E_TEST
+        return nil
+        #else
+        return menuBar?.dockMenu()
+        #endif
+    }
+
+    /// Closing the last window never quits: the capture shortcuts keep working. ⌘Q quits.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     func applicationWillTerminate(_ notification: Notification) {
         #if !SPARKLE_E2E_TEST   // the e2e build never restores the native shortcuts the real copy turned off

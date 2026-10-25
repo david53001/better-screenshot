@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import ServiceManagement
 import CaptureKit
 
@@ -24,6 +24,15 @@ enum LaunchAtLogin {
     /// (or macOS wants them to approve it there). Only they can turn it back on, in that pane.
     static var needsApproval: Bool {
         SMAppService.mainApp.status == .requiresApproval
+    }
+
+    /// This launch is macOS opening the app at login (a login item, `SMAppService.mainApp` included):
+    /// the open-application Apple Event says so, as LaunchAtLogin-Modern checks it. Only meaningful
+    /// while `applicationDidFinishLaunching` runs (that event is the current one then).
+    static var launchedAsLoginItem: Bool {
+        guard let event = NSAppleEventManager.shared().currentAppleEvent,
+              event.eventID == kAEOpenApplication else { return false }
+        return event.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
     }
 
     static func openSystemSettings() {

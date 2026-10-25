@@ -5,16 +5,17 @@
     <key>CFBundleName</key><string>BetterScreenshot</string>
     <key>CFBundleDisplayName</key><string>BetterScreenshot</string>
     <!-- Was com.betterscreenshot.app until 2026-08-06: macOS 26's ControlCenter holds an
-         unremovable blocked-host record keyed to that bundle id, which permanently hides the
-         menu-bar icon (docs/INVESTIGATION-2026-08-06-menubar-icon-not-placed.md). -->
+         unremovable blocked-host record keyed to that bundle id, which permanently hid the
+         menu-bar icon (docs/INVESTIGATION-2026-08-06-menubar-icon-not-placed.md). Never change it:
+         Screen Recording and the settings are keyed on it. -->
     <key>CFBundleIdentifier</key><string>com.betterscreenshot.mac</string>
     <key>CFBundleExecutable</key><string>BetterScreenshot</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>3.2.0</string>
-    <key>CFBundleVersion</key><string>12</string>
+    <key>CFBundleShortVersionString</key><string>3.3.0</string>
+    <key>CFBundleVersion</key><string>13</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
-    <key>LSUIElement</key><true/>
+    <!-- No LSUIElement since 3.3.0: a normal Dock app with its own main menu (docs/dock-app/PROGRESS.md). -->
     <key>NSMicrophoneUsageDescription</key>
     <string>BetterScreenshot records microphone audio in screen recordings when you enable the mic.</string>
     <key>NSCameraUsageDescription</key>

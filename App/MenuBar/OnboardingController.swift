@@ -80,7 +80,7 @@ final class OnboardingController: NSWindowController {
             stack.addArrangedSubview(appIconView())
             stack.addArrangedSubview(titleLabel("Welcome to BetterScreenshot"))
             stack.addArrangedSubview(bodyLabel(
-                "Capture, annotate, and share screenshots — right from your menu bar."))
+                "Capture, annotate, and share screenshots — from any app, with a shortcut."))
             stack.setCustomSpacing(22, after: stack.arrangedSubviews.last!)
             stack.addArrangedSubview(bodyLabel(
                 "macOS asks for one permission: Screen Recording. Click the button, "
@@ -109,8 +109,9 @@ final class OnboardingController: NSWindowController {
             check.contentTintColor = .systemGreen
             stack.addArrangedSubview(check)
             stack.addArrangedSubview(titleLabel("You're all set!"))
-            stack.addArrangedSubview(bodyLabel(
-                "BetterScreenshot lives in your menu bar. Capture any time with:"))
+            let dockLine = bodyLabel("BetterScreenshot lives in your Dock. Capture any time with:")
+            dockLine.tourAnchor = "welcome.dock"   // the Welcome tour's first step
+            stack.addArrangedSubview(dockLine)
             stack.setCustomSpacing(14, after: stack.arrangedSubviews.last!)
             let rows = HotkeyCheatSheet.rows(for: bindings())
             if !rows.isEmpty {

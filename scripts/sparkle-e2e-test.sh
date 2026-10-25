@@ -8,10 +8,11 @@
 #
 # 1. builds BetterScreenshot once (debug, this Mac's architecture) with -DSPARKLE_E2E_TEST: logs
 #    Sparkle's steps, installs right away instead of on quit, and starts nothing but the updater
-#    (no status item, hotkeys, native-shortcut changes, history or temp-file sweeps, which would
+#    (no menus, hotkeys, native-shortcut changes, history or temp-file sweeps, which would
 #    touch the real copy's shared state)
 # 2. makes two copies with bundle id com.betterscreenshot.mac.sparkletest: OLD (build 100) and NEW
-#    (build 101), both with SUFeedURL = a python http.server on 127.0.0.1 only, signed inside-out
+#    (build 101), both with SUFeedURL = a python http.server on 127.0.0.1 only and LSUIElement (the
+#    real app is a Dock app since 3.3.0; the test copies stay out of the Dock), signed inside-out
 #    with the real identity; NEW is zipped and EdDSA-signed with the real Sparkle key
 # 3. GOOD: OLD runs, finds NEW in the local appcast, downloads, verifies, installs, relaunches;
 #    checks the installed bundle is build 101 and passes codesign --verify --deep --strict
@@ -112,6 +113,7 @@ make_variant() {
         -c "Set :SUFeedURL http://127.0.0.1:$PORT/appcast.xml" \
         -c "Add :NSAppTransportSecurity dict" \
         -c "Add :NSAppTransportSecurity:NSAllowsLocalNetworking bool true" \
+        -c "Add :LSUIElement bool true" \
         "$plist"
     if [ "${4:-1}" = 1 ]; then /usr/libexec/PlistBuddy -c "Add :SUAutomaticallyUpdate bool true" "$plist"; fi
     BETTERSCREENSHOT_REQUIRE_IDENTITY=1 BETTERSCREENSHOT_OTHER_IDENTITY="${5:-}" \
