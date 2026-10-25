@@ -121,7 +121,7 @@ present in both menus, Pause/Open at Login… hidden/shown correctly, Record ↔
 13. Cmd-Tab lists BetterScreenshot (expected).
 
 ## RISKS / DECISIONS
-1. **Full screen.** Researched, not tested live: Apple DTS (forums thread 826308) says macOS doesn't layer a
+1. **Full screen.** Researched, not tested live: Apple DTS (Developer Technical Support; developer.apple.com/forums/thread/826308) says macOS doesn't layer a
    *regular* app's windows above other apps' full-screen Spaces; Electron hides the Dock icon for
    `visibleOnFullScreen` ("Apple changed … starting with 10.14 to disallow NSWindows from floating on top of
    fullscreen apps"); FunWithPanels shows a real non-activating `NSPanel` is the exception (it swizzles
