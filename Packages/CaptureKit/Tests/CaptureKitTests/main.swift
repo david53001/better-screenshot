@@ -24,5 +24,6 @@ runTests("CaptureKitTests",
     selectionClampTests +
     focusRestoreTests +
     windowPlacementTests +
-    launchAtLoginPromptTests
+    launchAtLoginPromptTests +
+    launchWindowPolicyTests
 )
