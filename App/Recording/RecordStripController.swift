@@ -109,6 +109,8 @@ final class RecordStripController: NSObject, NSMenuDelegate {
         p.isMovableByWindowBackground = true
         p.level = .floating
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        p.hidesOnDeactivate = false   // a Dock app deactivates often; panels hide then by default
+        p.canHide = false   // ⌘H / another app's Hide Others leave it on screen (Dock app, 3.3.0)
         p.contentView = bg
         panel = p
         refreshSources()   // fill the menus and show the meter/link before measuring

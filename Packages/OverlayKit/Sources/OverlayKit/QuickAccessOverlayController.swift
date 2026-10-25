@@ -99,6 +99,7 @@ public final class QuickAccessOverlayController: NSObject {
         panel.hasShadow = true
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.canHide = false   // ⌘H / another app's Hide Others leave it on screen (Dock app, 3.3.0)
 
         // Rounded card that clips the full-bleed image + overlaid controls.
         let container = NSView(frame: NSRect(origin: .zero, size: size))

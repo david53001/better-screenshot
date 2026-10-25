@@ -45,6 +45,7 @@ public final class PinPanelController {
         panel.isFloatingPanel = true
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.canHide = false   // ⌘H / another app's Hide Others leave it on screen (Dock app, 3.3.0)
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = style.shadow

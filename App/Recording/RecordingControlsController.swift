@@ -237,6 +237,7 @@ final class RecordingControlsController {
         p.hidesOnDeactivate = false
         p.isMovableByWindowBackground = true
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        p.canHide = false   // ⌘H / another app's Hide Others leave it on screen (Dock app, 3.3.0)
         p.contentView = root
 
         self.panel = p

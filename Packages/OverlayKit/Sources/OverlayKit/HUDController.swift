@@ -51,6 +51,7 @@ public final class HUDController {
         panel.ignoresMouseEvents = true
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.canHide = false   // ⌘H / another app's Hide Others leave it on screen (Dock app, 3.3.0)
 
         let container = HUDSurfaceView(frame: NSRect(origin: .zero, size: size), cornerRadius: size.height / 2)
         if let icon {

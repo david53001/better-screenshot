@@ -45,6 +45,8 @@ public final class CameraBubbleController {
         p.hasShadow = true
         p.isMovableByWindowBackground = true
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        p.hidesOnDeactivate = false   // a Dock app deactivates often; panels hide then by default
+        p.canHide = false   // ⌘H / another app's Hide Others leave it on screen (Dock app, 3.3.0)
 
         let content = NSView(frame: CGRect(origin: .zero, size: frame.size))
         content.wantsLayer = true

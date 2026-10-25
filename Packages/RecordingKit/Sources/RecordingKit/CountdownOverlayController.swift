@@ -38,6 +38,7 @@ public final class CountdownOverlayController {
         panel.hasShadow = true
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.canHide = false   // ⌘H / another app's Hide Others leave it on screen (Dock app, 3.3.0)
 
         let container = ClickView(frame: NSRect(x: 0, y: 0, width: side, height: side), cornerRadius: 24)
         container.onClick = { [weak self] in self?.finish() }   // click to skip

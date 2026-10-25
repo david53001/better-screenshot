@@ -104,8 +104,22 @@ public final class SelectionOverlayController {
 
 /// A borderless window that can still become key, so its view receives key
 /// events (Escape to cancel). Plain borderless NSWindows return false here.
-final class KeyableOverlayWindow: NSWindow {
+///
+/// A non-activating `NSPanel` on every Space, full-screen ones included: since 3.3.0 the app is a
+/// regular Dock app, and macOS keeps a regular app's plain windows off another app's full-screen
+/// Space (a capture there would switch the user to a desktop) — non-activating panels are the
+/// exception, as for the Quick Access card and the HUD. The overlay still activates the app itself
+/// (`NSApp.activate`), for the crosshair cursor.
+final class KeyableOverlayWindow: NSPanel {
     override var canBecomeKey: Bool { true }
+
+    override init(contentRect: NSRect, styleMask style: NSWindow.StyleMask,
+                  backing: NSWindow.BackingStoreType, defer flag: Bool) {
+        super.init(contentRect: contentRect, styleMask: style.union(.nonactivatingPanel),
+                   backing: backing, defer: flag)
+        hidesOnDeactivate = false   // panels hide when the app deactivates by default
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+    }
 }
 
 final class SelectionView: NSView {

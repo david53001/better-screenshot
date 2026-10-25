@@ -37,6 +37,8 @@ public final class KeystrokeOverlayController {
         p.hasShadow = false
         p.ignoresMouseEvents = true
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        p.hidesOnDeactivate = false   // a Dock app deactivates often; panels hide then by default
+        p.canHide = false   // ⌘H / another app's Hide Others leave it on screen (Dock app, 3.3.0)
 
         let content = HUDSurfaceView(frame: CGRect(origin: .zero, size: size), cornerRadius: 10)
         let label = NSTextField(labelWithString: "")

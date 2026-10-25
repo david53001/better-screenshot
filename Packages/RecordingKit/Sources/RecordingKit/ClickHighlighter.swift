@@ -21,6 +21,8 @@ public final class ClickHighlighter {
         p.hasShadow = false
         p.ignoresMouseEvents = true
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        p.hidesOnDeactivate = false   // a Dock app deactivates often; panels hide then by default
+        p.canHide = false   // ⌘H / another app's Hide Others leave it on screen (Dock app, 3.3.0)
         p.contentView?.wantsLayer = true
         p.orderFrontRegardless()
         panel = p
