@@ -19,8 +19,26 @@ menu. Owner-approved brief, 2026-10-25; built overnight by an agent.
 **Done, verified headless; needs the live checks below on the real installed app before release.**
 `scripts/build-app.sh release` assembles + signs `dist/BetterScreenshot.app` (exit 0; no `LSUIElement` in the
 bundle's Info.plist; 3.3.0 / 13; `codesign --verify --deep --strict` OK). `scripts/test.sh`: all suites pass —
-DesignKit 10/10, CaptureKit 158/158 (7 new), OverlayKit 50/50, EditorKit 155/155, RecordingKit 92/92,
-HistoryKit 41/41, TourKit 119/119 (625 total).
+DesignKit 10/10, CaptureKit 164/164 (13 new), OverlayKit 50/50, EditorKit 155/155, RecordingKit 93/93 (1 new),
+HistoryKit 41/41, TourKit 119/119 (632 total). Re-run 2026-10-26 after the review fixes (section below).
+
+## Review fixes (2026-10-26, after an independent review found no serious defects)
+1. Dock click: `LaunchWindowPolicy.reopen` (pure, tested) — app hidden → `NSApp.unhide` (while hidden every
+   window reports not visible); a titled non-panel window visible → AppKit brings the app forward; only a
+   minimized one (e.g. ⌘M) → `deminiaturize` it; nothing → Settings.
+2. Dock badge while paused: `RecorderState.badgeString` → "⏸ 1:23" (the menu/pill text "Paused · 1:23" was
+   too wide for the badge); `onStateChange` now carries the badge text.
+3. After the Settings shortcut recorder ends, `applyBindings()` re-registers (was `hotKeys.resume()`), so
+   the menu's shortcuts and its refused-combo list (`unregistered`) are refreshed too.
+4. Capture Window from a menu also needs `windowLayer == 0`; no window found (any path) → HUD "No window to
+   capture" instead of nothing.
+5. Session restore: `notification.userInfo[NSApplication.launchIsDefaultUserInfoKey] == false` (macOS
+   relaunching the app for "Reopen windows when logging back in", maybe without the login-item flag) opens no
+   window, like a login launch; setup and Welcome-after-the-grant still show. Logged at launch:
+   `BetterScreenshot launch: login item N, default launch N` (`log show --predicate 'process ==
+   "BetterScreenshot"' --last 5m | grep "launch:"`).
+6. Opened as a login item while our `SMAppService` login item is off (the Dock's Options ▸ Open at Login, or a
+   Login Items entry added by hand) → the one-time launch-at-login question is marked answered.
 
 ## What changed (file map)
 - `App/Info.plist` — no `LSUIElement`; 3.3.0, build 13.
@@ -108,9 +126,16 @@ present in both menus, Pause/Open at Login… hidden/shown correctly, Record ↔
 5. **Capture Window from the Capture menu** (Settings in front, Safari behind) → Safari's window. From the
    Dock menu while Safari is in front → Safari's window.
 6. **Login:** turn on Launch at login, log out/in → Dock icon, **no window**. (If a window appears, the Apple
-   Event check doesn't fire for `SMAppService.mainApp` on this macOS — see RISKS 3.)
-7. Closing Settings/History/editor never quits; hotkeys keep working with no windows.
-8. **Recording badge**: elapsed time on the Dock icon, ticking; stays while paused; gone after stop.
+   Event check doesn't fire for `SMAppService.mainApp` on this macOS — see RISKS 3; the launch log line says
+   which flag was seen.) Also **restart with "Reopen windows when logging back in" ticked** while the app is
+   running (launch at login off) → it comes back with no window.
+   **Dock's Options ▸ Open at Login** (with our Settings switch off): log out/in → no window, and the
+   one-time "Open at login?" card never appears afterwards.
+7. Closing Settings/History/editor never quits; hotkeys keep working with no windows. Dock click with only a
+   minimized window (⌘M the editor) → it comes back, Settings doesn't open; with the app hidden (⌘H) → it
+   unhides, Settings doesn't open.
+8. **Recording badge**: elapsed time on the Dock icon, ticking; "⏸ 0:17" while paused, fully visible; gone
+   after stop.
 9. ⌘H (and Hide Others from another app) leaves Quick Access cards, pins, the recording pill and camera bubble
    on screen; Settings/editor hide.
 10. Welcome tour (Help → Take the Welcome Tour): step 1 outlines the "lives in your Dock" line.
@@ -138,10 +163,13 @@ present in both menus, Pause/Open at Login… hidden/shown correctly, Record ↔
    uses with `SMAppService.mainApp`; not documented by Apple. A Sparkle "Install and Relaunch" relaunch shows
    Settings (it's not a login launch) — judged fine.
 4. **Double fire** reasoned + probed (see Key equivalents). The live check 4 confirms Carbon wins while in front.
-5. Dock click with a minimized window and nothing else up shows Settings (doesn't un-minimize). Floating panels
-   don't count as "a window up".
+5. Floating panels don't count as "a window up" for a Dock click. `launchIsDefault == false` also covers other
+   non-default launches (e.g. macOS opening the app to restore it): no window then either. If session restore
+   also sets the login-item flag, a user restored at login with our login item off is marked as having answered
+   the launch-at-login question (they already get relaunched at login).
 6. The Settings tour (if Tours & tips is on and it's unseen) can now start when Settings opens at launch.
-7. The hotkey Capture Window path still captures our own window if it's in front (unchanged).
+7. The hotkey Capture Window path still captures our own window if it's in front (unchanged); it now shows
+   "No window to capture" when nothing qualifies.
 8. Sparkle's scheduled-update timing changes for a regular app (Sparkle waits for an opportune moment). The
    e2e UI test (`E2E_UI=1 scripts/sparkle-e2e-test.sh`) still runs dockless copies, so it no longer tests the
    exact production activation policy. Not run tonight (it opens transparent windows and takes minutes).

@@ -57,4 +57,14 @@ let recorderStateTests: [TestCase] = [
         t.equal(paused.elapsedString(now: start.addingTimeInterval(999)), "Paused · 0:17")
         t.isNil(RecorderState.idle.elapsedString(now: Date()))
     },
+    TestCase("dockBadgeIsShortWhilePaused") { t in
+        let start = Date(timeIntervalSince1970: 0)
+        let rec = RecorderState.recording(started: start, accumulatedPause: 3)
+        t.equal(rec.badgeString(now: start.addingTimeInterval(10)), "0:07")
+        let paused = RecorderState.paused(started: start, accumulatedPause: 3,
+                                          since: start.addingTimeInterval(20))
+        t.equal(paused.badgeString(now: start.addingTimeInterval(999)), "⏸ 0:17")
+        t.isNil(RecorderState.idle.badgeString(now: Date()))
+        t.isNil(RecorderState.armed.badgeString(now: Date()))
+    },
 ]

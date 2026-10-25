@@ -35,6 +35,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // At login the app only takes its place in the Dock; any other launch shows a window (below).
         // Read first: the launch's Apple Event is only current while this method runs.
         let launchedAsLoginItem = LaunchAtLogin.launchedAsLoginItem
+        // False when macOS relaunched us to restore the session ("Reopen windows when logging back in"),
+        // which may not carry the login-item flag.
+        let launchIsDefault = notification.userInfo?[NSApplication.launchIsDefaultUserInfoKey] as? Bool ?? true
+        NSLog("BetterScreenshot launch: login item %d, default launch %d",
+              launchedAsLoginItem ? 1 : 0, launchIsDefault ? 1 : 0)
         // Settings → Appearance → Opacity drives every DesignKit surface, live.
         // The Settings tour's demo previews values without saving them (`SettingsStore.opacityPreview`).
         opacityWatch = settings.$settings.map(\.uiOpacity).combineLatest(settings.$opacityPreview)
@@ -73,8 +78,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             annotate: { [weak self] image in self?.coordinator.annotate(image) },
             pin: { [weak self] image in self?.coordinator.pin(image) },
             trim: { [weak self] url in self?.recordingCoordinator.presentTrim(url: url) }))
-        recordingCoordinator.onStateChange = { [weak self] recording, elapsed in
-            self?.menuBar.setRecording(recording, elapsed: elapsed)
+        recordingCoordinator.onStateChange = { [weak self] recording, elapsed in   // elapsed: the badge text
+            self?.menuBar.setRecording(recording, badge: elapsed)
         }
         recordingCoordinator.onPauseStateChange = { [weak self] active, paused in
             self?.menuBar.setPauseItem(active: active, paused: paused)
@@ -87,7 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if recording {
                     self.hotKeys.suspend()
                 } else {
-                    self.settings.failedActions = self.hotKeys.resume()
+                    self.applyBindings()   // also refreshes the menu's shortcuts and its refused-combo list
                 }
             })
         let tourSettings = TourSettingsActions(
@@ -126,6 +131,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBar.onAskLoginQuestion = { [weak self] in self?.loginPrompt.askFromMenu() }
         loginPrompt.quickAccessCorner = { [weak self] in self?.settings.settings.overlayCorner ?? .bottomRight }
         coordinator.onCaptureCompleted = { [weak self] in self?.loginPrompt.captureCompleted() }
+        // Opened at login although our SMAppService login item is off: the user set it up another way
+        // (the Dock's Options ▸ Open at Login, a Login Items entry) — they've answered, never ask.
+        if launchedAsLoginItem, !LaunchAtLogin.isEnabled { LaunchAtLoginPrompt().markAsked() }
 
         // One-button first-run setup (Screen Recording is the only permission).
         onboarding = OnboardingController(bindings: { [weak self] in self?.settings.bindings ?? .defaults })
@@ -156,7 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         switch LaunchWindowPolicy.window(
             permissionGranted: PermissionManager.hasScreenRecordingPermission,
-            launchedAsLoginItem: launchedAsLoginItem,
+            launchedAsLoginItem: launchedAsLoginItem, launchIsDefault: launchIsDefault,
             relaunchedAfterGrant: { OnboardingController.consumeRelaunchFlag() },
             opensWelcome: { tours.shouldOpenWelcomeOnLaunch(permissionGranted: true) }) {   // new user, unasked
         case .setup: onboarding.show(.needsPermission)
@@ -240,20 +248,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Clicking the Dock icon (or opening the app again from Finder) with none of our windows up opens
-    /// Settings; with one up, AppKit just brings the app forward. The floating panels (Quick Access, pins,
-    /// recording controls, HUD) don't count as windows here.
+    /// Clicking the Dock icon (or opening the app again from Finder): unhides a hidden app, brings it forward
+    /// when one of our windows is up, puts a minimized one back, else opens Settings
+    /// (`LaunchWindowPolicy.reopen`). The floating panels (Quick Access, pins, recording controls, HUD)
+    /// don't count as windows here.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         #if !SPARKLE_E2E_TEST
-        let windowUp = NSApp.windows.contains {
-            $0.isVisible && !($0 is NSPanel) && $0.styleMask.contains(.titled)
+        let windows = NSApp.windows.filter { !($0 is NSPanel) && $0.styleMask.contains(.titled) }
+        switch LaunchWindowPolicy.reopen(isHidden: NSApp.isHidden,
+                                         hasVisibleWindow: windows.contains { $0.isVisible },
+                                         hasMinimizedWindow: windows.contains { $0.isMiniaturized }) {
+        case .unhide: NSApp.unhide(nil); return false
+        case .bringForward: return true
+        case .restoreMinimized: windows.first { $0.isMiniaturized }?.deminiaturize(nil); return false
+        case .settings: settingsWindow.show(); return false
         }
-        if !windowUp {
-            settingsWindow.show()
-            return false
-        }
-        #endif
+        #else
         return true
+        #endif
     }
 
     /// The Dock icon's right-click menu: every capture, recording and app action (`MenuBarController`).

@@ -16,9 +16,11 @@ Bootstrap and lifecycle for the Dock app (a regular app since 3.3.0; no `LSUIEle
   (`App/Recording/TourTagRecordingGate.swift`): TourKit's `TagOverlayController` with its windows registered
   so a tour tag never shows up in a screen recording — keep it that way.
   **Dock app (3.3.0):** the launch window is CaptureKit `LaunchWindowPolicy` (setup without Screen Recording ·
-  Welcome after the permission relaunch / for an unasked new user · Settings · nothing at login);
-  `applicationShouldHandleReopen` (Dock click, or opening the app again) shows Settings when none of our titled,
-  non-panel windows is up; `applicationDockMenu` → `MenuBarController.dockMenu()`;
+  Welcome after the permission relaunch / for an unasked new user · Settings · nothing at login or when
+  `launchIsDefaultUserInfoKey` is false, i.e. session restore); `applicationShouldHandleReopen` (Dock click,
+  or opening the app again) follows `LaunchWindowPolicy.reopen`: unhide · bring forward · deminiaturize ·
+  Settings; a login-item launch with our SMAppService item off (Dock ▸ Options ▸ Open at Login) marks the
+  launch-at-login question answered; `applicationDockMenu` → `MenuBarController.dockMenu()`;
   `applicationShouldTerminateAfterLastWindowClosed` → false (⌘Q quits). The e2e build stays `.accessory` and
   its test copies get `LSUIElement` from `scripts/sparkle-e2e-test.sh`.
 - `Updates.swift` — Sparkle 2 (`SPUStandardUpdaterController`, started in `applicationDidFinishLaunching`):

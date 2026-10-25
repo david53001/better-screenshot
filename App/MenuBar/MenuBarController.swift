@@ -243,11 +243,11 @@ final class MenuBarController: NSObject {
         isPaused = active && paused
     }
 
-    /// While recording, the elapsed time is the Dock icon's badge (the status item's red stop icon and
-    /// timer before 3.3.0); Record Screen… reads Stop Recording.
-    func setRecording(_ recording: Bool, elapsed: String?) {
+    /// While recording, the elapsed time is the Dock icon's badge ("⏸ 1:23" while paused; the status
+    /// item's red stop icon and timer before 3.3.0); Record Screen… reads Stop Recording.
+    func setRecording(_ recording: Bool, badge text: String?) {
         isRecording = recording
-        let badge = recording ? (elapsed ?? "") : nil
+        let badge = recording ? (text ?? "") : nil
         if NSApp.dockTile.badgeLabel != badge { NSApp.dockTile.badgeLabel = badge }
     }
 

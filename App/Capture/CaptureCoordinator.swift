@@ -134,6 +134,8 @@ final class CaptureCoordinator {
         Task {
             if let id = await frontmostWindowID(skippingOwnWindows: skippingOwnWindows) {
                 await run(.window(windowID: id))
+            } else {
+                hud.show("No window to capture", symbol: "macwindow")
             }
         }
     }
@@ -373,7 +375,7 @@ final class CaptureCoordinator {
         let ownPID = ProcessInfo.processInfo.processIdentifier
         return content?.windows.first(where: {
             $0.isOnScreen && $0.title?.isEmpty == false
-                && !(skippingOwnWindows && $0.owningApplication?.processID == ownPID)
+                && !(skippingOwnWindows && ($0.owningApplication?.processID == ownPID || $0.windowLayer != 0))
         })?.windowID
     }
 }

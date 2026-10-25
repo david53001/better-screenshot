@@ -36,7 +36,9 @@ text recognition. Imported by the `App/` target (mainly `App/Capture`).
   and a storage protocol (`UserDefaults` in the app, an in-memory store in tests, so tests write no plist).
 - `LaunchWindowPolicy.swift` — which window a launch opens (Dock app, 3.3.0): setup without Screen Recording,
   Welcome after the permission relaunch or for an unasked new user, else Settings — or nothing when macOS
-  opened the app at login. Closures keep the relaunch flag's one-time read where it was.
+  opened the app at login or relaunched it for session restore (`launchIsDefault` false); `reopen` for a Dock
+  click (unhide · bring forward · restore a minimized window · Settings). Closures keep the relaunch flag's
+  one-time read where it was.
 
 ## Conventions / invariants
 - Coordinate convention (project-wide): annotations/regions are in base-image pixel space, **top-left

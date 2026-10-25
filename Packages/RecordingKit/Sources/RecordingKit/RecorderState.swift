@@ -51,4 +51,12 @@ public enum RecorderState: Equatable {
             return nil
         }
     }
+
+    /// The Dock icon's badge: the elapsed time, "⏸ 0:17" while paused (the badge is too narrow for
+    /// "Paused · …"), nil when not recording.
+    public func badgeString(now: Date) -> String? {
+        guard let elapsed = elapsedString(now: now) else { return nil }
+        if case .paused = self { return "⏸ " + elapsed.replacingOccurrences(of: "Paused · ", with: "") }
+        return elapsed
+    }
 }

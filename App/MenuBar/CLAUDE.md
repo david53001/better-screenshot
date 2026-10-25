@@ -17,7 +17,8 @@
   while we're in front; `fromCarbonHotkey` makes an item ignore a keyDown that is its own registered combo,
   so nothing can fire twice, while a combo macOS refused (`unregistered`) still works from the menu. Capture
   Window from a menu passes `skippingOwnWindows: true` (the user's window, not our Settings in front of it).
-  `setRecording` puts the elapsed time on the Dock icon (`NSApp.dockTile.badgeLabel`), cleared on stop.
+  `setRecording` puts the elapsed time on the Dock icon (`NSApp.dockTile.badgeLabel`; RecordingKit
+  `RecorderState.badgeString`, "⏸ 1:23" while paused), cleared on stop.
   `isMenuOpen` follows `NSMenu.didBegin/EndTrackingNotification` for any of our menus (the Dock menu is the
   Dock's and can't be seen). Every capture/app item has an SF Symbol (macOS 26 adds a gear to "Settings…" by
   itself; icons on all items keep the titles aligned) — give any new item one too. **Help & Tours ▸**

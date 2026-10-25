@@ -44,7 +44,7 @@ final class RecordingCoordinator {
 
     /// Set by the app delegate; presents the one-button permission setup window.
     var presentSetup: (() -> Void)?
-    /// Menu + Dock badge state: (recording?, elapsed string). Called on every change/tick.
+    /// Menu + Dock badge state: (recording?, Dock badge text — `RecorderState.badgeString`). Called on every change/tick.
     var onStateChange: ((Bool, String?) -> Void)?
     /// Drives the Pause/Resume menu item: (session active?, currently paused?).
     var onPauseStateChange: ((_ active: Bool, _ paused: Bool) -> Void)?
@@ -434,7 +434,7 @@ final class RecordingCoordinator {
     }
 
     private func notify() {
-        onStateChange?(isRecording, state.elapsedString(now: Date()))
+        onStateChange?(isRecording, state.badgeString(now: Date()))
         onPauseStateChange?(isRecording, isPaused)
         controls.update(pillStatus())
     }
