@@ -10,13 +10,14 @@ import Sparkle
 /// XPC services (only for sandboxed apps) are removed by `scripts/build-app.sh`. The only network
 /// traffic is the appcast + update download from GitHub (no system profile is sent).
 ///
-/// BetterScreenshot is a menu-bar app, so scheduled checks use Sparkle's "gentle reminders": a
-/// found update's window opens *behind* the user's windows instead of taking focus — except when
-/// Sparkle decides on "immediate focus" (its documented default: the app was launched recently,
-/// e.g. at login, or the Mac had been idle), when it opens in front, as in most Mac apps (verified
-/// by `E2E_UI=1 scripts/sparkle-e2e-test.sh`). So that a window behind others isn't missed, the
-/// menu's "Check for Updates…" item and the Settings → Updates button both read "Update Available
-/// (X)…" (`actionTitle`) until the user looks at it; either one brings Sparkle's window forward.
+/// Scheduled checks use Sparkle's "gentle reminders". Up to 3.2.0 (a menu-bar app) a found update's
+/// window opened *behind* the user's windows instead of taking focus, except when Sparkle decided on
+/// "immediate focus" (the app launched recently, e.g. at login, or the Mac had been idle; verified by
+/// `E2E_UI=1 scripts/sparkle-e2e-test.sh`, whose test copies are still dockless). Since 3.3.0 it's a
+/// regular Dock app, for which Sparkle waits for an opportune moment such as the user bringing the app
+/// forward. Either way, so that a waiting update isn't missed, the menus' "Check for Updates…" item and
+/// the Settings → Updates button read "Update Available (X)…" (`actionTitle`) until the user looks at
+/// it; either one brings Sparkle's window forward.
 /// (No notification: the app never asks for that permission.)
 @MainActor
 final class Updates: NSObject, ObservableObject {
@@ -53,7 +54,7 @@ final class Updates: NSObject, ObservableObject {
     /// "Check for Updates…" / "Update Available (X)…": shows Sparkle's window with the result, or brings
     /// the waiting update's window forward.
     func checkForUpdates() {
-        NSApp.activate(ignoringOtherApps: true)   // a menu-bar app: otherwise the window can open behind others
+        NSApp.activate(ignoringOtherApps: true)   // from the Dock menu we aren't active: otherwise it can open behind others
         showSparkleWindow()
     }
 

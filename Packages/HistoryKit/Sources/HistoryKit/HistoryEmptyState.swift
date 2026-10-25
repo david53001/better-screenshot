@@ -19,6 +19,6 @@ public enum HistoryEmptyState {
                            detail: "Press \(captureShortcut) to take your first screenshot. It will appear here.")
         }
         return Message(title: "No Captures Yet",
-                       detail: "Choose Capture Area in the menu bar to take your first screenshot. It will appear here.")
+                       detail: "Choose Capture Area in the Capture menu to take your first screenshot. It will appear here.")
     }
 }

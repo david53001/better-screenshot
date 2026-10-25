@@ -10,7 +10,7 @@ let historyEmptyStateTests: [TestCase] = [
     },
     TestCase("pointsAtTheMenuWhenCaptureAreaIsUnbound") { t in
         let m = HistoryEmptyState.message(historyEnabled: true, captureShortcut: nil)
-        t.isTrue(m.detail.contains("Capture Area in the menu bar"), m.detail)
+        t.isTrue(m.detail.contains("Capture Area in the Capture menu"), m.detail)
     },
     TestCase("saysHistoryIsOffInsteadOfPromisingCapturesWillAppear") { t in
         let m = HistoryEmptyState.message(historyEnabled: false, captureShortcut: "⇧⌘4")

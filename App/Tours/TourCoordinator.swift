@@ -25,9 +25,9 @@ final class TourCoordinator {
     /// The anchor of the step whose tag is on screen, nil when none (done state, paused, ended). The app
     /// runs the Opacity demo while `settings.opacity` shows.
     var onStepShown: ((String?) -> Void)?
-    /// Windows besides a tour's host where a step's anchor may live, searched after the host: the
-    /// menu-bar status item's window (the Welcome tour's first step points at the icon). The tag then
-    /// attaches to that window; the host still decides pausing.
+    /// Windows besides a tour's host where a step's anchor may live, searched after the host. The tag
+    /// then attaches to that window; the host still decides pausing. Unused since 3.3.0: it carried the
+    /// menu-bar status item's window for the Welcome tour's first step, which is now on the Welcome page.
     var extraAnchorWindows: () -> [NSWindow] = { [] }
     /// How long a completed Try step shows its "done" state before the next step.
     var completedDelay: TimeInterval = 0.8

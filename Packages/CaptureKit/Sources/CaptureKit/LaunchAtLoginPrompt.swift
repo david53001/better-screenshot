@@ -27,7 +27,7 @@ extension UserDefaults: LaunchAtLoginPromptStorage {}
 /// `unansweredHideSeconds`. It only counts as a showing if the user could have seen it (`Showing`):
 /// then it comes back after a later capture at least `reshowAfterSeconds` later (a relaunch, e.g.
 /// after an automatic update, doesn't shorten that), at most `maxShowings` times in all; after the
-/// last one it counts as answered "no". While it is due, the menu-bar menu also offers it
+/// last one it counts as answered "no". While it is due, the app's menus also offer it
 /// (`offersMenuItem`): the card never takes focus, so that is its keyboard path.
 ///
 /// All state is in the standard defaults under the `Key` names (docs/sparkle-updates/README.md).
@@ -73,7 +73,7 @@ public struct LaunchAtLoginPrompt {
         public var captureOrRecordingActive: Bool
         /// One of our own windows (editor, Settings, History…) is in front: the user is working in it.
         public var appIsActive: Bool
-        /// The menu-bar menu is open (menu tracking; `appIsActive` and the mouse buttons don't show it).
+        /// One of the app's menus is open (menu tracking; `appIsActive` and the mouse buttons don't show it).
         public var menuIsOpen: Bool
         /// The frontmost app is full screen, presenting or running a full-screen game
         /// (`fullScreenInFront`). AppKit does put the card on another app's full-screen Space
@@ -219,7 +219,7 @@ public struct LaunchAtLoginPrompt {
         return .show
     }
 
-    /// Whether the menu-bar menu shows **Open at Login…** (asks the same question in a standard,
+    /// Whether the app's menus show **Open at Login…** (asks the same question in a standard,
     /// keyboard-reachable alert): while the question is due. `isEnabled` (an XPC call) is only read
     /// then; found on, the question is marked asked and the item goes.
     public func offersMenuItem(isEnabled: () -> Bool) -> Bool {

@@ -44,7 +44,7 @@ final class RecordingCoordinator {
 
     /// Set by the app delegate; presents the one-button permission setup window.
     var presentSetup: (() -> Void)?
-    /// Menu-bar state: (recording?, elapsed string). Called on every change/tick.
+    /// Menu + Dock badge state: (recording?, elapsed string). Called on every change/tick.
     var onStateChange: ((Bool, String?) -> Void)?
     /// Drives the Pause/Resume menu item: (session active?, currently paused?).
     var onPauseStateChange: ((_ active: Bool, _ paused: Bool) -> Void)?
@@ -73,7 +73,7 @@ final class RecordingCoordinator {
     }
 
     /// True while a capture session exists (recording OR paused) — keeps the
-    /// menu-bar stop icon + timer visible through a pause.
+    /// Stop Recording item + Dock badge timer through a pause.
     var isRecording: Bool {
         switch state { case .recording, .paused: return true; default: return false }
     }

@@ -91,7 +91,7 @@ enum SettingsHelp {
 
     static let launchAtLogin = HelpText(
         "Launch at login",
-        "Starts BetterScreenshot automatically in the menu bar when you sign in to your Mac.",
+        "Starts BetterScreenshot automatically when you sign in to your Mac — in the Dock, without opening a window.",
         example: "Turn on so your shortcuts already work right after a restart."
     )
 
@@ -107,7 +107,7 @@ enum SettingsHelp {
         "Tours & tips",
         "Short guided tours point out each part of the app — the editor, recording, History — the "
             + "first time you use it. Each one runs once, and you can skip it any time. Reset All "
-            + "Tours lets them show again; Help & Tours in the menu bar replays any one of them.",
+            + "Tours lets them show again; the Help menu (or Help & Tours in the Dock menu) replays any one of them.",
         example: "Turn this on, then open the editor to be walked through its tools."
     )
 

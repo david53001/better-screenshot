@@ -9,7 +9,7 @@ import DesignKit
 /// It never takes focus: a borderless `.nonactivatingPanel` that can't become key, whose buttons
 /// take the first click — so typing in the frontmost app is never interrupted. That also means no
 /// keyboard path (Return/Escape have no focus to reach); VoiceOver announces it and can reach the
-/// buttons, and the app offers the same question from its menu-bar menu as the keyboard path. It
+/// buttons, and the app offers the same question from its menus as the keyboard path. It
 /// joins every Space. Without `.fullScreenAuxiliary` AppKit was expected to keep it off full-screen
 /// Spaces, but it doesn't: checked 2026-10-18 on macOS 26.7.1, such a panel from an accessory app
 /// stays visible on another app's full-screen Space. What keeps it off a full-screen app or a

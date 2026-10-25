@@ -548,8 +548,8 @@ public final class EditorWindowController: NSWindowController {
     }
 }
 
-/// Routes the zoom and panel key equivalents to the controller — the app is a menu-bar
-/// agent with no main menu to carry them — and Esc, which NSWindow turns into its own
+/// Routes the zoom and panel key equivalents to the controller — the app's main menu has no
+/// editor menu to carry them (and a key window gets key equivalents before the main menu) — and Esc, which NSWindow turns into its own
 /// `cancelOperation(_:)` instead of passing it on to the window controller.
 private final class EditorWindow: NSWindow, TourEscapeClaiming {
     var keyEquivalentHandler: ((NSEvent) -> Bool)?

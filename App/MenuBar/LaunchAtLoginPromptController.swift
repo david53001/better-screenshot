@@ -9,7 +9,7 @@ import OverlayKit
 ///
 /// After a capture makes it due (`afterCapture`), it checks once a second (`waitStep`, for up to
 /// `giveUpSeconds`) for a calm moment — the capture settled for 3 s, no key pressed for 2 s, no
-/// mouse button down, the menu-bar menu closed, no selection / countdown / record strip /
+/// mouse button down, none of our menus open, no selection / countdown / record strip /
 /// recording, none of our windows in front, nothing full-screen in front (AppKit would put the
 /// card on a full-screen Space; `LaunchAtLoginPrompt.fullScreenInFront`) — then shows a card in
 /// the top-right screen corner (bottom-right when Quick Access uses the top-right corner). The card
@@ -18,7 +18,7 @@ import OverlayKit
 /// (not while the pointer is on it); if the user could have seen it (`LaunchAtLoginPrompt.Showing`)
 /// that counts as one of `maxShowings`, and it comes back after a later capture at least a day later
 /// (relaunches included); if not, after a capture at least 10 minutes later. While the question is
-/// due, the menu-bar menu also has **Open at Login…** (`askFromMenu`): the same question in a
+/// due, the App menu and the Dock menu also have **Open at Login…** (`askFromMenu`): the same question in a
 /// standard alert, the card's keyboard path. Answers: **No Thanks**, or
 /// **Open at Login** → `SMAppService.mainApp.register()`, then "will open at login" (closes after
 /// 1.6 s), "One more step" + **Open Login Items** (`.requiresApproval`) or "Couldn't turn it on."
@@ -44,7 +44,7 @@ final class LaunchAtLoginPromptController {
 
     /// A selection overlay, countdown, record strip or recording is up (set by the app delegate).
     var isCaptureOrRecordingActive: () -> Bool = { false }
-    /// The menu-bar menu is open (set by the app delegate from `MenuBarController.isMenuOpen`).
+    /// One of our menus is open (set by the app delegate from `MenuBarController.isMenuOpen`).
     var isMenuOpen: () -> Bool = { false }
     /// Settings → Quick Access Overlay → Screen corner, so the card doesn't sit on the thumbnails.
     var quickAccessCorner: () -> OverlayCorner = { .bottomRight }
@@ -179,18 +179,18 @@ final class LaunchAtLoginPromptController {
     /// `kCGAnyInputEventType` (not imported into Swift): any key, click, scroll or mouse move.
     private static let anyInputEvent = CGEventType(rawValue: ~0)!
 
-    // MARK: The menu-bar path (keyboard)
+    // MARK: The menu path (keyboard)
 
-    /// Whether the menu-bar menu shows **Open at Login…** (`LaunchAtLoginPrompt.offersMenuItem`).
+    /// Whether the App menu and the Dock menu show **Open at Login…** (`LaunchAtLoginPrompt.offersMenuItem`).
     var offersMenuItem: Bool { rules.offersMenuItem(isEnabled: { LaunchAtLogin.isEnabled }) }
 
-    /// **Open at Login…** in the menu-bar menu: the same question as the card, in a standard alert
+    /// **Open at Login…** in the App menu or the Dock menu: the same question as the card, in a standard alert
     /// that takes focus — the user asked for it — so Return and Escape answer it and Full Keyboard
     /// Access and VoiceOver reach it. Closes the card if it's up (not counted as a showing).
     func askFromMenu() {
         close()
         stopWaiting()
-        NSApp.activate(ignoringOtherApps: true)   // an accessory app: else the alert opens behind
+        NSApp.activate(ignoringOtherApps: true)   // chosen from the Dock menu we aren't active: else the alert opens behind
         let question = NSAlert()
         question.messageText = "Open BetterScreenshot at login?"
         question.informativeText = "Your capture shortcuts keep working after a restart. You can change this any time in Settings."
