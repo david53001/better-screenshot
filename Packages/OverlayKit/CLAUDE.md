@@ -4,7 +4,11 @@ Floating `NSPanel`/`NSView` UI shown over the desktop: the area-selection overla
 Quick Access thumbnail (and its stack), and pin-to-screen panels. Imported by the `App/` target.
 
 ## Key files (`Sources/OverlayKit/`)
-- `SelectionOverlayController.swift` + `SelectionResult.swift` — drag-to-select-area overlay.
+- `SelectionOverlayController.swift` + `SelectionResult.swift` — drag-to-select-area overlay. Its windows
+  (`KeyableOverlayWindow`, also the window picker's) are non-activating `NSPanel`s that can become key, on
+  every Space with `.fullScreenAuxiliary`: since 3.3.0 the app is a regular Dock app, and macOS keeps a
+  regular app's plain windows off another app's full-screen Space. Quick Access, pins and the HUD set
+  `canHide = false` (⌘H / Hide Others) and `hidesOnDeactivate = false`.
 - `QuickAccessOverlayController.swift` + `QuickAccessStackController.swift` — the bottom-right
   post-capture floating thumbnail and its stack. Guided tour (TourKit, v3 Part 7): the stack posts
   `TourEvents.surfaceShown(.quickAccess, card)` once a **screenshot** card sits in its slot; anchors
@@ -14,7 +18,7 @@ Quick Access thumbnail (and its stack), and pin-to-screen panels. Imported by th
   panel among the card's child windows) the auto-dismiss countdown restarts instead of closing and a drop
   doesn't close the card. Details: `docs/MAC-TO-WINDOWS-PARITY-v3.md` §7.4.
 - `PinPanelController.swift`, `PinView.swift`, `PinGeometry.swift`, `DraggableImageView.swift` —
-  pin-a-screenshot-to-screen panels (entry points: the menu bar's Pin from Clipboard and the History window;
+  pin-a-screenshot-to-screen panels (entry points: Pin from Clipboard in the Capture / Dock menu and the History window;
   the Quick Access card's own Pin button was removed in v2.9.0).
 - `QuickAccessContrast.swift`, `SRGB.swift`, `BandLuminance.swift`, `AspectFillMap.swift` — pure,
   unit-tested contrast math for the card's overlaid buttons: WCAG luminance, p10/p90 band percentiles,
@@ -26,7 +30,7 @@ Quick Access thumbnail (and its stack), and pin-to-screen panels. Imported by th
 - `HUDController.swift` — transient on-screen toast (optional SF Symbol).
 - `PromptCardController.swift` — a notification-style question card in a screen corner (app icon, title,
   line, ≤ 2 buttons; white-filled primary + outlined secondary, first-click, never key, so no keyboard path on
-  the card; the app's menu-bar **Open at Login…** item is that path).
+  the card; the app's **Open at Login…** menu item is that path).
   `HUDSurfaceView` held at least at the default opacity so its all-white text stays ≥ 4.86:1. Joins every Space.
   Without `.fullScreenAuxiliary` it still **does** appear on another app's full-screen Space (checked 2026-10-18,
   macOS 26.7.1, round-3 review probe), so the caller must not show it while something is full screen (the app

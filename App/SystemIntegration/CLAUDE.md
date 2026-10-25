@@ -21,6 +21,9 @@ against the diff-level security checklist, and never weaken or bypass a permissi
   `needsApproval` = `.requiresApproval`, `setEnabled` → returns the resulting status, marks the one-time
   question answered and posts `didChangeNotification`; `openSystemSettings()` → Login Items). Never enabled
   without the user: the Settings switch or the one-time card (`App/MenuBar/LaunchAtLoginPromptController.swift`).
+  `launchedAsLoginItem` reads the launch's open-application Apple Event (`keyAEPropData` ==
+  `keyAELaunchedAsLogInItem`, the check LaunchAtLogin-Modern uses with `SMAppService.mainApp`) — only valid
+  during `applicationDidFinishLaunching`; a login launch opens no window (Dock app, 3.3.0).
 
 ## Invariants / guardrails
 - **No cloud, non-sandboxed, local-only.** Nothing here uploads or phones home. (The one network call in the

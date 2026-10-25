@@ -2624,7 +2624,7 @@ Help & Tours → Take the Welcome Tour, or a replay), hands over to `quickAccess
 
 | # | | Anchor → the control it outlines | Title | Body | Advances on | Requires | Placement |
 |---|---|---|---|---|---|---|---|
-| 1 | E | `menuBar.icon` → the menu-bar status item's button (Windows: the tray icon) | Your menu bar icon | Everything lives here: captures, recordings, History and Settings. | Next | — | automatic |
+| 1 | E | **macOS since 3.3.0 (a Dock app):** `welcome.dock` → the "BetterScreenshot lives in your Dock. Capture any time with:" line on the "You're all set!" page. **Windows (unchanged, still a tray app):** `menuBar.icon` → the tray icon, as below | macOS: Your Dock icon · Windows: Your menu bar icon | macOS: Click it for Settings. Right-click it for captures, recordings, History and more. · Windows: Everything lives here: captures, recordings, History and Settings. | Next | — | automatic |
 | 2 | E | `welcome.shortcuts` → only the grid's Capture Area, Capture Window and Capture Full Screen rows (keys + descriptions) on the "You're all set!" page | Capture shortcuts | {shortcut:captureArea} area, {shortcut:captureWindow} window, {shortcut:captureFullscreen} full screen — in any app. | Next | — | automatic |
 | 3 | T | `welcome.captureArea` → the keys label of the grid's Capture Area row ("⇧⌘4") | Take a screenshot | Press {shortcut:captureArea} now and drag across anything on screen. | `captureTaken` | — | automatic |
 
@@ -2695,7 +2695,9 @@ next countdown closes it. macOS detects "a tag is attached" as: the card's child
 `TagOverlayController.allWindowNumbers`. **WPF:** ask the tour coordinator whether its running tour's host
 window is this card (or check whether a tag window's `Owner` chain leads to the card).
 
-**The menu-bar step (status item / tray icon).** The coordinator looks a step's anchor up only in the
+**The menu-bar step (status item / tray icon).** *(macOS up to 3.2.0; the Windows port keeps this tray
+step. Since 3.3.0 the macOS app is a Dock app with no status item and step 1 is `welcome.dock` on the Welcome
+page — `extraAnchorWindows` is unset.)* The coordinator looks a step's anchor up only in the
 tour's host window, but the status item's button lives in the status bar's own window. Added to
 `TourCoordinator` (source-compatible, default empty): `var extraAnchorWindows: () -> [NSWindow]`. The
 coordinator searches the host first, then each extra window **that is visible and intersects a screen**;

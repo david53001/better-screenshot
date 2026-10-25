@@ -11,7 +11,7 @@ A **free, local macOS clone of CleanShot X** (screenshot + screen-recording tool
 
 ## Hard constraints
 - **No cloud.** No uploads, share links, accounts, or cloud sync — ever. Local features only.
-- **macOS-native, non-sandboxed, menu-bar agent** (`LSUIElement`). Personal/local use; signed with a local self-signed identity (no Apple Developer account required, not notarized).
+- **macOS-native, non-sandboxed, regular Dock app** (no `LSUIElement` since 3.3.0 — Dock icon, its own main menu and Dock menu, no status item; `docs/dock-app/PROGRESS.md`). Personal/local use; signed with a local self-signed identity (no Apple Developer account required, not notarized).
 - **Min target: macOS 14 (Sonoma).**
 - **Updates must never cost users their permission, settings, or data** (owner requirement, 2026-09-10).
   Screen Recording is keyed on the designated requirement `identifier "com.betterscreenshot.mac" and
@@ -40,7 +40,7 @@ A **free, local macOS clone of CleanShot X** (screenshot + screen-recording tool
 - **Testing:** TDD on pure logic (geometry, encode, model, renderer) via the local TestKit harness; system/UI behavior is manually verified against checklists in the plans.
 
 ## Architecture (v1)
-Local Swift packages + a menu-bar app target:
+Local Swift packages + a Dock app target:
 - `CaptureKit` — ScreenCaptureKit wrapper + pure geometry/crop/encode/filename logic.
 - `OverlayKit` — area-selection overlay + Quick Access thumbnail (`NSPanel`).
 - `EditorKit` — annotation document model + custom `NSView` canvas + tools + flatten-to-image renderer.
@@ -61,7 +61,7 @@ Local Swift packages + a menu-bar app target:
   `docs/PROGRESS-2026-09-29-native-look.md`.
 - `TourKit` — guided tours (v3 Part 7): tour model + catalog, engine, new-user classifier, the red tag
   overlay and the ⓘ button. The app side is `App/Tours/TourCoordinator.swift`.
-- `App/` (target) — hotkeys, menu bar, settings, and capture→overlay→editor→output orchestration; every app
+- `App/` (target) — hotkeys, main menu + Dock menu, settings, and capture→overlay→editor→output orchestration; every app
   window opens through `App/Lifecycle/WindowPlacer.swift` (centred, reopens at its last size/full screen).
 
 **Coordinate convention:** annotations live in base-image pixel space, top-left origin; rendering uses a flipped `NSGraphicsContext` so AppKit drawing (incl. text) is right-side-up.
@@ -208,8 +208,19 @@ enable is gone: after the 5th completed screenshot a non-activating card asks (C
 hides after 25 s; only a showing the user could see counts (visible + user active), it returns after a capture
 ≥ 24 h later (relaunches don't shorten that), ≤ 3 counted showings; never while something is full screen (AppKit
 *does* put the card on full-screen Spaces; on a notched MacBook a full-screen window starts below the notch);
-while due, the menu-bar menu has **Open at Login…** (an alert: the keyboard path); users of the old auto-enable
+while due, the menus have **Open at Login…** (an alert: the keyboard path); users of the old auto-enable
 (`didRegisterLaunchAtLogin`) are never asked. Builds pin the 26.5 SDK via `scripts/sdk-env.sh`.
+
+**Dock app** (built 2026-10-25 on `feat/dock-app`, v3.3.0 build 13, unreleased; owner-approved brief): no
+`LSUIElement`, no status item. `App/MenuBar/MenuBarController.swift` builds the main menu (App · Capture · Edit ·
+Window · Help) and the Dock menu (`applicationDockMenu`) from the same items; Carbon still fires the capture
+shortcuts — the Capture menu only shows them and ignores its own key equivalent when it is that registered combo
+(no double fire). Dock click / reopen with no window up → Settings; closing the last window never quits; at login
+(`LaunchAtLogin.launchedAsLoginItem`, the launch Apple Event's `keyAELaunchedAsLogInItem`) no window, otherwise
+CaptureKit `LaunchWindowPolicy`. Recording → elapsed time as the Dock badge. The selection overlay / window picker
+are non-activating `NSPanel`s with `.fullScreenAuxiliary` (a regular app's plain windows can't go on another app's
+full-screen Space); floating panels have `canHide = false`. Status, decisions, live checks still to do:
+`docs/dock-app/PROGRESS.md`.
 
 **Performance pass (planned 2026-10-01, not started):** `docs/PERF-PLAN-2026-10-01.md`. Lower RAM/CPU
 without losing snappiness: baseline, ranked fixes with file:line, measurement commands, and two items

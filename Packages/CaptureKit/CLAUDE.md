@@ -32,8 +32,11 @@ text recognition. Imported by the `App/` target (mainly `App/Capture`).
   enabled, `waitStep`, `shouldHideUnanswered`: an ignored card hides after 25 s; `Showing` + `cardHidUnanswered`:
   only a showing the user could have seen counts, ≤ 3, spaced ≥ 24 h apart even across relaunches;
   `fullScreenInFront`, which also knows a notched display's full-screen window starts below the notch row;
-  `offersMenuItem` for the menu-bar **Open at Login…** item)
+  `offersMenuItem` for the menus' **Open at Login…** item)
   and a storage protocol (`UserDefaults` in the app, an in-memory store in tests, so tests write no plist).
+- `LaunchWindowPolicy.swift` — which window a launch opens (Dock app, 3.3.0): setup without Screen Recording,
+  Welcome after the permission relaunch or for an unasked new user, else Settings — or nothing when macOS
+  opened the app at login. Closures keep the relaunch flag's one-time read where it was.
 
 ## Conventions / invariants
 - Coordinate convention (project-wide): annotations/regions are in base-image pixel space, **top-left

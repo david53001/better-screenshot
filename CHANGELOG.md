@@ -2,6 +2,23 @@
 
 All notable changes to BetterScreenshot. Versions are git tags; releases are published on [GitHub](../../releases).
 
+## v3.3.0 — unreleased · A Dock app
+
+- **BetterScreenshot lives in the Dock now**, not the menu bar. Click the Dock icon for Settings; right-click
+  it for everything the old menu-bar menu had: Capture Area / Window / Full Screen / Text, Record Screen
+  (Stop / Pause / Resume while recording), Pin from Clipboard, History, Restore Recently Closed, Help & Tours,
+  Check for Updates and Settings. While BetterScreenshot is in front, the same actions are in its own menus at
+  the top of the screen (BetterScreenshot · Capture · Edit · Window · Help), with your capture shortcuts shown
+  next to them; Copy, Paste, Undo and Select All now work in text fields.
+- **Closing windows doesn't quit**; your shortcuts keep working. Quit with ⌘Q (or Quit in the Dock menu).
+- **Opening the app shows Settings**; opened at login it only takes its place in the Dock, without a window.
+- **While recording**, the elapsed time shows on the Dock icon. Stop from the Dock menu, the Capture menu,
+  your shortcut, or the floating controls.
+- Capture Window chosen from a menu captures the window you were using, not BetterScreenshot's own window.
+- The capture overlays, Quick Access, pins and recording controls still work over full-screen apps, and stay
+  on screen when you hide BetterScreenshot (⌘H) or another app hides the others.
+- The Welcome tour's first step now explains the Dock icon. Settings, permissions and history carry over.
+
 ## v3.2.0 — 2026-10-18 · Automatic updates
 
 - **Updates install themselves.** BetterScreenshot checks GitHub once a day (Sparkle 2.10.0); a new version

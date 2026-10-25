@@ -1,6 +1,7 @@
-# App/ — menu-bar app target (orientation)
+# App/ — the app target (orientation)
 
-The BetterScreenshot menu-bar agent (`LSUIElement`, non-sandboxed, local-only). This is the single
+The BetterScreenshot Dock app (a regular app since 3.3.0 — no `LSUIElement`, no status item; non-sandboxed,
+local-only). This is the single
 SwiftPM **executable target** `BetterScreenshot` (see root `Package.swift`, `path: "App"`). It
 orchestrates the capture → overlay → editor → output flow across the `Packages/*` library modules.
 
@@ -19,7 +20,7 @@ orchestrates the capture → overlay → editor → output flow across the `Pack
 - `Recording/` — screen-recording orchestration + record strip.
 - `History/` — capture-history glue + browser window.
 - `Settings/` — settings store + UI.
-- `MenuBar/` — status-item menu + onboarding.
+- `MenuBar/` — main menu + Dock menu, onboarding, the launch-at-login card.
 - `Tours/` — guided-tour coordinator (who gets tours, triggers, persistence; logic in `Packages/TourKit`).
 - `SystemIntegration/` — ⚠️ OS-integration & permission surface (hotkeys, TCC, login item, native-shortcut suppression).
 

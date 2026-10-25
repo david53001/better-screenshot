@@ -1,5 +1,12 @@
 # BetterScreenshot: Sparkle auto-updates + the one-time "open at login?" prompt
 
+> **Since 3.3.0 (branch `feat/dock-app`) BetterScreenshot is a regular Dock app**, not a menu-bar app: where
+> this document says "menu-bar menu", read the App menu and the Dock menu (both have **Check for Updates…**
+> and, while due, **Open at Login…**); `MenuBarController.isMenuOpen` now follows menu tracking of any of the
+> app's menus (`NSMenu.didBegin/EndTrackingNotification`); a scheduled find is shown by Sparkle at an
+> opportune moment for a regular app (e.g. when it's brought forward). The e2e test copies get `LSUIElement`
+> so they stay out of the Dock. Release, keys and prompt rules are unchanged. See `docs/dock-app/PROGRESS.md`.
+
 Written 2026-10-18 for a fresh session with no context. BetterScreenshot is a SwiftPM menu-bar app
 (no Xcode project; Command Line Tools only) in
 `/Users/davidghermansteinberg/Desktop/Home/Projects/Code/BetterScreenshot`, GitHub

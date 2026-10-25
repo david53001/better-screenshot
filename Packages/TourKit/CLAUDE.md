@@ -19,8 +19,9 @@ Status + lanes: `docs/PROGRESS-v3.md` (lane "Tours & help"). Windows-port notes:
 - `Catalog/` — every tour as data, **one file per area** (`WelcomeTours`, `EditorTours`, `RecordingTours`,
   `VideoEditorTours`, `ShellTours`) so parallel lanes don't collide; `TourCatalog.all` lists them.
   `WelcomeTours` (welcome, quickAccess) and `ShellTours` (settings, history): steps, anchors and where each
-  event is posted are in parity doc §7.4 / §7.8. Welcome's first anchor (`menuBar.icon`) lives in the status
-  item's window, found through `TourCoordinator.extraAnchorWindows`.
+  event is posted are in parity doc §7.4 / §7.8. Welcome's first anchor is `welcome.dock` (the Welcome page's
+  "lives in your Dock" line, since 3.3.0; until then `menuBar.icon` on the status item's window, found through
+  `TourCoordinator.extraAnchorWindows`, now unused — as are the overlay's menu-bar-host branches).
 - `TourAudience.swift` — §14.9's pure new/existing classifier (`classify(Signals)`: any non-tour key in the
   app's own domain, anything in the support folder, Screen Recording already granted, or an unknown bundle
   id → `.existing`) + `TourPreferenceKey` (the only five keys tours persist).

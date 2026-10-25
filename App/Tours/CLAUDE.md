@@ -38,8 +38,8 @@ stream building the tag overlay + ⓘ button in TourKit (status: `docs/PROGRESS-
   - Persists exactly: `tourAudience`, `tourQuestionAnswered`, `firstUseToursEnabled`, `toursSeen`,
     `toursPaused` (`TourPreferenceKey`).
   - Anchors are looked up in the tour's host window, then in `extraAnchorWindows()` (only windows visible on
-    a screen) — `AppDelegate` passes the status item's window so the Welcome tour's `menuBar.icon` step works;
-    the tag then attaches to that window while pausing still follows the host. Each anchor is scrolled into
+    a screen); the tag then attaches to that window while pausing still follows the host. Unused since 3.3.0
+    (it carried the status item's window for the old `menuBar.icon` step; the Welcome step is `welcome.dock` now). Each anchor is scrolled into
     view (`scrollToVisible`) before its tag shows (Settings' Keyboard Shortcuts card is below the fold).
 - `NoOpTourTagPresenter.swift` — shows nothing. **Unused by the app** since the merge (the app's factory is
   `RecordingSafeTagPresenter`, `App/Recording/TourTagRecordingGate.swift`); kept only as a stand-in for probes.
@@ -49,7 +49,7 @@ closures, `openSurface` for Welcome/Settings/History), `App/MenuBar/OnboardingCo
 question), `App/MenuBar/MenuBarController.swift` (Help & Tours), `App/Settings/SettingsView.swift`
 (Startup → Tours & tips).
 
-Tours wired so far (lane 7S): Welcome (`OnboardingController` grid + status item), Quick Access
+Tours wired so far (lane 7S): Welcome (`OnboardingController` Dock line + grid), Quick Access
 (`OverlayKit` card), Settings, History — steps, anchors, events and the screenshot exclusion in
 `docs/MAC-TO-WINDOWS-PARITY-v3.md` §7.4 / §7.8.
 
