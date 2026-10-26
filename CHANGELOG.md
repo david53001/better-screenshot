@@ -2,7 +2,7 @@
 
 All notable changes to BetterScreenshot. Versions are git tags; releases are published on [GitHub](../../releases).
 
-## v3.3.0 — unreleased · A Dock app
+## v3.3.0 — 2026-10-26 · A Dock app
 
 - **BetterScreenshot lives in the Dock now**, not the menu bar. Click the Dock icon for Settings; right-click
   it for everything the old menu-bar menu had: Capture Area / Window / Full Screen / Text, Record Screen
