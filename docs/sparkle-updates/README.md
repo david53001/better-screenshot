@@ -9,9 +9,9 @@
 
 Written 2026-10-18 for a fresh session with no context. BetterScreenshot is a SwiftPM menu-bar app
 (no Xcode project; Command Line Tools only) in
-`/Users/davidghermansteinberg/Desktop/Home/Projects/Code/BetterScreenshot`, GitHub
+`/Users/davidghermansteinberg/Desktop/Home/Projects/Code/Mac Apps/BetterScreenshot`, GitHub
 `david53001/better-screenshot` (**public** repo). This work is on branch `feat/sparkle-updates`
-(worktree `/Users/davidghermansteinberg/Desktop/Home/Projects/Code/BetterScreenshot/.claude/worktrees/sparkle-updates`),
+(worktree `/Users/davidghermansteinberg/Desktop/Home/Projects/Code/Mac Apps/BetterScreenshot/.claude/worktrees/sparkle-updates`),
 based on **local** `main` at `c29f6c3` (the ⌘⇧3 takeover, one commit ahead of `origin/main` and not
 pushed yet). It copies the approach MacStats got first (`MacStats/docs/sparkle-updates/README.md` on
 MacStats' `feat/sparkle-updates` branch); JVoice gets the same.
@@ -284,7 +284,7 @@ conflict trivially).
 All from the repo root on `main`, with this branch merged:
 
 ```bash
-cd /Users/davidghermansteinberg/Desktop/Home/Projects/Code/BetterScreenshot
+cd /Users/davidghermansteinberg/Desktop/Home/Projects/Code/Mac Apps/BetterScreenshot
 git switch main
 # 0. (first time only) merge: git merge --no-ff feat/sparkle-updates
 # 1. Bump the version in App/Info.plist:
@@ -348,7 +348,7 @@ Every installed copy reads `releases/latest/download/appcast.xml`, and `scripts/
 ## How to re-run the end-to-end test
 
 ```bash
-cd /Users/davidghermansteinberg/Desktop/Home/Projects/Code/BetterScreenshot/.claude/worktrees/sparkle-updates   # or the repo root after merging
+cd /Users/davidghermansteinberg/Desktop/Home/Projects/Code/Mac Apps/BetterScreenshot/.claude/worktrees/sparkle-updates   # or the repo root after merging
 scripts/sparkle-e2e-test.sh                    # temp dir, deleted afterwards
 KEEP=1 scripts/sparkle-e2e-test.sh /some/dir   # keep logs/builds for inspection
 E2E_UI=1 KEEP=1 scripts/sparkle-e2e-test.sh /some/dir   # Sparkle's real windows (see "UI mode" below)

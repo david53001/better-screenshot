@@ -3369,7 +3369,7 @@ Startup | Recording · Pin to Screen | In the video · History · Save location.
 ## Part 9 — Native look (MacStats design language), released as v3.1.0, 2026-09-29
 
 > Numbered 9 because the unmerged Capture Text branch (`ocr-structure-math`) already adds a Part 8.
-> Source spec: `/Users/davidghermansteinberg/Desktop/Home/Projects/Code/MacStats/docs/design-language/betterscreenshot-native-redesign.md`
+> Source spec: `/Users/davidghermansteinberg/Desktop/Home/Projects/Code/Mac Apps/MacStats/docs/design-language/betterscreenshot-native-redesign.md`
 > (and the language itself: `.../MacStats/docs/design-language/README.md`). The owner wants the app to look
 > like a native OS app: slightly translucent surfaces, simple lines and text, soft (squircle) corners, no
 > all-black backgrounds and no decorative dots. **It replaces the pure-black "JVoice" Settings look** of

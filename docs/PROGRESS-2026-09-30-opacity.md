@@ -7,7 +7,7 @@
 **Owner request (2026-09-30):** the UI should be a tiny bit more transparent, more like MacStats (the owner's
 menu-bar system monitor, the reference look), and each app (MacStats, JVoice, BetterScreenshot) gets a small
 setting to change the UI's opacity, with a default to go back to.
-**Shared spec:** `/Users/davidghermansteinberg/Desktop/Home/Projects/Code/MacStats/.claude/worktrees/opacity/docs/design-language/opacity-setting.md`
+**Shared spec:** `/Users/davidghermansteinberg/Desktop/Home/Projects/Code/Mac Apps/MacStats/.claude/worktrees/opacity/docs/design-language/opacity-setting.md`
 (§1 default look, §2 the setting — identical in all three apps).
 
 ## Terms

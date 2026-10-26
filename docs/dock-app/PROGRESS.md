@@ -5,7 +5,7 @@ stops being a **menu-bar agent** (`LSUIElement` in `App/Info.plist` + an `NSStat
 **Dock app**: Dock icon, its own main menu at the top of the screen while it's in front, a Dock right-click
 menu. Owner-approved brief, 2026-10-25; built overnight by an agent.
 
-- Worktree: `~/Desktop/Home/Projects/Code/BetterScreenshot/.claude/worktrees/dock-app`, branch
+- Worktree: `~/Desktop/Home/Projects/Code/Mac Apps/BetterScreenshot/.claude/worktrees/dock-app`, branch
   `feat/dock-app`, off `main` 4009a6b (= released v3.2.0 + an install.sh tweak). Not merged, not pushed,
   not installed, not released.
 - Build rules on this Mac (fanless 16 GB Air, another agent builds in parallel): wrap every build/test in
