@@ -9,3 +9,7 @@ xcuserdata/
 /dist/
 .vscode/
 /.claude/worktrees/
+
+# Local only: screenshot cache backup and OCR bench build output
+/BetterScreenshot-cache-backup-*/
+/tools/ocr-bench/
